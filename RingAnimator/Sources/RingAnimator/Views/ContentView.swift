@@ -242,9 +242,23 @@ private struct PreviewTab: View {
                             .onEnded { value in
                                 let dropPoint = cardPosition(canvasSize: proxy.size)
                                     .addingTranslation(value.translation)
-                                previewDragTranslation = .zero
+                                // Both state changes belong in the *same*
+                                // animated transaction: resetting the drag
+                                // translation and switching corners
+                                // together lets SwiftUI interpolate
+                                // directly from "wherever the cursor let
+                                // go" to "the new corner's resting spot"
+                                // in one continuous move. Resetting the
+                                // translation outside (or before) the
+                                // withAnimation block snaps the card back
+                                // to the *old* corner's resting position
+                                // first, un-animated, and only then
+                                // animates from there to the new corner --
+                                // a visible jump-then-slide instead of one
+                                // smooth motion.
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                     previewCorner = .nearest(to: dropPoint, in: proxy.size)
+                                    previewDragTranslation = .zero
                                 }
                             }
                     )
