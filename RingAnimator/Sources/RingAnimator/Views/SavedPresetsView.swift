@@ -118,8 +118,10 @@ struct SavedPresetsView: View {
             HStack {
                 Spacer()
                 Button("Cancel") { showingSaveDialog = false }
+                    .ringGlassButtonStyle()
                 Button("Save") { confirmSave() }
                     .keyboardShortcut(.defaultAction)
+                    .ringGlassButtonStyle()
             }
         }
         .padding()
@@ -139,8 +141,10 @@ struct SavedPresetsView: View {
             HStack {
                 Spacer()
                 Button("Cancel") { renamingPreset = nil }
+                    .ringGlassButtonStyle()
                 Button("Save") { confirmRename() }
                     .keyboardShortcut(.defaultAction)
+                    .ringGlassButtonStyle()
             }
         }
         .padding()

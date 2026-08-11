@@ -141,6 +141,7 @@ struct CueDetailView: View {
                     Button("Reset to Default") {
                         params = cue.defaultParameters
                     }
+                    .ringGlassButtonStyle()
                 }
             }
         }

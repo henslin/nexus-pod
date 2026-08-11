@@ -45,6 +45,7 @@ public struct PasteableTextField: View {
                 Image(systemName: "doc.on.clipboard")
             }
             .help("Paste from clipboard")
+            .ringGlassButtonStyle()
             #endif
         }
     }

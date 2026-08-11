@@ -335,7 +335,7 @@ private struct PreviewTab: View {
                 largePreview
             }
             .padding(16)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .glassBackground(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
             .background(previewCardSizeReader)
         }
@@ -351,7 +351,7 @@ private struct PreviewTab: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .buttonStyle(.plain)
+        .ringGlassButtonStyle()
         .help("Collapse Large Preview")
     }
 

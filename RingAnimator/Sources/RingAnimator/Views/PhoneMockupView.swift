@@ -120,7 +120,7 @@ struct PhoneMockupView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(.regularMaterial, in: Capsule())
+                .glassBackground(in: Capsule())
                 .padding(14)
         }
         .sheet(isPresented: $isExportingAnimation) {
@@ -144,10 +144,11 @@ struct PhoneMockupView: View {
                 Image(systemName: "square.and.arrow.up")
             }
             .help("Export Animation…")
+            .ringGlassButtonStyle()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: Capsule())
+        .glassBackground(in: Capsule())
     }
 
     private var appearancePicker: some View {
