@@ -1,6 +1,16 @@
 import SwiftUI
 import RingAnimatorCore
 
+/// Small helper for `PreviewTab`'s draggable Large Preview card: adding a
+/// live drag's `translation` (a `CGSize` delta) to a resting `CGPoint`
+/// center is needed at both the "follow the cursor" and "where did they
+/// drop it" steps.
+private extension CGPoint {
+    func addingTranslation(_ translation: CGSize) -> CGPoint {
+        CGPoint(x: x + translation.width, y: y + translation.height)
+    }
+}
+
 /// Top-level layout: one native three-column split (sidebar → content →
 /// detail), the same structural pattern Mail/Notes/Xcode use. The sidebar
 /// picks which tool you're in; the content and detail columns swap based on
@@ -147,23 +157,115 @@ private struct PreviewTab: View {
     /// ...)` override its glass reads to pick up.
     @State private var isDarkMode = true
 
+    /// Which corner Large Preview is currently pinned to — persists across
+    /// drags (see the drag gesture on `largePreviewCard` in `body`);
+    /// `.topTrailing` matches where it always used to sit before it became
+    /// draggable.
+    @State private var previewCorner: PreviewCorner = .topTrailing
+    /// Live finger-follow offset while a drag is in progress, added on top
+    /// of `previewCorner`'s resting position; reset to `.zero` the instant
+    /// the drag ends and the snap animation to the new corner takes over.
+    @State private var previewDragTranslation: CGSize = .zero
+    /// Measured off the card itself (its size varies with the "Preview
+    /// size" slider in Controls) so corner math can center it correctly
+    /// instead of assuming a fixed size.
+    @State private var previewCardSize: CGSize = .zero
+
+    private enum PreviewCorner {
+        case topLeading, topTrailing, bottomLeading, bottomTrailing
+
+        /// Which quadrant of the canvas a drop point falls into — this is
+        /// what makes the drag "snap to nearest corner" regardless of
+        /// which corner it started from.
+        static func nearest(to point: CGPoint, in canvasSize: CGSize) -> PreviewCorner {
+            let isTop = point.y < canvasSize.height / 2
+            let isLeading = point.x < canvasSize.width / 2
+            switch (isTop, isLeading) {
+            case (true, true): return .topLeading
+            case (true, false): return .topTrailing
+            case (false, true): return .bottomLeading
+            case (false, false): return .bottomTrailing
+            }
+        }
+
+        /// The card's *center* point when resting in this corner — used
+        /// both to render it (via `.position`) and, combined with a drag's
+        /// `translation`, to figure out where it was dropped.
+        func center(canvasSize: CGSize, cardSize: CGSize, margin: CGFloat) -> CGPoint {
+            let x: CGFloat
+            switch self {
+            case .topLeading, .bottomLeading:
+                x = margin + cardSize.width / 2
+            case .topTrailing, .bottomTrailing:
+                x = canvasSize.width - margin - cardSize.width / 2
+            }
+            let y: CGFloat
+            switch self {
+            case .topLeading, .topTrailing:
+                y = margin + cardSize.height / 2
+            case .bottomLeading, .bottomTrailing:
+                y = canvasSize.height - margin - cardSize.height / 2
+            }
+            return CGPoint(x: x, y: y)
+        }
+    }
+
+    private let previewCardMargin: CGFloat = 20
+
     /// The phone mockup now owns the whole pane — a real pannable/
     /// zoomable canvas (see `PhoneMockupView`/`ZoomableCanvas`), Figma/
     /// Sketch style, rather than a box sized to fit alongside Large
-    /// Preview in a shared outer `ScrollView`. Large Preview floats as a
-    /// small card in the opposite corner from the zoom badge instead, so
-    /// both stay visible without splitting the available space (and
-    /// without fighting the canvas's own scrolling/panning for space to
-    /// size itself against — an outer `ScrollView` sizes to its content's
-    /// *intrinsic* size, which an infinitely pannable canvas doesn't
-    /// really have).
+    /// Preview in a shared outer `ScrollView`. Large Preview floats on top
+    /// as a draggable card instead of sharing a row with it, so both stay
+    /// visible without splitting the available space — drag it to
+    /// whichever of the 4 corners is out of the way (it snaps to the
+    /// nearest one on release, using `.position` rather than
+    /// `.overlay(alignment:)` so the drag and the snap-back both animate
+    /// as plain point movement instead of fighting SwiftUI's alignment
+    /// geometry).
     var body: some View {
-        PhoneMockupView(config: config, isDarkMode: $isDarkMode)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .topTrailing) {
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                PhoneMockupView(config: config, isDarkMode: $isDarkMode)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
                 largePreviewCard
-                    .padding(20)
+                    .background(previewCardSizeReader)
+                    .position(
+                        cardPosition(canvasSize: proxy.size).addingTranslation(previewDragTranslation)
+                    )
+                    .gesture(
+                        DragGesture(minimumDistance: 3)
+                            .onChanged { value in
+                                previewDragTranslation = value.translation
+                            }
+                            .onEnded { value in
+                                let dropPoint = cardPosition(canvasSize: proxy.size)
+                                    .addingTranslation(value.translation)
+                                previewDragTranslation = .zero
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    previewCorner = .nearest(to: dropPoint, in: proxy.size)
+                                }
+                            }
+                    )
             }
+        }
+    }
+
+    private func cardPosition(canvasSize: CGSize) -> CGPoint {
+        previewCorner.center(canvasSize: canvasSize, cardSize: previewCardSize, margin: previewCardMargin)
+    }
+
+    /// An invisible `GeometryReader` behind the card, purely to measure its
+    /// actual rendered size (it changes with the "Preview size" slider) so
+    /// `PreviewCorner.center` can position it correctly instead of
+    /// guessing a fixed size.
+    private var previewCardSizeReader: some View {
+        GeometryReader { cardProxy in
+            Color.clear
+                .onAppear { previewCardSize = cardProxy.size }
+                .onChange(of: cardProxy.size) { _, newSize in previewCardSize = newSize }
+        }
     }
 
     private var largePreviewCard: some View {
