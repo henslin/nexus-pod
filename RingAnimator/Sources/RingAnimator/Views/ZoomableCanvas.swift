@@ -125,6 +125,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         scrollView.allowsMagnification = true
         scrollView.minMagnification = minMagnification
         scrollView.maxMagnification = maxMagnification
+        scrollView.contentView = CenteringClipView()
         scrollView.magnification = restMagnification
         scrollView.documentView = hostingView
 
@@ -197,7 +198,19 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         /// badge track your fingers instead of just flashing a final
         /// number.
         func observeMagnification(of scrollView: NSScrollView) {
-            onPercentChange(percentage(for: scrollView.magnification))
+            // Deferred to the next run-loop turn: this is called from
+            // makeNSView, which runs *during* a SwiftUI view update, and
+            // synchronously mutating the @State this drives from inside
+            // that update is invalid (SwiftUI logs "Modifying state during
+            // view update, this will cause undefined behavior"). The
+            // magnification hasn't changed from `zoomPercent`'s own 100
+            // default at this point anyway -- this call exists so a
+            // non-default `restMagnification` still gets reflected if the
+            // badge is ever shown before the first real magnify.
+            let initialPercent = percentage(for: scrollView.magnification)
+            DispatchQueue.main.async { [onPercentChange] in
+                onPercentChange(initialPercent)
+            }
             magnificationObservation = scrollView.observe(\.magnification, options: [.new]) { [weak self] scrollView, _ in
                 guard let self else { return }
                 self.onPercentChange(self.percentage(for: scrollView.magnification))
@@ -230,5 +243,32 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         private func percentage(for magnification: CGFloat) -> Int {
             Int((magnification * 100).rounded())
         }
+    }
+}
+
+/// A stock `NSClipView` sits the document view at its bounds origin and
+/// leaves it there — fine while the document exactly fills the viewport
+/// (magnification 1, which is how `deviceFrame` is sized here, with zero
+/// margin), but the moment magnification moves off 1 in either direction
+/// the phone mockup would slide into a single corner instead of staying
+/// centered: zoomed out, it'd sit pinned to one edge with all the empty
+/// space on the other side; zoomed in, panning back to the start would
+/// land off-center instead of back in the middle. Overriding
+/// `constrainBoundsRect` to re-center whenever the document is smaller
+/// than the visible bounds — and to center the *initial* over-sized case
+/// too — keeps zooming feeling like Preview/Photos in either direction.
+private final class CenteringClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var rect = super.constrainBoundsRect(proposedBounds)
+        guard let documentView else { return rect }
+        let documentFrame = documentView.frame
+
+        if documentFrame.width < proposedBounds.width {
+            rect.origin.x = (documentFrame.width - proposedBounds.width) / 2
+        }
+        if documentFrame.height < proposedBounds.height {
+            rect.origin.y = (documentFrame.height - proposedBounds.height) / 2
+        }
+        return rect
     }
 }
