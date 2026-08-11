@@ -170,6 +170,10 @@ private struct PreviewTab: View {
     /// size" slider in Controls) so corner math can center it correctly
     /// instead of assuming a fixed size.
     @State private var previewCardSize: CGSize = .zero
+    /// Collapsed to a small round button once zooming/panning the canvas
+    /// makes the full card feel like it's in the way more than it's
+    /// helping — expand it again by tapping that button.
+    @State private var isPreviewCollapsed = false
 
     private enum PreviewCorner {
         case topLeading, topTrailing, bottomLeading, bottomTrailing
@@ -211,6 +215,15 @@ private struct PreviewTab: View {
     }
 
     private let previewCardMargin: CGFloat = 20
+    /// Fixed and known ahead of time (unlike the expanded card, which is
+    /// measured — see `previewCardSizeReader`) since it's just a plain
+    /// circular button whose size we control outright. Using a constant
+    /// here instead of measuring it means collapsing/expanding can change
+    /// `isPreviewCollapsed` and reposition in the very same animated
+    /// transaction with no dependency on a `GeometryReader` remeasurement
+    /// landing before the animation reads it — the same class of bug the
+    /// drag-snap fix above just worked around.
+    private let collapsedPreviewSize = CGSize(width: 44, height: 44)
 
     /// The phone mockup now owns the whole pane — a real pannable/
     /// zoomable canvas (see `PhoneMockupView`/`ZoomableCanvas`), Figma/
@@ -230,11 +243,19 @@ private struct PreviewTab: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 largePreviewCard
-                    .background(previewCardSizeReader)
                     .position(
                         cardPosition(canvasSize: proxy.size).addingTranslation(previewDragTranslation)
                     )
-                    .gesture(
+                    // .simultaneousGesture rather than .gesture: the
+                    // collapse/expand button lives inside largePreviewCard,
+                    // and .gesture claims priority over its child views'
+                    // own gestures (including a Button's tap), which would
+                    // make the button unreliable to click. Simultaneous
+                    // recognition lets the drag and the button's tap each
+                    // resolve independently -- SwiftUI's Button already
+                    // cancels its own tap if the pointer moves enough to
+                    // count as a drag, so this doesn't risk double-firing.
+                    .simultaneousGesture(
                         DragGesture(minimumDistance: 3)
                             .onChanged { value in
                                 previewDragTranslation = value.translation
@@ -267,7 +288,8 @@ private struct PreviewTab: View {
     }
 
     private func cardPosition(canvasSize: CGSize) -> CGPoint {
-        previewCorner.center(canvasSize: canvasSize, cardSize: previewCardSize, margin: previewCardMargin)
+        let cardSize = isPreviewCollapsed ? collapsedPreviewSize : previewCardSize
+        return previewCorner.center(canvasSize: canvasSize, cardSize: cardSize, margin: previewCardMargin)
     }
 
     /// An invisible `GeometryReader` behind the card, purely to measure its
@@ -282,14 +304,71 @@ private struct PreviewTab: View {
         }
     }
 
+    /// Switches between the full card and the small collapsed button —
+    /// `largePreviewCollapseButton`'s tap target lives *inside* the
+    /// expanded card (top-trailing, next to the label) so collapsing is
+    /// reachable without hunting for a separate control; the collapsed
+    /// state's entire button doubles as the expand target.
+    @ViewBuilder
     private var largePreviewCard: some View {
-        VStack(spacing: 10) {
-            Text("Large Preview").font(.caption).foregroundStyle(.secondary)
-            largePreview
+        if isPreviewCollapsed {
+            collapsedPreviewButton
+                .frame(width: collapsedPreviewSize.width, height: collapsedPreviewSize.height)
+        } else {
+            VStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Text("Large Preview").font(.caption).foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                    largePreviewCollapseButton
+                }
+                // Without this, the Spacer above has no width to actually
+                // be constrained by: largePreviewCard sits directly in a
+                // ZStack alongside PhoneMockupView's .frame(maxWidth:
+                // .infinity, maxHeight: .infinity), so the *proposed*
+                // width flowing down to this HStack is the whole canvas,
+                // and the Spacer greedily fills it -- stretching the
+                // header (and the card behind it) edge-to-edge instead of
+                // hugging the ring below it. Pinning the header to the
+                // ring's own width keeps the collapse button at the
+                // card's actual top-right corner.
+                .frame(width: previewOuterDiameter)
+                largePreview
+            }
+            .padding(16)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+            .background(previewCardSizeReader)
         }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+    }
+
+    private var largePreviewCollapseButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                isPreviewCollapsed = true
+            }
+        } label: {
+            Image(systemName: "arrow.down.right.and.arrow.up.left")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("Collapse Large Preview")
+    }
+
+    /// The collapsed state: just the ring itself, small and round, so it
+    /// still reads as "the large preview, tucked away" rather than an
+    /// unrelated icon — tapping anywhere on it expands the card back.
+    private var collapsedPreviewButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                isPreviewCollapsed = false
+            }
+        } label: {
+            glassRing(outerDiameter: collapsedPreviewSize.width, ringDiameter: collapsedPreviewSize.width * 0.6)
+        }
+        .buttonStyle(.plain)
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+        .help("Show Large Preview")
     }
 
     // The tab bar's ring pod: a 34pt ring centered in a 62pt circle (see
@@ -322,18 +401,34 @@ private struct PreviewTab: View {
     /// iPhone mockup's screen content (see `PhoneMockupView.screen`), for
     /// testing arbitrary reference images beyond the bundled "App UI" set.
     /// This preview stays exactly the ring, always.
-    @ViewBuilder
     private var largePreview: some View {
-        let outerDiameter = CGFloat(config.previewDiameter) * (podFrameDiameter / podDiameter)
-        let ring = RingView(config: config, diameter: CGFloat(config.previewDiameter))
+        glassRing(outerDiameter: previewOuterDiameter, ringDiameter: CGFloat(config.previewDiameter))
+    }
+
+    /// Also used by `largePreviewCard`'s header row (see the `.frame`
+    /// comment there) to pin the collapse button to the ring's actual
+    /// right edge instead of the whole canvas's.
+    private var previewOuterDiameter: CGFloat {
+        CGFloat(config.previewDiameter) * (podFrameDiameter / podDiameter)
+    }
+
+    /// Shared by `largePreview` (sized off the "Preview size" slider) and
+    /// `collapsedPreviewButton` (a small fixed size instead) — factored out
+    /// so the collapsed button is a genuine miniature of the same glass
+    /// ring rather than a separate icon that could drift out of sync with
+    /// it.
+    ///
+    /// `RingView` itself clips its own content to a circle matching its
+    /// frame (see `RingView.body`), so the glass here just needs to supply
+    /// the backing material/refraction — nothing further to clip.
+    /// `.environment(\.colorScheme, ...)` mirrors exactly what
+    /// `PhoneMockupView` applies to its own `deviceFrame`, so both glass
+    /// surfaces render the same appearance at once.
+    @ViewBuilder
+    private func glassRing(outerDiameter: CGFloat, ringDiameter: CGFloat) -> some View {
+        let ring = RingView(config: config, diameter: ringDiameter)
             .frame(width: outerDiameter, height: outerDiameter)
 
-        // `RingView` itself now clips its own content to a circle matching
-        // this frame (see `RingView.body`), so the glass here just needs to
-        // supply the backing material/refraction — nothing further to clip.
-        // `.environment(\.colorScheme, ...)` mirrors exactly what
-        // `PhoneMockupView` applies to its own `deviceFrame`, so both
-        // glass surfaces render the same appearance at once.
         Group {
             if #available(macOS 26.0, *) {
                 ring.glassEffect(config.glass, in: Circle())
