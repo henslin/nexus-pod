@@ -5,12 +5,12 @@ import SwiftUI
 /// the actual look for a given cue comes from combining a style with
 /// `LEDCueParameters` (colors, speed, counts, timings).
 public enum LEDPatternStyle: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
-    /// Bridges to the full Ring Designer animation system — `speed`,
+    /// Bridges to the full Nexus animation system — `speed`,
     /// `animationType` (all 11 continuous "AI thinking" variants: Wave,
     /// Chasing, Alternating, ...), `lineWidth`, `trailFraction`/
     /// `chasingFillStyle`, `diodeCount`, and every motion/glow/vibrancy/
-    /// particle knob below all apply, exactly as they would in the Ring
-    /// Designer — see `LEDCuePreviewView`, which literally renders this
+    /// particle knob below all apply, exactly as they would in Nexus
+    /// — see `LEDCuePreviewView`, which literally renders this
     /// case by handing an equivalent `RingConfig` to `RingView` rather than
     /// reimplementing the animation a second time. Every other case below
     /// stays a small, purpose-built rendering of one named Ziris spec-sheet
@@ -80,7 +80,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     // keeps behaving exactly as before, the same reasoning as every other
     // section here.
 
-    /// Which of the Ring Designer's 11 continuous "AI thinking" animations
+    /// Which of Nexus's 11 continuous "AI thinking" animations
     /// to render — see `RingAnimationType`.
     public var animationType: RingAnimationType
     /// Ring stroke thickness in points — `RingConfig.lineWidth`'s
@@ -98,7 +98,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     /// `RingConfig.diodeCount`.
     public var diodeCount: Double
 
-    // MARK: - Motion effects (same knobs as the Ring Designer)
+    // MARK: - Motion effects (same knobs as Nexus)
     // Defaulted so every existing cue in the library keeps behaving exactly
     // as before without needing to be touched.
 
@@ -114,7 +114,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     public var chromaticAberrationEnabled: Bool
     public var chromaticAberrationAmount: Double
 
-    // MARK: - Glow & vibrancy (same knobs as the Ring Designer's "Glow &
+    // MARK: - Glow & vibrancy (same knobs as Nexus's "Glow &
     // Blend" section — see `RingConfig.glowEnabled`/`vibrancyEnabled`).
     // Applied universally (every `style` above respects these now, not just
     // `.continuousAnimation`) — see `LEDCuePreviewView.ring(...)`.
@@ -125,7 +125,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     public var vibrancyAmount: Double
 
     // MARK: - Particles (same raw CAEmitterLayer/CAEmitterCell controls as
-    // the Ring Designer — see RingConfig.swift for the full explanation of
+    // Nexus — see RingConfig.swift for the full explanation of
     // each property).
 
     public var particlesEnabled: Bool

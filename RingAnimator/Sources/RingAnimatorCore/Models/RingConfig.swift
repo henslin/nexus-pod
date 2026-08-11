@@ -35,7 +35,7 @@ public final class RingConfig: ObservableObject {
 
     /// Bridges in the other direction from `LEDCueParameters.animationType`
     /// (see `LEDPatternStyle.continuousAnimation`'s doc comment): `nil`
-    /// (default) keeps the Ring Designer's original behavior — a
+    /// (default) keeps Nexus's original behavior — a
     /// continuous loop of `animationType` above. Setting this to one of the
     /// Cue Library's canned Ziris spec-sheet behaviors (Flash, Quick Flash,
     /// Transition to Solid, Spin then Solid Fade, ...) overrides

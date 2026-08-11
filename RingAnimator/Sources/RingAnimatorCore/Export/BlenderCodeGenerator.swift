@@ -6,7 +6,7 @@ import SwiftUI
 /// can paste into Blender's Scripting tab to see a ring reproduced as a
 /// real, driver-animated scene object, plus the inverse: reading that same
 /// script back to update a live `RingConfig`/`LEDCueParameters`. Covers
-/// both the Ring Designer's own current ring (`blenderCode`) and a single
+/// both Nexus's own current ring (`blenderCode`) and a single
 /// Cue Library entry (`blenderCueCode`) — the same split `CodeGenerators`'
 /// other three exporters already have between `swiftUICode`/`swiftUICueCode`
 /// etc.
@@ -19,7 +19,7 @@ import SwiftUI
 /// closer to what "translate the ring animations for Blender" actually
 /// implies than a static one-shot dump would be. The cue script's
 /// `continuousAnimation` style literally calls the same
-/// `_build_continuous_animation()` Python function the Ring Designer
+/// `_build_continuous_animation()` Python function Nexus
 /// script does, defined once in the shared helpers below, so the two
 /// never drift apart.
 ///
@@ -38,7 +38,7 @@ public extension CodeGenerators {
 
         let header = """
         # ============================================================
-        # Ring Pod -> Blender import (Ring Designer)
+        # Ring Pod -> Blender import (Nexus)
         # Animation: \(config.animationType.rawValue) - Easing: \(config.easingStyle.rawValue)
         #
         # Paste into Blender's Scripting tab and hit Run (or run headless
@@ -154,7 +154,7 @@ public extension CodeGenerators {
         return header + "\n\n" + blenderHelpers + "\n\n" + blenderCueDispatch
     }
 
-    // MARK: - Shared preamble (helpers + the Ring Designer's 11-animation-
+    // MARK: - Shared preamble (helpers + Nexus's 11-animation-
     // type dispatch, as a callable function so the Cue script's own
     // `continuousAnimation` style can reuse it verbatim instead of
     // duplicating it).
@@ -363,11 +363,11 @@ public extension CodeGenerators {
 
 
         def _build_continuous_animation():
-            # The Ring Designer's 11 continuous "AI thinking" animation
+            # Nexus's 11 continuous "AI thinking" animation
             # types, translated to native Blender techniques — curve bevel
             # trims stand in for SwiftUI's `.trim(from:to:)`, drivers stand
-            # in for `TimelineView`. Shared verbatim between the Ring
-            # Designer's own export and a Cue Library cue whose style is
+            # in for `TimelineView`. Shared verbatim between Nexus's own
+            # export and a Cue Library cue whose style is
             # "continuousAnimation", so the two never drift apart.
             anim = p["animation_type"]
             glow_strength = GLOW_STRENGTH

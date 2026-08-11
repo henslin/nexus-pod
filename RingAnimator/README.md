@@ -45,10 +45,10 @@ own project in another window).
 
 ## What's inside the macOS app
 
-The app has two top-level tabs: **Ring Designer** (the original tool) and
+The app has two top-level tabs: **Nexus** (the original tool) and
 **Cue Library** (the LED cue explorer).
 
-### Ring Designer
+### Nexus
 
 - **Preview tab** — shows the ring both in a mock tab bar (a native iOS
   26/27-style Liquid Glass tab bar with a separate floating ring pod) and as
@@ -138,7 +138,7 @@ Nexus Ring App/
       RingAnimator/                    - macOS app target
         RingAnimatorApp.swift          - app entry point
         Views/
-          ContentView.swift            - top-level layout (Ring Designer / Cue Library tabs)
+          ContentView.swift            - top-level layout (Nexus / Cue Library tabs)
           TabBarPreview.swift          - native Liquid Glass mock tab bar
           ExportView.swift             - code export panel
           CueExplorerView.swift        - cue library sidebar + detail editor

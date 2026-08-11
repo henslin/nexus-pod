@@ -9,14 +9,14 @@ public enum CodeGenerators {
 
     /// `swiftUICode`/`composeCode`/`webCode` below all switch exhaustively
     /// on `config.animationType` — they don't know about `config.patternStyle`
-    /// (a Ring Designer feature added after these exporters existed) at all.
+    /// (a Nexus feature added after these exporters existed) at all.
     /// Silently exporting `animationType`'s code while the live preview is
     /// actually showing a `patternStyle` override would be actively
     /// misleading (wrong animation, not just an incomplete one), so each of
     /// the three calls this first and bails out with an explanatory
     /// placeholder instead of guessing. Cue Library cues with a
     /// `LEDPatternStyle` already export correctly via `swiftUICueCode`/
-    /// `composeCueCode`/`webCueCode` below — wiring the Ring Designer's own
+    /// `composeCueCode`/`webCueCode` below — wiring Nexus's own
     /// exporters through the same path is a reasonable follow-up, just not
     /// done here.
     static func patternStyleExportPlaceholder(config: RingConfig) -> String? {
@@ -1518,14 +1518,6 @@ ctx.stroke();
         }
     }
 
-    /// Whether particles are pinned to the emitter circle's edge
-    /// (`.points`/`.outline`) or scattered anywhere inside it
-    /// (`.surface`/`.volume`) — the one axis this hand-written
-    /// approximation actually distinguishes between.
-    private static func isEdgeLike(_ mode: ParticleEmitterMode) -> Bool {
-        mode == .points || mode == .outline
-    }
-
     private static func kotlinEmitterModeCaseName(_ mode: ParticleEmitterMode) -> String {
         swiftEmitterModeCaseName(mode)
     }
@@ -1783,7 +1775,7 @@ ctx.stroke();
     // Every cue in the Cue Library (`LEDCueParameters`, driven by
     // `LEDPatternStyle` rather than `RingAnimationType` — see
     // `LEDCuePreviewView`, which this mirrors 1:1) can be exported the same
-    // way a Ring Designer animation can. Only the cue's *current* style is
+    // way a Nexus animation can. Only the cue's *current* style is
     // baked in (matching how the ring exporters above only emit the
     // currently-selected `RingAnimationType`'s code, not a runtime switch
     // over all of them) — motion effects, particles, and chromatic
@@ -1798,17 +1790,17 @@ ctx.stroke();
         let contentBody: String
         switch parameters.style {
         case .continuousAnimation:
-            // A `.continuousAnimation` cue is authored with the full Ring
-            // Designer animation system (`animationType` + every motion/
+            // A `.continuousAnimation` cue is authored with the full Nexus
+            // animation system (`animationType` + every motion/
             // glow/vibrancy/particle knob) rather than one of the fixed
             // Ziris spec-sheet behaviors below — see `LEDCuePreviewView`,
             // which renders it by handing an equivalent `RingConfig` to
             // `RingView` instead of a template like this one. Exporting
-            // *that* system's own generated code is what the Ring
-            // Designer's own "Export Code" tab already does (`swiftUICode`
+            // *that* system's own generated code is what Nexus's own
+            // "Export Code" tab already does (`swiftUICode`
             // above) — switch this cue's Style to a Ziris pattern to export
-            // it from here, or copy its `animationType` into the Ring
-            // Designer and export from there. This case only exists so the
+            // it from here, or copy its `animationType` into Nexus
+            // and export from there. This case only exists so the
             // switch stays exhaustive; it falls back to a plain solid ring.
             cycleFormula = "2.0"
             contentBody = "ring(opacity: 1, color: primary(t))"
@@ -1988,7 +1980,7 @@ struct \(structName): View {
     var chromaticAberrationAmount: CGFloat = \(parameters.chromaticAberrationAmount)
 
     // Particles — literal CAEmitterLayer/CAEmitterCell parameters, same
-    // hand-written approximation the Ring Designer's own export uses.
+    // hand-written approximation Nexus's own export uses.
     var particlesEnabled: Bool = \(parameters.particlesEnabled)
     var particleEmitterShape: String = "\(parameters.particleEmitterShape.rawValue)"
     var particleEmitterMode: ParticleEmitterMode = .\(swiftEmitterModeCaseName(parameters.particleEmitterMode))
@@ -2155,7 +2147,7 @@ extension Color {
         switch parameters.style {
         case .continuousAnimation:
             // See the matching case in `swiftUICueCode` above — this cue is
-            // authored via the full Ring Designer animation system, not one
+            // authored via the full Nexus animation system, not one
             // of the Ziris patterns below. Falls back to a plain solid ring
             // just to keep this switch exhaustive.
             cycleFormula = "2.0"
@@ -2612,7 +2604,7 @@ fun \(functionName)(
         switch parameters.style {
         case .continuousAnimation:
             // See the matching case in `swiftUICueCode` above — this cue is
-            // authored via the full Ring Designer animation system, not one
+            // authored via the full Nexus animation system, not one
             // of the Ziris patterns below. Falls back to a plain solid ring
             // just to keep this switch exhaustive.
             cycleFormula = "2.0"

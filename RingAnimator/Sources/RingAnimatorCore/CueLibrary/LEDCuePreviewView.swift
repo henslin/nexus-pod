@@ -8,10 +8,10 @@ import SwiftUI
 /// (see that case's doc comment) is rendered by handing an equivalent
 /// `RingConfig` straight to a real `RingView` (`animationConfig` below)
 /// instead of reimplementing any of those 11 animations a second time here.
-/// That's what actually guarantees Cue Library ↔ Ring Designer parity for
+/// That's what actually guarantees Cue Library ↔ Nexus parity for
 /// that style, rather than two hand-maintained copies that can drift apart.
 ///
-/// The same motion effects available in the Ring Designer (easing, scale
+/// The same motion effects available in Nexus (easing, scale
 /// pulse, hue shift, blur, blend mode, particles, and now glow/vibrancy
 /// too) layer on top of whichever style is active here too — see
 /// `LEDCueParameters`.
@@ -53,10 +53,10 @@ public struct LEDCuePreviewView: View {
     }
 
     /// Copies every field `RingView` reads off `RingConfig` from this cue's
-    /// own `parameters` — the same fields the Ring Designer's own Controls
+    /// own `parameters` — the same fields Nexus's own Controls
     /// panel edits, so a `.continuousAnimation` cue really can reproduce
     /// anything designed there. `sequencePlaybackEnabled` is forced on
-    /// (unlike the Ring Designer's own default of an infinite ambient loop)
+    /// (unlike Nexus's own default of an infinite ambient loop)
     /// so this cue's `holdSeconds`/`fadeOutSeconds`/`loops` — meaningful for
     /// every other style already — stay meaningful for this one too,
     /// instead of silently doing nothing.
@@ -313,7 +313,7 @@ public struct LEDCuePreviewView: View {
     // MARK: - Shared drawing
 
     /// Glow now reads `parameters.glowEnabled`/`glowRadius` (the same Glow &
-    /// Blend fields the Ring Designer exposes) instead of a hardcoded
+    /// Blend fields Nexus exposes) instead of a hardcoded
     /// radius-10 shadow — every style above shares this one helper, so
     /// turning glow off/tuning its radius affects all of them uniformly.
     private func ring(opacity: Double, color: Color, width: CGFloat? = nil) -> some View {

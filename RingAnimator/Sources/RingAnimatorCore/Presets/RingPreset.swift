@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A saved snapshot of a `RingConfig` — "an animation you like," bookmarked
-/// from the Ring Designer so you can come back to it later or hand it to a
+/// from Nexus so you can come back to it later or hand it to a
 /// teammate (see `RingPresetStore` and `SavedPresetsView`).
 ///
 /// Deliberately excludes a few `RingConfig` properties that aren't really
@@ -154,7 +154,7 @@ public struct RingPreset: Identifiable, Codable, Equatable {
     }
 
     /// Applies every saved knob back onto a live `RingConfig` — used to load
-    /// this preset into the Ring Designer.
+    /// this preset into Nexus.
     public func apply(to config: RingConfig) {
         config.animationType = animationType
         config.patternStyle = patternStyle

@@ -4,10 +4,10 @@ import UniformTypeIdentifiers
 import RingAnimatorCore
 
 /// Code export for a single Cue Library entry — the Cue Library's
-/// counterpart to the Ring Designer's `ExportView`. Bakes in whichever
+/// counterpart to Nexus's `ExportView`. Bakes in whichever
 /// `LEDPatternStyle` (plus every motion-effect/particle/aberration tweak)
-/// the cue currently has, exactly like `ExportView` bakes in the Ring
-/// Designer's currently-selected `RingAnimationType` — not a runtime
+/// the cue currently has, exactly like `ExportView` bakes in Nexus's
+/// currently-selected `RingAnimationType` — not a runtime
 /// switch over all 14 styles, just this cue's current look, portable to
 /// iOS/Android/Web/Blender. Same segmented-control-plus-one-full-width-pane
 /// layout as `ExportView`, for the same reason: a fixed-minimum-width
@@ -137,8 +137,7 @@ struct CueExportView: View {
     /// Reads a `.py` file — either one Ring Pod exported for this cue, or a
     /// teammate's hand-edited copy of one — and applies whatever
     /// `RING_POD_PARAMS` it finds back onto this cue, the same "load it and
-    /// see it" pattern `ExportView`'s own Blender Import uses for the Ring
-    /// Designer.
+    /// see it" pattern `ExportView`'s own Blender Import uses for Nexus.
     private func importBlender() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [UTType(filenameExtension: "py") ?? .plainText]

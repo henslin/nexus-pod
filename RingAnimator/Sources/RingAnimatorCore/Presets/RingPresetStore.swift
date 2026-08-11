@@ -1,11 +1,11 @@
 import Foundation
 
 /// Persists the user's bookmarked `RingConfig` snapshots — the "Saved
-/// Animations" column in the Ring Designer (see `SavedPresetsView`).
+/// Animations" column in Nexus (see `SavedPresetsView`).
 /// Modeled directly on `LEDCueStore`: same Application Support JSON file
 /// convention, same plain load/save-on-mutation approach. Kept here in
 /// `RingAnimatorCore` (like `LEDCueStore`) even though today's UI for it is
-/// Mac-only, so it's ready to reuse from the iOS app's Ring Designer if that
+/// Mac-only, so it's ready to reuse from the iOS app's Nexus if that
 /// ever gets a matching feature.
 public final class RingPresetStore: ObservableObject {
     @Published public private(set) var presets: [RingPreset] = []

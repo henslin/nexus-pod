@@ -5,10 +5,10 @@ import RingAnimatorCore
 /// detail), the same structural pattern Mail/Notes/Xcode use. The sidebar
 /// picks which tool you're in; the content and detail columns swap based on
 /// that choice. This replaces an earlier version that stacked two SwiftUI
-/// `TabView`s directly on top of each other (an outer Ring Designer/Cue
+/// `TabView`s directly on top of each other (an outer Nexus/Cue
 /// Library tab strip, with a second Preview/Export strip immediately below
 /// it) — visually cramped and not a standard macOS pattern. A single sidebar
-/// plus a toolbar-based segmented control for the Ring Designer's
+/// plus a toolbar-based segmented control for Nexus's
 /// Preview/Export toggle reads as one coherent window instead of two
 /// stacked widgets.
 struct ContentView: View {
