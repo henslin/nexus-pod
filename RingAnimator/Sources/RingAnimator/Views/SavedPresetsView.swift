@@ -5,7 +5,7 @@ import RingAnimatorCore
 
 /// The "Saved Animations" column — a scrolling list of `RingConfig`
 /// snapshots you've bookmarked, living alongside `ControlsView` inside the
-/// Ring Designer section (see `ContentView`, which puts the two in an
+/// Nexus section (see `ContentView`, which puts the two in an
 /// `HSplitView` together). Modeled on `CueListView`'s list-column pattern;
 /// export/import uses the same `NSSavePanel`/`NSOpenPanel` convention as
 /// `ExportView`/`CueListView` — the app doesn't have a macOS share sheet
@@ -82,26 +82,15 @@ struct SavedPresetsView: View {
                 .help("Export saved animations to share with your team, or import ones they've sent you")
             }
         }
-        .alert("Save Animation", isPresented: $showingSaveDialog) {
-            TextField("Name", text: $newPresetName)
-            Button("Save") {
-                let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
-                store.add(RingPreset(name: name.isEmpty ? "Untitled" : name, config: config))
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .alert(
-            "Rename Animation",
-            isPresented: Binding(get: { renamingPreset != nil }, set: { if !$0 { renamingPreset = nil } })
-        ) {
-            TextField("Name", text: $renameText)
-            Button("Save") {
-                if let preset = renamingPreset {
-                    store.rename(preset.id, to: renameText)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
+        // Custom sheets instead of `.alert(...)` with an embedded
+        // `TextField` — SwiftUI alerts only support a bare TextField with
+        // no room for a companion control, and typing doesn't reach any
+        // TextField in this app right now (see `PasteableTextField`'s doc
+        // comment), so the alert version was simply unusable: nothing you
+        // typed ever landed in the field. A plain sheet gives room for the
+        // paste-workaround button alongside it.
+        .sheet(isPresented: $showingSaveDialog) { saveDialog }
+        .sheet(item: $renamingPreset) { _ in renameDialog }
         .alert(
             "Couldn't Import",
             isPresented: Binding(get: { importErrorMessage != nil }, set: { if !$0 { importErrorMessage = nil } })
@@ -118,6 +107,51 @@ struct SavedPresetsView: View {
         } message: {
             Text(importSuccessMessage ?? "")
         }
+    }
+
+    // MARK: - Save / Rename dialogs
+
+    private var saveDialog: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Save Animation").font(.headline)
+            PasteableTextField("Name", text: $newPresetName) { confirmSave() }
+            HStack {
+                Spacer()
+                Button("Cancel") { showingSaveDialog = false }
+                Button("Save") { confirmSave() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding()
+        .frame(width: 320)
+    }
+
+    private func confirmSave() {
+        let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
+        store.add(RingPreset(name: name.isEmpty ? "Untitled" : name, config: config))
+        showingSaveDialog = false
+    }
+
+    private var renameDialog: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Rename Animation").font(.headline)
+            PasteableTextField("Name", text: $renameText) { confirmRename() }
+            HStack {
+                Spacer()
+                Button("Cancel") { renamingPreset = nil }
+                Button("Save") { confirmRename() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding()
+        .frame(width: 320)
+    }
+
+    private func confirmRename() {
+        if let preset = renamingPreset {
+            store.rename(preset.id, to: renameText)
+        }
+        renamingPreset = nil
     }
 
     // MARK: - Export / Import

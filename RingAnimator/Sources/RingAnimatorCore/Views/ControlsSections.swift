@@ -161,19 +161,7 @@ struct VoiceSection: View {
 
         if voice.connectionState == .connected {
             HStack {
-                TextField("Say something…", text: $pendingMessage)
-                    #if os(macOS)
-                    .textFieldStyle(.roundedBorder)
-                    #endif
-                    .onSubmit { sendMessage() }
-                #if os(macOS)
-                Button {
-                    pasteFromClipboard(into: $pendingMessage)
-                } label: {
-                    Image(systemName: "doc.on.clipboard")
-                }
-                .help("Paste from clipboard")
-                #endif
+                PasteableTextField("Say something…", text: $pendingMessage) { sendMessage() }
                 Button("Send") { sendMessage() }
                     .disabled(pendingMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -191,17 +179,6 @@ struct VoiceSection: View {
                 .foregroundStyle(.orange)
         }
     }
-
-    #if os(macOS)
-    /// Workaround for the text-input bug (typing/focus never reaches any
-    /// TextField/SecureField in this app on this Xcode beta): reads the
-    /// system clipboard directly and writes it into the given binding, no
-    /// keyboard focus required.
-    private func pasteFromClipboard(into binding: Binding<String>) {
-        guard let string = NSPasteboard.general.string(forType: .string) else { return }
-        binding.wrappedValue = string.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    #endif
 
     @ViewBuilder
     private var connectButton: some View {
