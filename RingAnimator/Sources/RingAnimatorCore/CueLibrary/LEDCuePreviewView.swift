@@ -1,0 +1,460 @@
+import SwiftUI
+
+/// Renders a live preview of a single LED cue from its `LEDCueParameters`.
+/// Every `LEDPatternStyle` case has a distinct rendering here so the team
+/// can see, at a glance, what a cue currently communicates — separate from
+/// `RingView`, which renders the 11 continuous "AI thinking" animations
+/// used elsewhere in the app... with one exception: `.continuousAnimation`
+/// (see that case's doc comment) is rendered by handing an equivalent
+/// `RingConfig` straight to a real `RingView` (`animationConfig` below)
+/// instead of reimplementing any of those 11 animations a second time here.
+/// That's what actually guarantees Cue Library ↔ Ring Designer parity for
+/// that style, rather than two hand-maintained copies that can drift apart.
+///
+/// The same motion effects available in the Ring Designer (easing, scale
+/// pulse, hue shift, blur, blend mode, particles, and now glow/vibrancy
+/// too) layer on top of whichever style is active here too — see
+/// `LEDCueParameters`.
+public struct LEDCuePreviewView: View {
+    public var parameters: LEDCueParameters
+    public var diameter: CGFloat
+    public var lineWidth: CGFloat
+
+    /// Backs `.continuousAnimation` only — see the type doc comment. Held
+    /// as `@StateObject` (created once, kept across `parameters` changes)
+    /// rather than built fresh per render: `RingConfig.init()` does a
+    /// synchronous Keychain read and spins up a `VoiceConversationController`,
+    /// both wasted work if repeated every time `parameters` changes (or,
+    /// worse, every animation frame). `syncAnimationConfig()` copies the
+    /// current `parameters` into it instead, on `.onAppear` and whenever
+    /// `parameters` changes.
+    @StateObject private var animationConfig = RingConfig()
+
+    public init(parameters: LEDCueParameters, diameter: CGFloat = 160, lineWidth: CGFloat = 12) {
+        self.parameters = parameters
+        self.diameter = diameter
+        self.lineWidth = lineWidth
+    }
+
+    /// The particle layer's own field is a bit bigger than the ring itself,
+    /// so particles have room to drift and fade before getting clipped —
+    /// see the usage note where this is applied below.
+    private var particleFieldDiameter: CGFloat { diameter * 1.35 }
+
+    public var body: some View {
+        if parameters.style == .continuousAnimation {
+            RingView(config: animationConfig, diameter: diameter)
+                .frame(width: diameter, height: diameter)
+                .onAppear { syncAnimationConfig() }
+                .onChange(of: parameters) { _, _ in syncAnimationConfig() }
+        } else {
+            legacyStyleBody
+        }
+    }
+
+    /// Copies every field `RingView` reads off `RingConfig` from this cue's
+    /// own `parameters` — the same fields the Ring Designer's own Controls
+    /// panel edits, so a `.continuousAnimation` cue really can reproduce
+    /// anything designed there. `sequencePlaybackEnabled` is forced on
+    /// (unlike the Ring Designer's own default of an infinite ambient loop)
+    /// so this cue's `holdSeconds`/`fadeOutSeconds`/`loops` — meaningful for
+    /// every other style already — stay meaningful for this one too,
+    /// instead of silently doing nothing.
+    private func syncAnimationConfig() {
+        animationConfig.animationType = parameters.animationType
+        animationConfig.speed = parameters.speed
+        animationConfig.lineWidth = parameters.lineWidth
+        animationConfig.trailFraction = parameters.trailFraction
+        animationConfig.chasingFillStyle = parameters.chasingFillStyle
+        animationConfig.diodeCount = parameters.diodeCount
+        animationConfig.primaryColor = Color(hex: parameters.primaryColorHex)
+        animationConfig.secondaryColor = Color(hex: parameters.secondaryColorHex)
+        animationConfig.glowEnabled = parameters.glowEnabled
+        animationConfig.glowRadius = parameters.glowRadius
+        animationConfig.vibrancyEnabled = parameters.vibrancyEnabled
+        animationConfig.vibrancyAmount = parameters.vibrancyAmount
+        animationConfig.easingStyle = parameters.easingStyle
+        animationConfig.springBounce = parameters.springBounce
+        animationConfig.scalePulseEnabled = parameters.scalePulseEnabled
+        animationConfig.scalePulseAmount = parameters.scalePulseAmount
+        animationConfig.scalePulseSpeed = parameters.scalePulseSpeed
+        animationConfig.hueShiftEnabled = parameters.hueShiftEnabled
+        animationConfig.hueShiftSpeed = parameters.hueShiftSpeed
+        animationConfig.blurRadius = parameters.blurRadius
+        animationConfig.blendMode = parameters.blendMode
+        animationConfig.chromaticAberrationEnabled = parameters.chromaticAberrationEnabled
+        animationConfig.chromaticAberrationAmount = parameters.chromaticAberrationAmount
+        animationConfig.particlesEnabled = parameters.particlesEnabled
+        animationConfig.particleEmitterShape = parameters.particleEmitterShape
+        animationConfig.particleEmitterMode = parameters.particleEmitterMode
+        animationConfig.particleEmitterSizeMultiplier = parameters.particleEmitterSizeMultiplier
+        animationConfig.particleRenderMode = parameters.particleRenderMode
+        animationConfig.particleBirthRate = parameters.particleBirthRate
+        animationConfig.particleLifetime = parameters.particleLifetime
+        animationConfig.particleLifetimeRange = parameters.particleLifetimeRange
+        animationConfig.particleVelocity = parameters.particleVelocity
+        animationConfig.particleVelocityRange = parameters.particleVelocityRange
+        animationConfig.particleEmissionLongitude = parameters.particleEmissionLongitude
+        animationConfig.particleEmissionSpread = parameters.particleEmissionSpread
+        animationConfig.particleXAcceleration = parameters.particleXAcceleration
+        animationConfig.particleYAcceleration = parameters.particleYAcceleration
+        animationConfig.particleSpin = parameters.particleSpin
+        animationConfig.particleSpinRange = parameters.particleSpinRange
+        animationConfig.particleScale = parameters.particleScale
+        animationConfig.particleScaleRange = parameters.particleScaleRange
+        animationConfig.particlePulseEnabled = parameters.particlePulseEnabled
+        animationConfig.particlePulsePeriod = parameters.particlePulsePeriod
+        animationConfig.particleBlurRadius = parameters.particleBlurRadius
+        animationConfig.sequencePlaybackEnabled = true
+        animationConfig.holdSeconds = parameters.holdSeconds
+        animationConfig.fadeOutSeconds = parameters.fadeOutSeconds
+        animationConfig.loops = parameters.loops
+    }
+
+    /// Every `LEDPatternStyle` case *except* `.continuousAnimation` — the
+    /// original hand-rolled renderer, unchanged in substance from before
+    /// that case existed.
+    private var legacyStyleBody: some View {
+        TimelineView(.animation) { timeline in
+            let elapsed = timeline.date.timeIntervalSinceReferenceDate
+            let cycle = max(cycleDuration, 0.2)
+            let t = elapsed.truncatingRemainder(dividingBy: cycle)
+            let breathing = parameters.scalePulseEnabled
+                ? 1 + parameters.scalePulseAmount * sin(elapsed * parameters.scalePulseSpeed * 2 * .pi)
+                : 1
+
+            ZStack {
+                // Particles sit behind the style content — like corona rays
+                // emanating from underneath the ring, not floating in front.
+                // Backed by a real CAEmitterLayer (see RingParticleEmitter.swift).
+                if parameters.particlesEnabled {
+                    // Sized/clipped a bit larger than the ring itself
+                    // (`particleFieldDiameter`, not the tight `diameter`)
+                    // so particles have real room to drift and fade instead
+                    // of hitting a clip edge the instant they leave the
+                    // ring's own bounding square. This view is always shown
+                    // with some surrounding chrome (see CueExplorerView's
+                    // preview), so the modest overflow stays contained.
+                    let particleView = RingParticleEmitterView(
+                        particlesEnabled: parameters.particlesEnabled,
+                        emitterShape: parameters.particleEmitterShape,
+                        emitterMode: parameters.particleEmitterMode,
+                        emitterSizeMultiplier: parameters.particleEmitterSizeMultiplier,
+                        renderMode: parameters.particleRenderMode,
+                        birthRate: parameters.particleBirthRate,
+                        lifetime: parameters.particleLifetime,
+                        lifetimeRange: parameters.particleLifetimeRange,
+                        velocity: parameters.particleVelocity,
+                        velocityRange: parameters.particleVelocityRange,
+                        emissionLongitude: parameters.particleEmissionLongitude,
+                        emissionSpread: parameters.particleEmissionSpread,
+                        xAcceleration: parameters.particleXAcceleration,
+                        yAcceleration: parameters.particleYAcceleration,
+                        spin: parameters.particleSpin,
+                        spinRange: parameters.particleSpinRange,
+                        particleScale: parameters.particleScale,
+                        scaleRange: parameters.particleScaleRange,
+                        pulseEnabled: parameters.particlePulseEnabled,
+                        pulsePeriod: parameters.particlePulsePeriod,
+                        blurRadius: parameters.particleBlurRadius,
+                        primaryColor: primary(t),
+                        secondaryColor: secondary(t),
+                        size: particleFieldDiameter,
+                        ringRadius: diameter / 2 - lineWidth / 2
+                    )
+                    // Belt-and-suspenders on top of the in-place update in
+                    // RingParticleEmitterView: keying `.id()` to every
+                    // particle parameter forces SwiftUI to fully tear down
+                    // and recreate the underlying CAEmitterLayer/cells from
+                    // scratch whenever any of them change.
+                    particleView
+                        .id(particleView.parameterSignature)
+                        .frame(width: particleFieldDiameter, height: particleFieldDiameter)
+                        .clipped()
+                        .allowsHitTesting(false)
+                }
+                aberratedContent(t: t, cycle: cycle)
+            }
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(breathing)
+            .blur(radius: parameters.blurRadius)
+            .compositingGroup()
+            // Same formula as `RingView.body` — see there for why the
+            // `.compositingGroup()` above has to come first.
+            .saturation(vibrancyMultiplier)
+            .contrast(1 + (vibrancyMultiplier - 1) * 0.35)
+            .brightness((vibrancyMultiplier - 1) * 0.05)
+            .blendMode(parameters.blendMode.swiftUIBlendMode)
+        }
+    }
+
+    /// `1` when vibrancy is off — see `RingView.vibrancyMultiplier`, which
+    /// this mirrors exactly.
+    private var vibrancyMultiplier: Double {
+        parameters.vibrancyEnabled ? parameters.vibrancyAmount : 1
+    }
+
+    private var speed: Double { max(parameters.speed, 0.05) }
+
+    /// Hue-shifted primary/secondary, evaluated against the cue's own
+    /// cycle-relative time `t` (rather than unbounded elapsed time) so it
+    /// doesn't need threading through every style renderer below — colors
+    /// drift within each cycle and reset with it, which reads fine given
+    /// most cue cycles are only a couple of seconds long.
+    private func hueColor(t: Double, offset: Double) -> Color {
+        let raw = (t * parameters.hueShiftSpeed).truncatingRemainder(dividingBy: 1)
+        let hue = ((raw < 0 ? raw + 1 : raw) + offset).truncatingRemainder(dividingBy: 1)
+        return Color(hue: hue, saturation: 0.85, brightness: 1)
+    }
+
+    private func primary(_ t: Double) -> Color {
+        parameters.hueShiftEnabled ? hueColor(t: t, offset: 0) : Color(hex: parameters.primaryColorHex)
+    }
+
+    private func secondary(_ t: Double) -> Color {
+        parameters.hueShiftEnabled ? hueColor(t: t, offset: 0.5) : Color(hex: parameters.secondaryColorHex)
+    }
+
+    /// How long one full loop of the preview takes, in seconds. Chosen per
+    /// style so quick alerts read as quick and multi-second sequences (spin
+    /// → solid → fade) have room to breathe before looping.
+    private var cycleDuration: Double {
+        switch parameters.style {
+        case .continuousAnimation:
+            // Never actually reached — `body` renders `RingView` directly
+            // for this case, bypassing `legacyStyleBody`/`cycleDuration`
+            // entirely. Only here to keep this switch exhaustive.
+            return 2.0
+        case .solid, .off, .notApplicable, .custom:
+            return 2.0
+        case .earConOnly:
+            return 2.0
+        case .flash:
+            return (1.0 / speed) * 2
+        case .quickFlash:
+            let single = 0.14
+            return Double(max(parameters.flashCount, 1)) * single * 2 + 0.8
+        case .ripple:
+            return (1.1 / speed) + 0.2
+        case .transitionToSolid:
+            return 0.5 + parameters.holdSeconds + 0.5
+        case .spinThenSolidFade:
+            return (1.1 / speed) + parameters.holdSeconds + parameters.fadeOutSeconds + 0.6
+        case .pulseAccelerateThenSolidFade:
+            return 2.2 + parameters.holdSeconds + parameters.fadeOutSeconds + 0.6
+        case .rainbowThenWhiteFade:
+            return (1.5 / speed) + parameters.holdSeconds + parameters.fadeOutSeconds + 0.6
+        case .voiceAssistantColor:
+            return 2.4 / speed
+        }
+    }
+
+    /// Universal post-process, same technique as `RingView.aberratedContent`
+    /// — three color-isolated, offset, screen-blended copies of whichever
+    /// style is active. Doesn't touch any of the 13 style renderers below.
+    @ViewBuilder
+    private func aberratedContent(t: Double, cycle: Double) -> some View {
+        if parameters.chromaticAberrationEnabled {
+            let offset = CGFloat(parameters.chromaticAberrationAmount)
+            ZStack {
+                content(t: t, cycle: cycle)
+                    .colorMultiply(.red)
+                    .blendMode(.screen)
+                    .offset(x: -offset, y: offset * 0.3)
+                content(t: t, cycle: cycle)
+                    .colorMultiply(.green)
+                    .blendMode(.screen)
+                    .offset(x: 0, y: -offset * 0.5)
+                content(t: t, cycle: cycle)
+                    .colorMultiply(.blue)
+                    .blendMode(.screen)
+                    .offset(x: offset, y: offset * 0.3)
+            }
+            .compositingGroup()
+        } else {
+            content(t: t, cycle: cycle)
+        }
+    }
+
+    @ViewBuilder
+    private func content(t: Double, cycle: Double) -> some View {
+        switch parameters.style {
+        case .continuousAnimation:
+            // Never actually reached — see the matching case in
+            // `cycleDuration` above.
+            EmptyView()
+        case .solid:
+            ring(opacity: 1, color: primary(t))
+        case .off, .notApplicable:
+            ring(opacity: 0.06, color: .white)
+        case .earConOnly:
+            earconGlyph
+        case .flash:
+            flashView(t: t)
+        case .quickFlash:
+            quickFlashView(t: t)
+        case .ripple:
+            rippleView(t: t, cycle: cycle)
+        case .transitionToSolid:
+            transitionToSolidView(t: t)
+        case .spinThenSolidFade:
+            spinThenFadeView(t: t)
+        case .pulseAccelerateThenSolidFade:
+            pulseAccelerateView(t: t)
+        case .rainbowThenWhiteFade:
+            rainbowFadeView(t: t)
+        case .voiceAssistantColor:
+            voiceAssistantView(t: t)
+        case .custom:
+            ring(opacity: 0.5, color: primary(t))
+        }
+    }
+
+    // MARK: - Shared drawing
+
+    /// Glow now reads `parameters.glowEnabled`/`glowRadius` (the same Glow &
+    /// Blend fields the Ring Designer exposes) instead of a hardcoded
+    /// radius-10 shadow — every style above shares this one helper, so
+    /// turning glow off/tuning its radius affects all of them uniformly.
+    private func ring(opacity: Double, color: Color, width: CGFloat? = nil) -> some View {
+        let glowRadius = parameters.glowEnabled ? parameters.glowRadius : 0
+        return Circle()
+            .stroke(color, style: StrokeStyle(lineWidth: width ?? lineWidth, lineCap: .round))
+            .opacity(opacity)
+            .shadow(color: color.opacity(opacity * 0.7), radius: opacity > 0 ? glowRadius : 0)
+    }
+
+    private var earconGlyph: some View {
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.08), lineWidth: lineWidth)
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: diameter * 0.28))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Style renderers
+
+    private func flashView(t: Double) -> some View {
+        let period = 1.0 / speed
+        let on = t.truncatingRemainder(dividingBy: period) < period / 2
+        return ring(opacity: on ? 1 : 0.05, color: primary(t))
+    }
+
+    private func quickFlashView(t: Double) -> some View {
+        let single = 0.14
+        let flashWindow = Double(max(parameters.flashCount, 1)) * single * 2
+        let on: Bool
+        if t < flashWindow {
+            let phase = t.truncatingRemainder(dividingBy: single * 2)
+            on = phase < single
+        } else {
+            on = false
+        }
+        return ring(opacity: on ? 1 : 0.05, color: primary(t))
+    }
+
+    private func rippleView(t: Double, cycle: Double) -> some View {
+        let progress = (t / cycle).truncatingRemainder(dividingBy: 1.0)
+        return ZStack {
+            ForEach(0..<2, id: \.self) { i in
+                let offset = Double(i) * 0.5
+                let raw = (progress + offset).truncatingRemainder(dividingBy: 1.0)
+                let p = MotionEasing.apply(raw, style: parameters.easingStyle, bounce: parameters.springBounce)
+                Circle()
+                    .stroke(i.isMultiple(of: 2) ? primary(t) : secondary(t), lineWidth: lineWidth * 0.6)
+                    .scaleEffect(0.55 + 0.55 * p)
+                    .opacity(1 - p)
+            }
+            ring(opacity: 0.15, color: primary(t), width: lineWidth * 0.4)
+        }
+    }
+
+    private func transitionToSolidView(t: Double) -> some View {
+        let rampIn = 0.5
+        let holdEnd = rampIn + parameters.holdSeconds
+        let opacity: Double
+        if t < rampIn {
+            opacity = t / rampIn
+        } else if t < holdEnd {
+            opacity = 1
+        } else {
+            opacity = 0.05
+        }
+        return ring(opacity: max(opacity, 0.05), color: primary(t))
+    }
+
+    private func spinThenFadeView(t: Double) -> some View {
+        let spinDuration = 1.1 / speed
+        let holdEnd = spinDuration + parameters.holdSeconds
+
+        if t < spinDuration {
+            let head = t / spinDuration
+            let easedHead = MotionEasing.apply(head, style: parameters.easingStyle, bounce: parameters.springBounce)
+            return AnyView(
+                ZStack {
+                    Circle().stroke(primary(t).opacity(0.12), lineWidth: lineWidth)
+                    Circle()
+                        .trim(from: 0, to: 0.28)
+                        .stroke(primary(t), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                        .rotationEffect(.radians(easedHead * 2 * .pi * 3))
+                }
+                .shadow(color: primary(t).opacity(0.6), radius: parameters.glowEnabled ? parameters.glowRadius : 0)
+            )
+        } else if t < holdEnd {
+            return AnyView(ring(opacity: 1, color: primary(t)))
+        } else {
+            let fadeProgress = parameters.fadeOutSeconds > 0 ? (t - holdEnd) / parameters.fadeOutSeconds : 1
+            return AnyView(ring(opacity: max(1 - fadeProgress, 0.05), color: primary(t)))
+        }
+    }
+
+    private func pulseAccelerateView(t: Double) -> some View {
+        let pulseDuration = 2.2
+        let holdEnd = pulseDuration + parameters.holdSeconds
+
+        if t < pulseDuration {
+            // Pulse rate accelerates as t approaches pulseDuration (countdown feel).
+            let progress = t / pulseDuration
+            let rate = 1.5 + progress * 8
+            let value = (sin(t * rate * 2 * .pi) + 1) / 2
+            return AnyView(
+                ring(opacity: 0.4 + 0.6 * value, color: primary(t), width: lineWidth * CGFloat(0.7 + 0.5 * value))
+            )
+        } else if t < holdEnd {
+            return AnyView(ring(opacity: 1, color: primary(t)))
+        } else {
+            let fadeProgress = parameters.fadeOutSeconds > 0 ? (t - holdEnd) / parameters.fadeOutSeconds : 1
+            return AnyView(ring(opacity: max(1 - fadeProgress, 0.05), color: primary(t)))
+        }
+    }
+
+    private func rainbowFadeView(t: Double) -> some View {
+        let spinDuration = 1.5 / speed
+        let holdEnd = spinDuration + parameters.holdSeconds
+
+        if t < spinDuration {
+            let hue = (t / spinDuration)
+            return AnyView(
+                ring(opacity: 1, color: Color(hue: hue, saturation: 0.85, brightness: 1))
+            )
+        } else if t < holdEnd {
+            return AnyView(ring(opacity: 1, color: .white))
+        } else {
+            let fadeProgress = parameters.fadeOutSeconds > 0 ? (t - holdEnd) / parameters.fadeOutSeconds : 1
+            return AnyView(ring(opacity: max(1 - fadeProgress, 0.05), color: .white))
+        }
+    }
+
+    private func voiceAssistantView(t: Double) -> some View {
+        let phase = t * speed * 2 * .pi
+        let gradient = AngularGradient(colors: [primary(t), secondary(t), primary(t)], center: .center)
+        return Circle()
+            .stroke(gradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            .rotationEffect(.radians(phase))
+            .shadow(color: primary(t).opacity(0.5), radius: parameters.glowEnabled ? parameters.glowRadius : 0)
+    }
+
+    // Particle rendering (all 3 emission styles) has moved to a real
+    // CAEmitterLayer — see RingParticleEmitter.swift / RingParticleEmitterView.swift.
+}
