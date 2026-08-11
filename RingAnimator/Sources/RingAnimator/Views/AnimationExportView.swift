@@ -78,9 +78,11 @@ struct AnimationExportView: View {
                 Spacer()
                 Button("Cancel") { onDismiss() }
                     .disabled(isExporting)
+                    .ringGlassButtonStyle()
                 Button("Export…") { beginExport() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(isExporting || (!exportGIF && !exportMovie))
+                    .ringGlassButtonStyle()
             }
         }
         .padding(20)

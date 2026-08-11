@@ -164,6 +164,7 @@ struct VoiceSection: View {
                 PasteableTextField("Say something…", text: $pendingMessage) { sendMessage() }
                 Button("Send") { sendMessage() }
                     .disabled(pendingMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .ringGlassButtonStyle()
             }
             if !voice.lastAgentResponse.isEmpty {
                 Text("“\(voice.lastAgentResponse)”")
@@ -185,12 +186,14 @@ struct VoiceSection: View {
         switch voice.connectionState {
         case .connected, .connecting:
             Button("Disconnect") { voice.disconnect() }
+                .ringGlassButtonStyle()
         case .disconnected, .error:
             // No Agent ID/API Key fields anymore — this just connects
             // straight to the preconfigured agent in `config.elevenLabsAgentID`.
             Button("Use AI Agent") {
                 voice.connect(apiKey: config.elevenLabsAPIKey, agentID: config.elevenLabsAgentID)
             }
+            .ringGlassButtonStyle()
         }
     }
 
@@ -277,6 +280,12 @@ struct ParticlesSection: View {
     var body: some View {
         Toggle("Particles", isOn: $config.particlesEnabled)
         if config.particlesEnabled {
+            // 20-odd raw CAEmitterLayer/CAEmitterCell knobs read as one
+            // undifferentiated wall without some kind of grouping — these
+            // captions split them the way Xcode's own Attributes inspector
+            // splits a layer's properties: where/how particles spawn,
+            // how they move once alive, then how they look.
+            GroupCaption("Emission")
             Picker("Emitter shape", selection: $config.particleEmitterShape) {
                 ForEach(ParticleEmitterShape.allCases) { shape in
                     Text(shape.rawValue).tag(shape)
@@ -293,25 +302,27 @@ struct ParticlesSection: View {
                     Text(mode.rawValue).tag(mode)
                 }
             }
-
             LabeledSlider(title: "Birth rate", value: $config.particleBirthRate, range: 0...40, format: "%.0f/s")
-            LabeledSlider(title: "Lifetime", value: $config.particleLifetime, range: 0.2...4, format: "%.1fs")
-            LabeledSlider(title: "Lifetime range", value: $config.particleLifetimeRange, range: 0...2, format: "%.1fs")
-            LabeledSlider(title: "Velocity", value: $config.particleVelocity, range: 0...150, format: "%.0f pt/s")
-            LabeledSlider(title: "Velocity range", value: $config.particleVelocityRange, range: 0...80, format: "%.0f pt/s")
-            LabeledSlider(title: "Emission longitude", value: $config.particleEmissionLongitude, range: 0...360, format: "%.0f°")
-            LabeledSlider(title: "Emission spread", value: $config.particleEmissionSpread, range: 0...360, format: "%.0f°")
-            LabeledSlider(title: "X acceleration", value: $config.particleXAcceleration, range: -100...100, format: "%.0f pt/s²")
-            LabeledSlider(title: "Y acceleration", value: $config.particleYAcceleration, range: -100...100, format: "%.0f pt/s²")
-            LabeledSlider(title: "Spin", value: $config.particleSpin, range: -6...6, format: "%.1f rad/s")
-            LabeledSlider(title: "Spin range", value: $config.particleSpinRange, range: 0...6, format: "%.1f rad/s")
-            LabeledSlider(title: "Scale", value: $config.particleScale, range: 1...10, format: "%.0f pt")
-            LabeledSlider(title: "Scale range", value: $config.particleScaleRange, range: 0...5, format: "%.0f pt")
-
             Toggle("Pulse birth rate", isOn: $config.particlePulseEnabled)
             if config.particlePulseEnabled {
                 LabeledSlider(title: "Pulse period", value: $config.particlePulsePeriod, range: 0.1...3, format: "%.1fs")
             }
+            LabeledSlider(title: "Emission longitude", value: $config.particleEmissionLongitude, range: 0...360, format: "%.0f°")
+            LabeledSlider(title: "Emission spread", value: $config.particleEmissionSpread, range: 0...360, format: "%.0f°")
+
+            GroupCaption("Motion")
+            LabeledSlider(title: "Lifetime", value: $config.particleLifetime, range: 0.2...4, format: "%.1fs")
+            LabeledSlider(title: "Lifetime range", value: $config.particleLifetimeRange, range: 0...2, format: "%.1fs")
+            LabeledSlider(title: "Velocity", value: $config.particleVelocity, range: 0...150, format: "%.0f pt/s")
+            LabeledSlider(title: "Velocity range", value: $config.particleVelocityRange, range: 0...80, format: "%.0f pt/s")
+            LabeledSlider(title: "X acceleration", value: $config.particleXAcceleration, range: -100...100, format: "%.0f pt/s²")
+            LabeledSlider(title: "Y acceleration", value: $config.particleYAcceleration, range: -100...100, format: "%.0f pt/s²")
+            LabeledSlider(title: "Spin", value: $config.particleSpin, range: -6...6, format: "%.1f rad/s")
+            LabeledSlider(title: "Spin range", value: $config.particleSpinRange, range: 0...6, format: "%.1f rad/s")
+
+            GroupCaption("Appearance")
+            LabeledSlider(title: "Scale", value: $config.particleScale, range: 1...10, format: "%.0f pt")
+            LabeledSlider(title: "Scale range", value: $config.particleScaleRange, range: 0...5, format: "%.0f pt")
             LabeledSlider(title: "Blur", value: $config.particleBlurRadius, range: 0...20, format: "%.0f pt")
         }
     }
@@ -352,6 +363,7 @@ struct BackgroundSection: View {
                 Button("Remove Image", role: .destructive) {
                     config.backgroundImageData = nil
                 }
+                .ringGlassButtonStyle()
             }
             LabeledSlider(title: "Dim", value: $config.backgroundDimAmount, range: 0...1, format: "%.2f")
         }
@@ -363,6 +375,7 @@ struct BackgroundSection: View {
         Button(config.backgroundImageData == nil ? "Choose Image…" : "Change Image…") {
             pickBackgroundImageMac()
         }
+        .ringGlassButtonStyle()
         #elseif os(iOS)
         PhotosPicker(config.backgroundImageData == nil ? "Choose Image…" : "Change Image…",
                      selection: $selectedPhotoItem, matching: .images)
@@ -373,6 +386,7 @@ struct BackgroundSection: View {
                     }
                 }
             }
+            .ringGlassButtonStyle()
         #endif
     }
 
@@ -425,6 +439,47 @@ struct ColorSection: View {
             Text("Overridden live while color cycling is on — these are the fallback colors.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Shared row controls
+
+/// A small all-caps sub-header for breaking up one long section into
+/// scannable groups — used inside `ParticlesSection`, whose ~20 raw
+/// CAEmitterLayer/CAEmitterCell knobs otherwise read as one undifferentiated
+/// wall of sliders.
+struct GroupCaption: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .padding(.top, 6)
+    }
+}
+
+/// Applies the real `.glass` button style on macOS/iOS 26, with a plain
+/// bordered fallback below that. Buttons sitting inside a `Form`/`List`/
+/// toolbar already pick up Liquid Glass chrome automatically from their
+/// container (see `ExportView`'s equivalent comment) — this is for buttons
+/// that sit on their own instead, like the ones in `BackgroundSection`/
+/// `VoiceSection` (which, since `ControlsView` moved off `Form` onto its
+/// own glass cards, no longer get that for free) and `AnimationExportView`
+/// in the main `RingAnimator` target (hence `public` — it needs to cross
+/// the module boundary from this shared package into that executable).
+public extension View {
+    @ViewBuilder
+    func ringGlassButtonStyle() -> some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            self.buttonStyle(.glass)
+        } else {
+            self.buttonStyle(.bordered)
         }
     }
 }

@@ -31,7 +31,7 @@ public struct RingSettingsMenu: View {
     public var body: some View {
         List {
             Section {
-                NavigationLink("Preview") {
+                NavigationLink {
                     Form {
                         Section {
                             Picker("Appearance", selection: $isDarkMode) {
@@ -49,23 +49,44 @@ public struct RingSettingsMenu: View {
                     .formStyle(.grouped)
                     .navigationTitle("Preview")
                     .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Preview", systemImage: "eye")
                 }
             }
 
+            // Same order Mac's `ControlsView` cards use — "the ring's own
+            // look" first (Color, Animation, Shape, Motion Effects, Glow &
+            // Blend, Particles), then "how it's staged for this demo"
+            // (Playback, Voice, Background, Liquid Glass) — plus matching
+            // icons, so the two platforms read as the same settings
+            // reorganized into two different container shapes rather than
+            // two independently-ordered menus.
             Section {
-                NavigationLink("Animation") {
+                NavigationLink {
+                    Form { Section { ColorSection(config: config) } }
+                        .formStyle(.grouped)
+                        .navigationTitle("Color")
+                        .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Color", systemImage: "paintpalette")
+                }
+                NavigationLink {
                     Form { Section { AnimationSection(config: config) } }
                         .formStyle(.grouped)
                         .navigationTitle("Animation")
                         .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Animation", systemImage: "play.circle")
                 }
-                NavigationLink("Shape") {
+                NavigationLink {
                     Form { Section { ShapeSection(config: config) } }
                         .formStyle(.grouped)
                         .navigationTitle("Shape")
                         .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Shape", systemImage: "circle.dashed")
                 }
-                NavigationLink("Motion Effects") {
+                NavigationLink {
                     Form {
                         Section {
                             MotionEffectsSection(config: config)
@@ -78,28 +99,18 @@ public struct RingSettingsMenu: View {
                     .formStyle(.grouped)
                     .navigationTitle("Motion Effects")
                     .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Motion Effects", systemImage: "arrow.triangle.2.circlepath")
                 }
-                NavigationLink("Voice") {
-                    Form {
-                        Section {
-                            VoiceSection(config: config, voice: voice, stt: stt)
-                        } footer: {
-                            Text("Connects to a preconfigured ElevenLabs Conversational AI agent so the ring reacts to actual assistant speech instead of a simulated level.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .formStyle(.grouped)
-                    .navigationTitle("Voice")
-                    .inlineNavigationTitleIfAvailable()
-                }
-                NavigationLink("Glow & Blend") {
+                NavigationLink {
                     Form { Section { GlowBlendSection(config: config) } }
                         .formStyle(.grouped)
                         .navigationTitle("Glow & Blend")
                         .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Glow & Blend", systemImage: "sun.max")
                 }
-                NavigationLink("Particles") {
+                NavigationLink {
                     Form {
                         Section {
                             ParticlesSection(config: config)
@@ -112,8 +123,10 @@ public struct RingSettingsMenu: View {
                     .formStyle(.grouped)
                     .navigationTitle("Particles")
                     .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Particles", systemImage: "sparkles")
                 }
-                NavigationLink("Playback") {
+                NavigationLink {
                     Form {
                         Section {
                             PlaybackSection(config: config)
@@ -126,8 +139,26 @@ public struct RingSettingsMenu: View {
                     .formStyle(.grouped)
                     .navigationTitle("Playback")
                     .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Playback", systemImage: "repeat")
                 }
-                NavigationLink("Background") {
+                NavigationLink {
+                    Form {
+                        Section {
+                            VoiceSection(config: config, voice: voice, stt: stt)
+                        } footer: {
+                            Text("Connects to a preconfigured ElevenLabs Conversational AI agent so the ring reacts to actual assistant speech instead of a simulated level.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .formStyle(.grouped)
+                    .navigationTitle("Voice")
+                    .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Voice", systemImage: "waveform")
+                }
+                NavigationLink {
                     Form {
                         Section {
                             BackgroundSection(config: config)
@@ -140,8 +171,10 @@ public struct RingSettingsMenu: View {
                     .formStyle(.grouped)
                     .navigationTitle("Background")
                     .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Background", systemImage: "photo")
                 }
-                NavigationLink("Liquid Glass") {
+                NavigationLink {
                     Form {
                         Section {
                             LiquidGlassSection(config: config)
@@ -154,12 +187,8 @@ public struct RingSettingsMenu: View {
                     .formStyle(.grouped)
                     .navigationTitle("Liquid Glass")
                     .inlineNavigationTitleIfAvailable()
-                }
-                NavigationLink("Color") {
-                    Form { Section { ColorSection(config: config) } }
-                        .formStyle(.grouped)
-                        .navigationTitle("Color")
-                        .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Liquid Glass", systemImage: "wand.and.stars")
                 }
             }
         }
