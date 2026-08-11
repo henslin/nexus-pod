@@ -38,6 +38,19 @@ import RingAnimatorCore
 /// anything about the zoom mechanism itself, which is why it's back as
 /// the genuine Apple-supported approach rather than a hand-rolled gesture.
 ///
+/// The canvas fills the entire Preview pane (Figma/Sketch style — one big
+/// zoomable/pannable surface, not a box hugging the phone) rather than
+/// being sized exactly to the phone's own pixel dimensions the way it was
+/// originally. `ZoomableCanvas.contentSize` still describes the phone's
+/// actual size (what "100%"/double-click-to-reset means); the view itself
+/// just gets `.frame(maxWidth: .infinity, maxHeight: .infinity)` so
+/// AppKit hands its `NSScrollView` however much space `PreviewTab` (in
+/// `ContentView.swift`) actually has, and `CenteringClipView` (see
+/// `ZoomableCanvas.swift`) keeps the phone centered in whatever that
+/// turns out to be. The appearance/App-UI controls and the zoom hint
+/// float as overlays instead of stacking above the canvas, so they don't
+/// eat into that space.
+///
 
 /// The ring pod itself has a duplicate ring behind it (see
 /// `TabBarPreview.ringPodStack`) — same size, exactly centered, sitting
@@ -80,33 +93,45 @@ struct PhoneMockupView: View {
     private let cornerRadius: CGFloat = 44
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 28) {
-                appearancePicker
-                Toggle("App UI", isOn: $showAppUI)
-                    .toggleStyle(.switch)
-                    .fixedSize()
-            }
-            .padding(.bottom, 16)
-
-            ZoomableCanvas(
-                contentSize: CGSize(width: screenWidth + 24, height: screenHeight + 24),
-                minMagnification: 0.5,
-                maxMagnification: 4,
-                restMagnification: 1
-            ) {
-                deviceFrame
-                    // Applied here, above deviceFrame, so the phone body, the
-                    // screen content, the Liquid Glass tab bar, and the ring
-                    // pod all pick up the chosen appearance together.
-                    .environment(\.colorScheme, isDarkMode ? .dark : .light)
-            }
-            .frame(width: screenWidth + 24, height: screenHeight + 24)
-
+        ZoomableCanvas(
+            contentSize: CGSize(width: screenWidth + 24, height: screenHeight + 24),
+            minMagnification: 0.25,
+            maxMagnification: 4,
+            restMagnification: 1
+        ) {
+            deviceFrame
+                // Applied here, above deviceFrame, so the phone body, the
+                // screen content, the Liquid Glass tab bar, and the ring
+                // pod all pick up the chosen appearance together.
+                .environment(\.colorScheme, isDarkMode ? .dark : .light)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .overlay(alignment: .top) {
+            controlsBar
+                .padding(.top, 16)
+        }
+        .overlay(alignment: .bottomLeading) {
             Text("Pinch to zoom · double-click to reset")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.regularMaterial, in: Capsule())
+                .padding(14)
         }
+    }
+
+    private var controlsBar: some View {
+        HStack(spacing: 28) {
+            appearancePicker
+            Toggle("App UI", isOn: $showAppUI)
+                .toggleStyle(.switch)
+                .fixedSize()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: Capsule())
     }
 
     private var appearancePicker: some View {

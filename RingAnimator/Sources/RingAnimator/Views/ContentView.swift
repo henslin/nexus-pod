@@ -147,28 +147,33 @@ private struct PreviewTab: View {
     /// ...)` override its glass reads to pick up.
     @State private var isDarkMode = true
 
+    /// The phone mockup now owns the whole pane — a real pannable/
+    /// zoomable canvas (see `PhoneMockupView`/`ZoomableCanvas`), Figma/
+    /// Sketch style, rather than a box sized to fit alongside Large
+    /// Preview in a shared outer `ScrollView`. Large Preview floats as a
+    /// small card in the opposite corner from the zoom badge instead, so
+    /// both stay visible without splitting the available space (and
+    /// without fighting the canvas's own scrolling/panning for space to
+    /// size itself against — an outer `ScrollView` sizes to its content's
+    /// *intrinsic* size, which an infinitely pannable canvas doesn't
+    /// really have).
     var body: some View {
-        GeometryReader { proxy in
-            ScrollView([.vertical, .horizontal]) {
-                HStack(alignment: .center, spacing: 48) {
-                    VStack(spacing: 10) {
-                        Text("iPhone 17 Pro Preview").font(.caption).foregroundStyle(.secondary)
-                        PhoneMockupView(config: config, isDarkMode: $isDarkMode)
-                    }
-
-                    VStack(spacing: 10) {
-                        Text("Large Preview").font(.caption).foregroundStyle(.secondary)
-                        largePreview
-                    }
-                }
-                .padding(40)
-                // A frame at least as big as the viewport, centered by
-                // default — so when content is smaller than the window it
-                // sits dead-center both ways, and when it's larger the
-                // ScrollView takes over instead of clipping anything.
-                .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
+        PhoneMockupView(config: config, isDarkMode: $isDarkMode)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topTrailing) {
+                largePreviewCard
+                    .padding(20)
             }
+    }
+
+    private var largePreviewCard: some View {
+        VStack(spacing: 10) {
+            Text("Large Preview").font(.caption).foregroundStyle(.secondary)
+            largePreview
         }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
     }
 
     // The tab bar's ring pod: a 34pt ring centered in a 62pt circle (see
