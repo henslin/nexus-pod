@@ -29,13 +29,16 @@ import RingAnimatorCore
 /// behavior (Simulator or a real device), not this Mac-hosted mockup.
 /// This mockup stays tap-only.
 ///
-/// Pinch-to-zoom on this preview is paused, not abandoned — see
-/// `ZoomableCanvas.swift.bak` (same folder; renamed with a `.bak`
-/// extension so SwiftPM ignores it, not deleted) for the in-progress
-/// implementation and a full writeup of what's been ruled out so far and
-/// what to try next. This view renders `deviceFrame` directly, at a fixed
-/// size, in the meantime.
+/// Trackpad pinch-to-zoom lives on `deviceFrame` via `ZoomableCanvas`
+/// (same folder) — a real `NSScrollView` with `allowsMagnification`,
+/// double-click to reset to actual size, and a live "150%"-style badge
+/// that tracks your fingers in real time. This was blocked for a long
+/// time by an unrelated bug (the app never actually becoming the active
+/// app when launched from Xcode — see `RingAnimatorApp.swift`), not
+/// anything about the zoom mechanism itself, which is why it's back as
+/// the genuine Apple-supported approach rather than a hand-rolled gesture.
 ///
+
 /// The ring pod itself has a duplicate ring behind it (see
 /// `TabBarPreview.ringPodStack`) — same size, exactly centered, sitting
 /// behind the Liquid Glass material so it's genuinely refracted rather
@@ -86,11 +89,23 @@ struct PhoneMockupView: View {
             }
             .padding(.bottom, 16)
 
-            deviceFrame
-                // Applied here, above deviceFrame, so the phone body, the
-                // screen content, the Liquid Glass tab bar, and the ring
-                // pod all pick up the chosen appearance together.
-                .environment(\.colorScheme, isDarkMode ? .dark : .light)
+            ZoomableCanvas(
+                contentSize: CGSize(width: screenWidth + 24, height: screenHeight + 24),
+                minMagnification: 0.5,
+                maxMagnification: 4,
+                restMagnification: 1
+            ) {
+                deviceFrame
+                    // Applied here, above deviceFrame, so the phone body, the
+                    // screen content, the Liquid Glass tab bar, and the ring
+                    // pod all pick up the chosen appearance together.
+                    .environment(\.colorScheme, isDarkMode ? .dark : .light)
+            }
+            .frame(width: screenWidth + 24, height: screenHeight + 24)
+
+            Text("Pinch to zoom · double-click to reset")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 
