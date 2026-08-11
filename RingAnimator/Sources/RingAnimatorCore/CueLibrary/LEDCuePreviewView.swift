@@ -19,6 +19,11 @@ public struct LEDCuePreviewView: View {
     public var parameters: LEDCueParameters
     public var diameter: CGFloat
     public var lineWidth: CGFloat
+    /// Mirrors `RingView.overrideElapsed` exactly — see its doc comment.
+    /// Forwarded straight through to the nested `RingView` for
+    /// `.continuousAnimation`; used directly (bypassing `TimelineView`) for
+    /// every other style via `legacyStyleContent(elapsed:)`.
+    public var overrideElapsed: Double? = nil
 
     /// Backs `.continuousAnimation` only — see the type doc comment. Held
     /// as `@StateObject` (created once, kept across `parameters` changes)
@@ -30,10 +35,11 @@ public struct LEDCuePreviewView: View {
     /// `parameters` changes.
     @StateObject private var animationConfig = RingConfig()
 
-    public init(parameters: LEDCueParameters, diameter: CGFloat = 160, lineWidth: CGFloat = 12) {
+    public init(parameters: LEDCueParameters, diameter: CGFloat = 160, lineWidth: CGFloat = 12, overrideElapsed: Double? = nil) {
         self.parameters = parameters
         self.diameter = diameter
         self.lineWidth = lineWidth
+        self.overrideElapsed = overrideElapsed
     }
 
     /// The particle layer's own field is a bit bigger than the ring itself,
@@ -43,10 +49,15 @@ public struct LEDCuePreviewView: View {
 
     public var body: some View {
         if parameters.style == .continuousAnimation {
-            RingView(config: animationConfig, diameter: diameter)
+            RingView(config: animationConfig, diameter: diameter, overrideElapsed: overrideElapsed)
                 .frame(width: diameter, height: diameter)
                 .onAppear { syncAnimationConfig() }
                 .onChange(of: parameters) { _, _ in syncAnimationConfig() }
+        } else if let overrideElapsed {
+            // Same reasoning as `RingView.body`'s override branch — a
+            // one-shot deterministic snapshot bypasses TimelineView
+            // entirely rather than asking it for "the frame at time t".
+            legacyStyleContent(elapsed: overrideElapsed)
         } else {
             legacyStyleBody
         }
@@ -116,14 +127,22 @@ public struct LEDCuePreviewView: View {
     /// that case existed.
     private var legacyStyleBody: some View {
         TimelineView(.animation) { timeline in
-            let elapsed = timeline.date.timeIntervalSinceReferenceDate
-            let cycle = max(cycleDuration, 0.2)
-            let t = elapsed.truncatingRemainder(dividingBy: cycle)
-            let breathing = parameters.scalePulseEnabled
-                ? 1 + parameters.scalePulseAmount * sin(elapsed * parameters.scalePulseSpeed * 2 * .pi)
-                : 1
+            legacyStyleContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+        }
+    }
 
-            ZStack {
+    /// The actual per-frame content, factored out of `legacyStyleBody` so
+    /// it can be called directly with a synthetic elapsed time — see
+    /// `overrideElapsed`.
+    @ViewBuilder
+    private func legacyStyleContent(elapsed: Double) -> some View {
+        let cycle = max(cycleDuration, 0.2)
+        let t = elapsed.truncatingRemainder(dividingBy: cycle)
+        let breathing = parameters.scalePulseEnabled
+            ? 1 + parameters.scalePulseAmount * sin(elapsed * parameters.scalePulseSpeed * 2 * .pi)
+            : 1
+
+        ZStack {
                 // Particles sit behind the style content — like corona rays
                 // emanating from underneath the ring, not floating in front.
                 // Backed by a real CAEmitterLayer (see RingParticleEmitter.swift).
@@ -185,7 +204,6 @@ public struct LEDCuePreviewView: View {
             .contrast(1 + (vibrancyMultiplier - 1) * 0.35)
             .brightness((vibrancyMultiplier - 1) * 0.05)
             .blendMode(parameters.blendMode.swiftUIBlendMode)
-        }
     }
 
     /// `1` when vibrancy is off — see `RingView.vibrancyMultiplier`, which

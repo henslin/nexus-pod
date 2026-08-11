@@ -73,6 +73,9 @@ struct PhoneMockupView: View {
     /// shrink/offset math in `GrowFromRingModifier` so the two motions
     /// stack cleanly (lift up, then reset to 0 right as the shrink begins).
     @State private var pillLiftOffset: CGFloat = 0
+    /// Drives the Export Animation sheet — see `AnimationExportView`, wired
+    /// in via `controlsBar` below.
+    @State private var isExportingAnimation = false
 
     init(config: RingConfig, isDarkMode: Binding<Bool>) {
         self.config = config
@@ -120,6 +123,13 @@ struct PhoneMockupView: View {
                 .background(.regularMaterial, in: Capsule())
                 .padding(14)
         }
+        .sheet(isPresented: $isExportingAnimation) {
+            AnimationExportView(
+                config: config,
+                colorScheme: isDarkMode ? .dark : .light,
+                onDismiss: { isExportingAnimation = false }
+            )
+        }
     }
 
     private var controlsBar: some View {
@@ -128,6 +138,12 @@ struct PhoneMockupView: View {
             Toggle("App UI", isOn: $showAppUI)
                 .toggleStyle(.switch)
                 .fixedSize()
+            Button {
+                isExportingAnimation = true
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .help("Export Animation…")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

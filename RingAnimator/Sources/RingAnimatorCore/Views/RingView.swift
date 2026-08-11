@@ -17,6 +17,15 @@ import SwiftUI
 public struct RingView: View {
     @ObservedObject var config: RingConfig
     var diameter: CGFloat? = nil
+    /// When set, renders one deterministic frame at exactly this elapsed
+    /// time instead of driving off `TimelineView(.animation)`'s real
+    /// wall-clock date — used by `AnimationExporter` to render a GIF/movie
+    /// frame by frame. `easedPhase(elapsed:)` and everything downstream of
+    /// it are pure functions of `elapsed`, so substituting `frameIndex /
+    /// fps` here for real time reproduces an exact, repeatable frame every
+    /// time (unlike the particle layer, which is real `CAEmitterLayer`
+    /// physics `AnimationExporter` disables rather than trying to seek).
+    var overrideElapsed: Double? = nil
     @StateObject private var audioMonitor = AudioLevelMonitor()
 
     // The size every absolute value on `RingConfig` (line width, glow
@@ -28,15 +37,23 @@ public struct RingView: View {
     // width stroke stretched around a wider circle.
     private let referenceDiameter: CGFloat = 34
 
-    public init(config: RingConfig, diameter: CGFloat? = nil) {
+    public init(config: RingConfig, diameter: CGFloat? = nil, overrideElapsed: Double? = nil) {
         self.config = config
         self.diameter = diameter
+        self.overrideElapsed = overrideElapsed
     }
 
     public var body: some View {
         Group {
             if let style = effectivePatternStyle {
                 patternStyleBody(style: style)
+            } else if let overrideElapsed {
+                // Skips TimelineView entirely for a one-shot deterministic
+                // render — TimelineView is built for continuous live
+                // updates, not a single synchronous snapshot, so an export
+                // renderer asking it for "the frame at time t" isn't a
+                // scenario it's designed for.
+                continuousAnimationContent(elapsed: overrideElapsed)
             } else {
                 continuousAnimationBody
             }
@@ -88,7 +105,7 @@ public struct RingView: View {
         GeometryReader { geo in
             let size = diameter ?? min(geo.size.width, geo.size.height)
             let scale = size / referenceDiameter
-            LEDCuePreviewView(parameters: cueParameters(style: style, scale: scale), diameter: size, lineWidth: lw(scale))
+            LEDCuePreviewView(parameters: cueParameters(style: style, scale: scale), diameter: size, lineWidth: lw(scale), overrideElapsed: overrideElapsed)
                 .frame(width: geo.size.width, height: geo.size.height)
                 // Same reasoning as the `.clipShape(Circle())` on the
                 // continuous-animation path below — keeps glow/particles/
@@ -163,83 +180,90 @@ public struct RingView: View {
     /// existed.
     private var continuousAnimationBody: some View {
         TimelineView(.animation) { timeline in
-            let elapsed = timeline.date.timeIntervalSinceReferenceDate
-            let phase = easedPhase(elapsed: elapsed)
-            // Prefer the connected ElevenLabs assistant's live speech level
-            // over the local mic when both are available — see
-            // `RingConfig.voiceReactiveEnabled`'s doc comment. Read fresh
-            // every frame here rather than relying on Combine publishing,
-            // since `TimelineView(.animation)` already re-invokes this
-            // closure ~60x/second regardless.
-            //
-            // Written as a single ternary expression rather than an
-            // if/else statement deliberately — this closure is
-            // `@ViewBuilder`-attributed (it's `TimelineView`'s `content`
-            // parameter), which transforms *any* if/else statement in its
-            // body via `buildEither`, even ones that only compute a plain
-            // value like this. That transform expects each branch to
-            // build a `View`, so a plain assignment inside if/else here
-            // fails to type-check with "Generic parameter 'Content' could
-            // not be inferred." A ternary is just an expression, not a
-            // statement, so the builder never touches it.
-            let voiceLevel: Double = !config.voiceReactiveEnabled
-                ? 0
-                : (config.elevenLabs.connectionState == .connected
-                    ? config.elevenLabs.level * config.voiceReactiveSensitivity
-                    : audioMonitor.level * config.voiceReactiveSensitivity)
-            let breathing = (config.scalePulseEnabled
-                ? 1 + config.scalePulseAmount * sin(elapsed * config.scalePulseSpeed * 2 * .pi)
-                : 1) + voiceLevel * 0.25
-            let envelopeOpacity = sequenceEnvelopeOpacity(elapsed: elapsed)
+            continuousAnimationContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+        }
+    }
 
-            GeometryReader { geo in
-                let size = diameter ?? min(geo.size.width, geo.size.height)
-                let scale = size / referenceDiameter
-                // The container SwiftUI actually gave this view — usually
-                // bigger than `size` itself (the tab bar pod is a 34pt ring
-                // inside a 62pt frame; the large preview matches that same
-                // ratio — see ContentView's `largePreview`). Particles get
-                // that whole container to drift and fade in, instead of
-                // being clipped the instant they cross the ring's own tight
-                // bounding square.
-                let particleFieldSize = min(geo.size.width, geo.size.height)
+    /// The actual per-frame content, factored out of `continuousAnimationBody`
+    /// so `AnimationExporter` (via `overrideElapsed` in `body` above) can
+    /// call it directly with a synthetic elapsed time, bypassing
+    /// `TimelineView` entirely for a one-shot deterministic snapshot.
+    @ViewBuilder
+    private func continuousAnimationContent(elapsed: Double) -> some View {
+        let phase = easedPhase(elapsed: elapsed)
+        // Prefer the connected ElevenLabs assistant's live speech level
+        // over the local mic when both are available — see
+        // `RingConfig.voiceReactiveEnabled`'s doc comment. Read fresh
+        // every frame here rather than relying on Combine publishing,
+        // since `TimelineView(.animation)` already re-invokes this
+        // closure ~60x/second regardless.
+        //
+        // Written as a single ternary expression rather than an
+        // if/else statement deliberately — this is a `@ViewBuilder`
+        // function, which transforms *any* if/else statement in its
+        // body via `buildEither`, even ones that only compute a plain
+        // value like this. That transform expects each branch to
+        // build a `View`, so a plain assignment inside if/else here
+        // fails to type-check with "Generic parameter 'Content' could
+        // not be inferred." A ternary is just an expression, not a
+        // statement, so the builder never touches it.
+        let voiceLevel: Double = !config.voiceReactiveEnabled
+            ? 0
+            : (config.elevenLabs.connectionState == .connected
+                ? config.elevenLabs.level * config.voiceReactiveSensitivity
+                : audioMonitor.level * config.voiceReactiveSensitivity)
+        let breathing = (config.scalePulseEnabled
+            ? 1 + config.scalePulseAmount * sin(elapsed * config.scalePulseSpeed * 2 * .pi)
+            : 1) + voiceLevel * 0.25
+        let envelopeOpacity = sequenceEnvelopeOpacity(elapsed: elapsed)
 
-                ZStack {
-                    ringContent(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, size: size, scale: scale, particleFieldSize: particleFieldSize)
-                        .scaleEffect(breathing)
-                        .blur(radius: config.blurRadius * scale)
-                        .compositingGroup()
-                        // Saturation/contrast/brightness are Core Image
-                        // filters that need the ring flattened to one image
-                        // first (`.compositingGroup()` above) rather than
-                        // applied per-shape — otherwise overlapping
-                        // strokes/particles would each get boosted
-                        // independently and the overlaps would blow out.
-                        // Applied before `.blendMode` so the blend itself
-                        // works with the already-punchier colors.
-                        .saturation(vibrancyMultiplier)
-                        .contrast(1 + (vibrancyMultiplier - 1) * 0.35)
-                        .brightness((vibrancyMultiplier - 1) * 0.05)
-                        .blendMode(config.blendMode.swiftUIBlendMode)
-                        .opacity(envelopeOpacity)
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-                // Both call sites (`TabBarPreview`'s 62pt ring pod and
-                // `ContentView`'s large preview) size this view's container
-                // to the same circular "pod" footprint the ring is meant to
-                // read as sitting inside — but nothing was actually
-                // enforcing that boundary. Particles (`particleFieldSize`
-                // above deliberately gives them the *whole* container, not
-                // just the ring's own tight square, so they have room to
-                // drift) and each animation's glow `.shadow(...)` could
-                // both bleed past the circle into the pod/large-preview's
-                // corners. Clipping the fully-composited result to a circle
-                // inscribed in the container keeps everything — particles,
-                // glow, blur — contained to the same round silhouette the
-                // Liquid Glass pod itself uses, instead of a stray square
-                // haze poking out past the glass edge.
-                .clipShape(Circle())
+        GeometryReader { geo in
+            let size = diameter ?? min(geo.size.width, geo.size.height)
+            let scale = size / referenceDiameter
+            // The container SwiftUI actually gave this view — usually
+            // bigger than `size` itself (the tab bar pod is a 34pt ring
+            // inside a 62pt frame; the large preview matches that same
+            // ratio — see ContentView's `largePreview`). Particles get
+            // that whole container to drift and fade in, instead of
+            // being clipped the instant they cross the ring's own tight
+            // bounding square.
+            let particleFieldSize = min(geo.size.width, geo.size.height)
+
+            ZStack {
+                ringContent(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, size: size, scale: scale, particleFieldSize: particleFieldSize)
+                    .scaleEffect(breathing)
+                    .blur(radius: config.blurRadius * scale)
+                    .compositingGroup()
+                    // Saturation/contrast/brightness are Core Image
+                    // filters that need the ring flattened to one image
+                    // first (`.compositingGroup()` above) rather than
+                    // applied per-shape — otherwise overlapping
+                    // strokes/particles would each get boosted
+                    // independently and the overlaps would blow out.
+                    // Applied before `.blendMode` so the blend itself
+                    // works with the already-punchier colors.
+                    .saturation(vibrancyMultiplier)
+                    .contrast(1 + (vibrancyMultiplier - 1) * 0.35)
+                    .brightness((vibrancyMultiplier - 1) * 0.05)
+                    .blendMode(config.blendMode.swiftUIBlendMode)
+                    .opacity(envelopeOpacity)
             }
+            .frame(width: geo.size.width, height: geo.size.height)
+            // Both call sites (`TabBarPreview`'s 62pt ring pod and
+            // `ContentView`'s large preview) size this view's container
+            // to the same circular "pod" footprint the ring is meant to
+            // read as sitting inside — but nothing was actually
+            // enforcing that boundary. Particles (`particleFieldSize`
+            // above deliberately gives them the *whole* container, not
+            // just the ring's own tight square, so they have room to
+            // drift) and each animation's glow `.shadow(...)` could
+            // both bleed past the circle into the pod/large-preview's
+            // corners. Clipping the fully-composited result to a circle
+            // inscribed in the container keeps everything — particles,
+            // glow, blur — contained to the same round silhouette the
+            // Liquid Glass pod itself uses, instead of a stray square
+            // haze poking out past the glass edge.
+            .clipShape(Circle())
         }
     }
 
