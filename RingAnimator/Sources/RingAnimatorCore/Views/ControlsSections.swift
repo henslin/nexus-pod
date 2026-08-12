@@ -20,8 +20,8 @@ struct AnimationSection: View {
     @ObservedObject var config: RingConfig
 
     var body: some View {
-        Picker("Pattern style", selection: $config.patternStyle) {
-            Text("Continuous (Animation Type below)").tag(LEDPatternStyle?.none)
+        Picker("Pattern Style", selection: $config.patternStyle) {
+            Text("Continuous (Animation Type Below)").tag(LEDPatternStyle?.none)
             // Excludes a few Cue Library-only styles that don't make sense
             // as a live override on the ring you're actually looking at:
             // `.earConOnly`/`.notApplicable` describe cues with no LED
@@ -44,7 +44,7 @@ struct AnimationSection: View {
             .foregroundStyle(.secondary)
 
         if config.patternStyle == .flash || config.patternStyle == .quickFlash {
-            Stepper("Flash count: \(config.flashCount)", value: $config.flashCount, in: 1...10)
+            Stepper("Flash Count: \(config.flashCount)", value: $config.flashCount, in: 1...10)
         }
 
         Picker("Type", selection: $config.animationType) {
@@ -62,7 +62,7 @@ struct AnimationSection: View {
         LabeledSlider(title: "Speed", value: $config.speed, range: 0.1...3.0, format: "%.1fx")
 
         if config.animationType == .chasing {
-            Picker("Fill style", selection: $config.chasingFillStyle) {
+            Picker("Fill Style", selection: $config.chasingFillStyle) {
                 ForEach(ChasingFillStyle.allCases) { style in
                     Text(style.rawValue).tag(style)
                 }
@@ -75,13 +75,13 @@ struct AnimationSection: View {
         }
         if config.animationType == .chasing || config.animationType == .dualChase {
             LabeledSlider(
-                title: config.animationType == .chasing && config.chasingFillStyle == .drawUndraw ? "Peak length" : "Trail length",
+                title: config.animationType == .chasing && config.chasingFillStyle == .drawUndraw ? "Peak Length" : "Trail Length",
                 value: $config.trailFraction, range: 0.05...1.0, format: "%.2f"
             )
         }
         if config.animationType == .alternating || config.animationType == .equalizer || config.animationType == .sparkle {
             LabeledSlider(
-                title: config.animationType == .equalizer ? "Segment count" : config.animationType == .sparkle ? "Sparkle count" : "Diode count",
+                title: config.animationType == .equalizer ? "Segment Count" : config.animationType == .sparkle ? "Sparkle Count" : "Diode Count",
                 value: $config.diodeCount, range: 8...60, format: "%.0f"
             )
         }
@@ -95,7 +95,7 @@ struct AnimationSection: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         if config.easingStyle == .spring {
-            LabeledSlider(title: "Spring bounce", value: $config.springBounce, range: 0...1, format: "%.2f")
+            LabeledSlider(title: "Spring Bounce", value: $config.springBounce, range: 0...1, format: "%.2f")
         }
     }
 }
@@ -106,8 +106,8 @@ struct ShapeSection: View {
     @ObservedObject var config: RingConfig
 
     var body: some View {
-        LabeledSlider(title: "Line width", value: $config.lineWidth, range: 2...16, format: "%.0f pt")
-        LabeledSlider(title: "Preview size", value: $config.previewDiameter, range: 80...220, format: "%.0f pt")
+        LabeledSlider(title: "Line Width", value: $config.lineWidth, range: 2...16, format: "%.0f pt")
+        LabeledSlider(title: "Preview Size", value: $config.previewDiameter, range: 80...220, format: "%.0f pt")
     }
 }
 
@@ -117,13 +117,13 @@ struct MotionEffectsSection: View {
     @ObservedObject var config: RingConfig
 
     var body: some View {
-        Toggle("Scale pulse (breathing)", isOn: $config.scalePulseEnabled)
+        Toggle("Scale Pulse (Breathing)", isOn: $config.scalePulseEnabled)
         if config.scalePulseEnabled {
             LabeledSlider(title: "Amount", value: $config.scalePulseAmount, range: 0.02...0.4, format: "%.2f")
             LabeledSlider(title: "Speed", value: $config.scalePulseSpeed, range: 0.1...3.0, format: "%.1fx")
         }
 
-        Toggle("Color cycling (hue shift)", isOn: $config.hueShiftEnabled)
+        Toggle("Color Cycling (Hue Shift)", isOn: $config.hueShiftEnabled)
         if config.hueShiftEnabled {
             LabeledSlider(title: "Speed", value: $config.hueShiftSpeed, range: 0.02...1.0, format: "%.2fx")
             Text("Every configured color trails evenly spaced around the color wheel while active — 180° apart with just Primary/Secondary, closer together with more colors added.")
@@ -142,14 +142,14 @@ struct VoiceSection: View {
     @State private var pendingMessage: String = ""
 
     var body: some View {
-        Toggle("Voice reactive", isOn: $config.voiceReactiveEnabled)
+        Toggle("Voice Reactive", isOn: $config.voiceReactiveEnabled)
         if config.voiceReactiveEnabled {
             LabeledSlider(title: "Sensitivity", value: $config.voiceReactiveSensitivity, range: 0.2...3.0, format: "%.1fx")
             Text("Boosts glow and scale live — from the ElevenLabs assistant below if connected, otherwise the microphone (asked for on first use).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Toggle("Demo mode (no agent needed)", isOn: $config.voiceDemoModeEnabled)
+            Toggle("Demo Mode (No Agent Needed)", isOn: $config.voiceDemoModeEnabled)
             if config.voiceDemoModeEnabled {
                 Text("Shows the listening pill above the tab bar and live-transcribes your mic — no ElevenLabs connection required. Temporary, for demoing the pipeline.")
                     .font(.caption)
@@ -213,7 +213,7 @@ struct VoiceSection: View {
     private var connectionStatusLabel: some View {
         switch voice.connectionState {
         case .disconnected:
-            Text("Not connected")
+            Text("Not Connected")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case .connecting:
@@ -260,10 +260,10 @@ struct GlowBlendSection: View {
 
         Toggle("Glow", isOn: $config.glowEnabled)
         if config.glowEnabled {
-            LabeledSlider(title: "Glow radius", value: $config.glowRadius, range: 2...24, format: "%.0f pt")
+            LabeledSlider(title: "Glow Radius", value: $config.glowRadius, range: 2...24, format: "%.0f pt")
         }
         LabeledSlider(title: "Blur", value: $config.blurRadius, range: 0...12, format: "%.0f pt")
-        Picker("Blend mode", selection: $config.blendMode) {
+        Picker("Blend Mode", selection: $config.blendMode) {
             ForEach(RingBlendMode.allCases) { mode in
                 Text(mode.rawValue).tag(mode)
             }
@@ -274,7 +274,7 @@ struct GlowBlendSection: View {
                 .foregroundStyle(.secondary)
         }
 
-        Toggle("Chromatic aberration", isOn: $config.chromaticAberrationEnabled)
+        Toggle("Chromatic Aberration", isOn: $config.chromaticAberrationEnabled)
         if config.chromaticAberrationEnabled {
             LabeledSlider(title: "Amount", value: $config.chromaticAberrationAmount, range: 0...30, format: "%.0f pt")
             Text("Deliberately exaggerated RGB split, inspired by Siri's colorful \"wavelengths\" — not a subtle lens artifact.")
@@ -298,43 +298,43 @@ struct ParticlesSection: View {
             // splits a layer's properties: where/how particles spawn,
             // how they move once alive, then how they look.
             GroupCaption("Emission")
-            Picker("Emitter shape", selection: $config.particleEmitterShape) {
+            Picker("Emitter Shape", selection: $config.particleEmitterShape) {
                 ForEach(ParticleEmitterShape.allCases) { shape in
                     Text(shape.rawValue).tag(shape)
                 }
             }
-            Picker("Emitter mode", selection: $config.particleEmitterMode) {
+            Picker("Emitter Mode", selection: $config.particleEmitterMode) {
                 ForEach(ParticleEmitterMode.allCases) { mode in
                     Text(mode.rawValue).tag(mode)
                 }
             }
-            LabeledSlider(title: "Emitter size", value: $config.particleEmitterSizeMultiplier, range: 0.1...3, format: "%.1fx")
-            Picker("Render mode", selection: $config.particleRenderMode) {
+            LabeledSlider(title: "Emitter Size", value: $config.particleEmitterSizeMultiplier, range: 0.1...3, format: "%.1fx")
+            Picker("Render Mode", selection: $config.particleRenderMode) {
                 ForEach(ParticleRenderMode.allCases) { mode in
                     Text(mode.rawValue).tag(mode)
                 }
             }
-            LabeledSlider(title: "Birth rate", value: $config.particleBirthRate, range: 0...40, format: "%.0f/s")
-            Toggle("Pulse birth rate", isOn: $config.particlePulseEnabled)
+            LabeledSlider(title: "Birth Rate", value: $config.particleBirthRate, range: 0...40, format: "%.0f/s")
+            Toggle("Pulse Birth Rate", isOn: $config.particlePulseEnabled)
             if config.particlePulseEnabled {
-                LabeledSlider(title: "Pulse period", value: $config.particlePulsePeriod, range: 0.1...3, format: "%.1fs")
+                LabeledSlider(title: "Pulse Period", value: $config.particlePulsePeriod, range: 0.1...3, format: "%.1fs")
             }
-            LabeledSlider(title: "Emission longitude", value: $config.particleEmissionLongitude, range: 0...360, format: "%.0f°")
-            LabeledSlider(title: "Emission spread", value: $config.particleEmissionSpread, range: 0...360, format: "%.0f°")
+            LabeledSlider(title: "Emission Longitude", value: $config.particleEmissionLongitude, range: 0...360, format: "%.0f°")
+            LabeledSlider(title: "Emission Spread", value: $config.particleEmissionSpread, range: 0...360, format: "%.0f°")
 
             GroupCaption("Motion")
             LabeledSlider(title: "Lifetime", value: $config.particleLifetime, range: 0.2...4, format: "%.1fs")
-            LabeledSlider(title: "Lifetime range", value: $config.particleLifetimeRange, range: 0...2, format: "%.1fs")
+            LabeledSlider(title: "Lifetime Range", value: $config.particleLifetimeRange, range: 0...2, format: "%.1fs")
             LabeledSlider(title: "Velocity", value: $config.particleVelocity, range: 0...150, format: "%.0f pt/s")
-            LabeledSlider(title: "Velocity range", value: $config.particleVelocityRange, range: 0...80, format: "%.0f pt/s")
-            LabeledSlider(title: "X acceleration", value: $config.particleXAcceleration, range: -100...100, format: "%.0f pt/s²")
-            LabeledSlider(title: "Y acceleration", value: $config.particleYAcceleration, range: -100...100, format: "%.0f pt/s²")
+            LabeledSlider(title: "Velocity Range", value: $config.particleVelocityRange, range: 0...80, format: "%.0f pt/s")
+            LabeledSlider(title: "X Acceleration", value: $config.particleXAcceleration, range: -100...100, format: "%.0f pt/s²")
+            LabeledSlider(title: "Y Acceleration", value: $config.particleYAcceleration, range: -100...100, format: "%.0f pt/s²")
             LabeledSlider(title: "Spin", value: $config.particleSpin, range: -6...6, format: "%.1f rad/s")
-            LabeledSlider(title: "Spin range", value: $config.particleSpinRange, range: 0...6, format: "%.1f rad/s")
+            LabeledSlider(title: "Spin Range", value: $config.particleSpinRange, range: 0...6, format: "%.1f rad/s")
 
             GroupCaption("Appearance")
             LabeledSlider(title: "Scale", value: $config.particleScale, range: 1...10, format: "%.0f pt")
-            LabeledSlider(title: "Scale range", value: $config.particleScaleRange, range: 0...5, format: "%.0f pt")
+            LabeledSlider(title: "Scale Range", value: $config.particleScaleRange, range: 0...5, format: "%.0f pt")
             LabeledSlider(title: "Blur", value: $config.particleBlurRadius, range: 0...20, format: "%.0f pt")
         }
     }
@@ -350,10 +350,10 @@ struct PlaybackSection: View {
     }
 
     var body: some View {
-        Toggle("Sequence playback", isOn: $config.sequencePlaybackEnabled)
+        Toggle("Sequence Playback", isOn: $config.sequencePlaybackEnabled)
         if config.sequencePlaybackEnabled {
             LabeledSlider(title: "Hold", value: $config.holdSeconds, range: 0...6, format: "%.1fs")
-            LabeledSlider(title: "Fade out", value: $config.fadeOutSeconds, range: 0...3, format: "%.1fs")
+            LabeledSlider(title: "Fade Out", value: $config.fadeOutSeconds, range: 0...3, format: "%.1fs")
             Stepper(loopsLabel, value: $config.loops, in: 0...10)
         }
     }
@@ -368,7 +368,7 @@ struct BackgroundSection: View {
     #endif
 
     var body: some View {
-        Toggle("Background image", isOn: $config.backgroundImageEnabled)
+        Toggle("Background Image", isOn: $config.backgroundImageEnabled)
         if config.backgroundImageEnabled {
             backgroundImagePicker
             if config.backgroundImageData != nil {
@@ -430,7 +430,7 @@ struct LiquidGlassSection: View {
 
         Toggle("Tint", isOn: $config.glassTintEnabled)
         if config.glassTintEnabled {
-            ColorPicker("Tint color", selection: $config.glassTintColor)
+            ColorPicker("Tint Color", selection: $config.glassTintColor)
         }
 
         Toggle("Interactive", isOn: $config.glassInteractive)
@@ -441,6 +441,15 @@ struct LiquidGlassSection: View {
 
 struct ColorSection: View {
     @ObservedObject var config: RingConfig
+
+    /// Continues Primary/Secondary's naming scheme instead of switching to
+    /// "Color 3"/"Color 4" — matches `RingConfig.maxAdditionalColors` (4),
+    /// covering up to 6 colors total. Falls back to a 1-based "Color N"
+    /// only if that cap is ever raised past this list's length.
+    static func ordinalName(for index: Int) -> String {
+        let names = ["Tertiary", "Quaternary", "Quinary", "Senary"]
+        return names.indices.contains(index) ? names[index] : "Color \(index + 3)"
+    }
 
     var body: some View {
         ColorPicker("Primary", selection: $config.primaryColor)
@@ -468,9 +477,10 @@ struct ColorSection: View {
             // theoretical one; reproduced by removing a single remaining
             // extra color slot.
             let color = config.additionalColors.indices.contains(index) ? config.additionalColors[index] : Color.white
+            let name = ColorSection.ordinalName(for: index)
             HStack(spacing: 8) {
                 ColorPicker(
-                    "Color \(index + 3)",
+                    name,
                     selection: Binding(
                         get: { config.additionalColors.indices.contains(index) ? config.additionalColors[index] : color },
                         set: { newValue in
@@ -487,7 +497,7 @@ struct ColorSection: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Remove Color \(index + 3)")
+                .help("Remove \(name)")
             }
             Text(color.hexString).font(.caption).foregroundStyle(.secondary)
             ApprovedColorSwatchGrid(selectedHex: color.hexString) { newValue in
