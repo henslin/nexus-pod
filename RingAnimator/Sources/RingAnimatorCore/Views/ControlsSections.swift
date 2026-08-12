@@ -445,13 +445,59 @@ struct ColorSection: View {
     var body: some View {
         ColorPicker("Primary", selection: $config.primaryColor)
         Text(config.primaryColor.hexString).font(.caption).foregroundStyle(.secondary)
+        ApprovedColorSwatchRow(selectedHex: config.primaryColor.hexString) { config.primaryColor = $0 }
+
         ColorPicker("Secondary", selection: $config.secondaryColor)
         Text(config.secondaryColor.hexString).font(.caption).foregroundStyle(.secondary)
+        ApprovedColorSwatchRow(selectedHex: config.secondaryColor.hexString) { config.secondaryColor = $0 }
+
         if config.hueShiftEnabled {
             Text("Overridden live while color cycling is on — these are the fallback colors.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// A row of tap-to-apply swatches from `ApprovedColorPalette`, shown right
+/// under a `ColorPicker` so picking a brand color doesn't require opening
+/// the system color picker and hunting for the exact hex. Whichever swatch
+/// (if any) matches `selectedHex` gets a ring around it — comparing hex
+/// strings rather than `Color` values directly since `Color` isn't
+/// reliably `Equatable` across color spaces, and hex is already how this
+/// app treats color identity everywhere else (presets, code export). Both
+/// sides of the comparison come out of `Color.hexString`/
+/// `ApprovedColor.hex`'s shared uppercase `"#RRGGBB"` format, so a plain
+/// `==` is enough — no case-folding needed.
+private struct ApprovedColorSwatchRow: View {
+    let selectedHex: String
+    let onSelect: (Color) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(ApprovedColorPalette.colors) { approved in
+                Button {
+                    onSelect(approved.color)
+                } label: {
+                    Circle()
+                        .fill(approved.color)
+                        .frame(width: 20, height: 20)
+                        .overlay(
+                            Circle().strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+                        )
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.accentColor, lineWidth: 2)
+                                .padding(-2.5)
+                                .opacity(selectedHex == approved.hex ? 1 : 0)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(approved.name)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, 2)
     }
 }
 
