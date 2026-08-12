@@ -126,7 +126,7 @@ struct MotionEffectsSection: View {
         Toggle("Color cycling (hue shift)", isOn: $config.hueShiftEnabled)
         if config.hueShiftEnabled {
             LabeledSlider(title: "Speed", value: $config.hueShiftSpeed, range: 0.02...1.0, format: "%.2fx")
-            Text("Secondary color trails 180° behind primary while active.")
+            Text("Every configured color trails evenly spaced around the color wheel while active — 180° apart with just Primary/Secondary, closer together with more colors added.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -445,11 +445,71 @@ struct ColorSection: View {
     var body: some View {
         ColorPicker("Primary", selection: $config.primaryColor)
         Text(config.primaryColor.hexString).font(.caption).foregroundStyle(.secondary)
-        ApprovedColorSwatchRow(selectedHex: config.primaryColor.hexString) { config.primaryColor = $0 }
+        ApprovedColorSwatchGrid(selectedHex: config.primaryColor.hexString) { config.primaryColor = $0 }
 
         ColorPicker("Secondary", selection: $config.secondaryColor)
         Text(config.secondaryColor.hexString).font(.caption).foregroundStyle(.secondary)
-        ApprovedColorSwatchRow(selectedHex: config.secondaryColor.hexString) { config.secondaryColor = $0 }
+        ApprovedColorSwatchGrid(selectedHex: config.secondaryColor.hexString) { config.secondaryColor = $0 }
+
+        // Extra color slots beyond Primary/Secondary — every one of these
+        // actually feeds `RingView.activeColors(elapsed:)`, so adding a
+        // 3rd/4th/... color here changes what the ring renders, not just
+        // what's stored. Indexed by position (not a stable id — `Color`
+        // isn't `Identifiable` and duplicate colors are allowed) since the
+        // list is short and never reordered, only appended to/removed
+        // from.
+        ForEach(Array(config.additionalColors.indices), id: \.self) { index in
+            // Bounds-checked on every access: when the last row's remove
+            // button fires, `additionalColors.remove(at:)` shrinks the
+            // array immediately, but SwiftUI still re-evaluates this row's
+            // closures once more for the exit transition using the
+            // now-stale `index` — an unguarded `additionalColors[index]`
+            // there is a real crash (`Index out of range`), not just a
+            // theoretical one; reproduced by removing a single remaining
+            // extra color slot.
+            let color = config.additionalColors.indices.contains(index) ? config.additionalColors[index] : Color.white
+            HStack(spacing: 8) {
+                ColorPicker(
+                    "Color \(index + 3)",
+                    selection: Binding(
+                        get: { config.additionalColors.indices.contains(index) ? config.additionalColors[index] : color },
+                        set: { newValue in
+                            guard config.additionalColors.indices.contains(index) else { return }
+                            config.additionalColors[index] = newValue
+                        }
+                    )
+                )
+                Button {
+                    guard config.additionalColors.indices.contains(index) else { return }
+                    config.additionalColors.remove(at: index)
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Remove Color \(index + 3)")
+            }
+            Text(color.hexString).font(.caption).foregroundStyle(.secondary)
+            ApprovedColorSwatchGrid(selectedHex: color.hexString) { newValue in
+                guard config.additionalColors.indices.contains(index) else { return }
+                config.additionalColors[index] = newValue
+            }
+        }
+
+        if config.additionalColors.count < RingConfig.maxAdditionalColors {
+            Button {
+                // Starts on whatever App Hues swatch isn't already
+                // Primary/Secondary/an existing extra color, so a freshly
+                // added slot doesn't just silently duplicate one you
+                // already have.
+                let used = Set([config.primaryColor.hexString, config.secondaryColor.hexString] + config.additionalColors.map(\.hexString))
+                let next = ApprovedColorPalette.colors.first { !used.contains($0.hex) }
+                config.additionalColors.append(next?.color ?? .white)
+            } label: {
+                Label("Add Color", systemImage: "plus.circle")
+            }
+            .ringGlassButtonStyle()
+        }
 
         if config.hueShiftEnabled {
             Text("Overridden live while color cycling is on — these are the fallback colors.")
@@ -459,22 +519,28 @@ struct ColorSection: View {
     }
 }
 
-/// A row of tap-to-apply swatches from `ApprovedColorPalette`, shown right
-/// under a `ColorPicker` so picking a brand color doesn't require opening
-/// the system color picker and hunting for the exact hex. Whichever swatch
-/// (if any) matches `selectedHex` gets a ring around it — comparing hex
-/// strings rather than `Color` values directly since `Color` isn't
-/// reliably `Equatable` across color spaces, and hex is already how this
-/// app treats color identity everywhere else (presets, code export). Both
-/// sides of the comparison come out of `Color.hexString`/
-/// `ApprovedColor.hex`'s shared uppercase `"#RRGGBB"` format, so a plain
-/// `==` is enough — no case-folding needed.
-private struct ApprovedColorSwatchRow: View {
+/// A wrapping grid of tap-to-apply swatches from `ApprovedColorPalette`
+/// ("App Hues"), shown right under a `ColorPicker` so picking a brand
+/// color doesn't require opening the system color picker and hunting for
+/// the exact hex. All 18 swatches need to wrap across several rows at the
+/// Controls panel's width — a `LazyVGrid` with adaptive columns does that
+/// automatically, unlike a plain `HStack`. Whichever swatch (if any)
+/// matches `selectedHex` gets a ring around it — comparing hex strings
+/// rather than `Color` values directly since `Color` isn't reliably
+/// `Equatable` across color spaces, and hex is already how this app treats
+/// color identity everywhere else (presets, code export). Both sides of
+/// the comparison come out of `Color.hexString`/`ApprovedColor.hex`'s
+/// shared uppercase `"#RRGGBB"` format, so a plain `==` is enough — no
+/// case-folding needed.
+private struct ApprovedColorSwatchGrid: View {
     let selectedHex: String
     let onSelect: (Color) -> Void
 
+    private let columns = [GridItem(.adaptive(minimum: 20, maximum: 22), spacing: 8)]
+
     var body: some View {
-        HStack(spacing: 8) {
+        GroupCaption("App Hues")
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
             ForEach(ApprovedColorPalette.colors) { approved in
                 Button {
                     onSelect(approved.color)
@@ -495,7 +561,6 @@ private struct ApprovedColorSwatchRow: View {
                 .buttonStyle(.plain)
                 .help(approved.name)
             }
-            Spacer(minLength: 0)
         }
         .padding(.bottom, 2)
     }

@@ -35,6 +35,13 @@ public struct RingPreset: Identifiable, Codable, Equatable {
 
     public var primaryColorHex: String
     public var secondaryColorHex: String
+    /// Optional (not just defaulted) on purpose: synthesized `Decodable`
+    /// only auto-fills a *missing* JSON key for `Optional` properties, not
+    /// ones with a plain default value — so this has to be `[String]?`,
+    /// not `[String] = []`, for a saved-presets.json written before this
+    /// field existed to still decode instead of throwing `keyNotFound`.
+    /// `nil` and `[]` both mean "no extra colors" everywhere this is read.
+    public var additionalColorHexes: [String]?
 
     public var glowEnabled: Bool
     public var glowRadius: Double
@@ -102,6 +109,7 @@ public struct RingPreset: Identifiable, Codable, Equatable {
 
         primaryColorHex = config.primaryColor.hexString
         secondaryColorHex = config.secondaryColor.hexString
+        additionalColorHexes = config.additionalColors.map { $0.hexString }
 
         glowEnabled = config.glowEnabled
         glowRadius = config.glowRadius
@@ -167,6 +175,7 @@ public struct RingPreset: Identifiable, Codable, Equatable {
 
         config.primaryColor = Color(hex: primaryColorHex)
         config.secondaryColor = Color(hex: secondaryColorHex)
+        config.additionalColors = (additionalColorHexes ?? []).map { Color(hex: $0) }
 
         config.glowEnabled = glowEnabled
         config.glowRadius = glowRadius

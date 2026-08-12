@@ -421,22 +421,49 @@ public struct RingView: View {
         return max(1 - fadeT, 0)
     }
 
-    // MARK: - Hue-shifted color
+    // MARK: - Colors
 
-    private func colors(elapsed: Double) -> (primary: Color, secondary: Color) {
-        guard config.hueShiftEnabled else { return (config.primaryColor, config.secondaryColor) }
+    /// Every configured color — `primaryColor`/`secondaryColor` plus
+    /// whatever's in `additionalColors` — in order. The animation variants
+    /// below read from this directly (cycling `all[i % all.count]` per
+    /// element) when they render several discrete pieces, or through
+    /// `colors(elapsed:)`'s first-two convenience when they only ever need
+    /// a "main" color and a counterpart — either way, adding a 3rd/4th/...
+    /// color via the Controls panel's "+ Add Color" changes what's
+    /// actually rendered, not just what's stored.
+    ///
+    /// Hue-shift generalizes the old "two complementary hues 180° apart"
+    /// behavior to N evenly-spaced hues around the color wheel (N being
+    /// however many colors are configured) — the same rotating-hue idea,
+    /// just one point per slot instead of hard-coding exactly 2.
+    private func activeColors(elapsed: Double) -> [Color] {
+        let configured = [config.primaryColor, config.secondaryColor] + config.additionalColors
+        guard config.hueShiftEnabled else { return configured }
         let raw = (elapsed * config.hueShiftSpeed).truncatingRemainder(dividingBy: 1)
-        let hue1 = raw < 0 ? raw + 1 : raw
-        let hue2 = (hue1 + 0.5).truncatingRemainder(dividingBy: 1)
-        return (
-            Color(hue: hue1, saturation: 0.85, brightness: 1),
-            Color(hue: hue2, saturation: 0.85, brightness: 1)
-        )
+        let base = raw < 0 ? raw + 1 : raw
+        let n = configured.count
+        return (0..<n).map { i in
+            let hue = (base + Double(i) / Double(n)).truncatingRemainder(dividingBy: 1)
+            return Color(hue: hue, saturation: 0.85, brightness: 1)
+        }
+    }
+
+    /// Convenience for variants that only ever need a "main" color and a
+    /// counterpart (a glow tint, a track/background stroke, the two arcs
+    /// in "Dual Chase") rather than cycling through every configured
+    /// color — always `activeColors`' first two entries. Never runs out:
+    /// Primary/Secondary are permanent slots, so there are always at least 2.
+    private func colors(elapsed: Double) -> (primary: Color, secondary: Color) {
+        let all = activeColors(elapsed: elapsed)
+        return (all[0], all[1])
     }
 
     private func gradient(elapsed: Double) -> AngularGradient {
-        let (p, s) = colors(elapsed: elapsed)
-        return AngularGradient(colors: [p, s, p], center: .center)
+        let all = activeColors(elapsed: elapsed)
+        // Closes the loop back to the first color so the sweep reads as
+        // one continuous band with no hard seam — the same reason the old
+        // 2-color version repeated `p` at both ends ([p, s, p]).
+        return AngularGradient(colors: all + [all[0]], center: .center)
     }
 
     // MARK: - Shared pieces
@@ -539,7 +566,7 @@ public struct RingView: View {
     private func alternatingRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let blink = (sin(phase) + 1) / 2
         let count = max(Int(config.diodeCount.rounded()), 2)
-        let (p, s) = colors(elapsed: elapsed)
+        let all = activeColors(elapsed: elapsed)
         let diodeSize = lw(scale)
         return glow(
             GeometryReader { geo in
@@ -547,9 +574,15 @@ public struct RingView: View {
                 ZStack {
                     ForEach(0..<count, id: \.self) { i in
                         let angle = (Double(i) / Double(count)) * 2 * Double.pi - .pi / 2
+                        // The on/off blink groups stay strict even/odd
+                        // (unrelated to color count) — colors cycle
+                        // through every configured slot independently, so
+                        // more colors just means more distinct diodes,
+                        // still swapping the same two blink groups back
+                        // and forth.
                         let isEven = i.isMultiple(of: 2)
                         Circle()
-                            .fill(isEven ? p : s)
+                            .fill(all[i % all.count])
                             .frame(width: diodeSize, height: diodeSize)
                             .opacity(isEven ? blink : 1 - blink)
                             .position(
@@ -560,7 +593,7 @@ public struct RingView: View {
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
             },
-            color: p,
+            color: all[0],
             boost: voiceLevel,
             scale: scale
         )
@@ -585,25 +618,25 @@ public struct RingView: View {
     /// fixed offset per index) so a new one keeps emanating as the last
     /// fades out, instead of all pulsing in lockstep.
     private func rippleRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
-        let (p, s) = colors(elapsed: elapsed)
+        let all = activeColors(elapsed: elapsed)
         let cycles = elapsed * config.speed
         let f = cycles - cycles.rounded(.down)
         let waveCount = 3
         return glow(
             ZStack {
                 Circle()
-                    .stroke(p.opacity(0.25), lineWidth: lw(scale))
+                    .stroke(all[0].opacity(0.25), lineWidth: lw(scale))
                 ForEach(0..<waveCount, id: \.self) { i in
                     let localT = (f + Double(i) / Double(waveCount)).truncatingRemainder(dividingBy: 1)
                     Circle()
                         .stroke(
-                            (i.isMultiple(of: 2) ? p : s).opacity((1 - localT) * 0.8),
+                            all[i % all.count].opacity((1 - localT) * 0.8),
                             lineWidth: lw(scale) * CGFloat(1 - localT * 0.5)
                         )
                         .scaleEffect(1 + localT * 0.6)
                 }
             },
-            color: p,
+            color: all[0],
             boost: voiceLevel,
             scale: scale
         )
@@ -653,11 +686,11 @@ public struct RingView: View {
     /// straight on top of every segment's own pulse.
     private func equalizerRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let count = max(Int(config.diodeCount.rounded()), 4)
-        let (p, s) = colors(elapsed: elapsed)
+        let all = activeColors(elapsed: elapsed)
         let segmentFraction = (1.0 / Double(count)) * 0.7
         return glow(
             ZStack {
-                Circle().stroke(p.opacity(0.12), lineWidth: lw(scale))
+                Circle().stroke(all[0].opacity(0.12), lineWidth: lw(scale))
                 ForEach(0..<count, id: \.self) { i in
                     let seed = pseudoRandom(i)
                     let localPhase = elapsed * config.speed * 2 * Double.pi * (0.6 + seed * 0.8) + seed * 2 * Double.pi
@@ -666,13 +699,13 @@ public struct RingView: View {
                     Circle()
                         .trim(from: start, to: start + segmentFraction)
                         .stroke(
-                            i.isMultiple(of: 2) ? p : s,
+                            all[i % all.count],
                             style: StrokeStyle(lineWidth: lw(scale) * CGFloat(0.3 + value * 0.7), lineCap: .round)
                         )
                         .opacity(0.5 + value * 0.5)
                 }
             },
-            color: p,
+            color: all[0],
             boost: voiceLevel,
             scale: scale
         )
@@ -708,13 +741,13 @@ public struct RingView: View {
     /// frame and identical across the SwiftUI/Compose/Web exports.
     private func sparkleRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let count = max(Int(config.diodeCount.rounded()), 4)
-        let (p, s) = colors(elapsed: elapsed)
+        let all = activeColors(elapsed: elapsed)
         let dotSize = lw(scale)
         return glow(
             GeometryReader { geo in
                 let radius = min(geo.size.width, geo.size.height) / 2 - dotSize / 2
                 ZStack {
-                    Circle().stroke(p.opacity(0.1), lineWidth: lw(scale) * 0.4)
+                    Circle().stroke(all[0].opacity(0.1), lineWidth: lw(scale) * 0.4)
                     ForEach(0..<count, id: \.self) { i in
                         let angle = (Double(i) / Double(count)) * 2 * Double.pi - .pi / 2
                         let seed = pseudoRandom(i)
@@ -723,7 +756,7 @@ public struct RingView: View {
                         // Bright for the first quarter of this point's own cycle, dim the rest.
                         let brightness = max(0, 1 - f * 4)
                         Circle()
-                            .fill(i.isMultiple(of: 2) ? p : s)
+                            .fill(all[i % all.count])
                             .frame(width: dotSize, height: dotSize)
                             .opacity(0.15 + brightness * 0.85 + voiceLevel * 0.2)
                             .scaleEffect(0.6 + brightness * 0.6)
@@ -735,7 +768,7 @@ public struct RingView: View {
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
             },
-            color: p,
+            color: all[0],
             boost: voiceLevel,
             scale: scale
         )
@@ -749,10 +782,10 @@ public struct RingView: View {
     /// another.
     private func auroraRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let bandCount = 3
-        let (p, s) = colors(elapsed: elapsed)
+        let all = activeColors(elapsed: elapsed)
         return glow(
             ZStack {
-                Circle().stroke(p.opacity(0.08), lineWidth: lw(scale) * 0.4)
+                Circle().stroke(all[0].opacity(0.08), lineWidth: lw(scale) * 0.4)
                 ForEach(0..<bandCount, id: \.self) { i in
                     let seed = pseudoRandom(i)
                     let bandSpeed = config.speed * (0.12 + seed * 0.22)
@@ -762,7 +795,7 @@ public struct RingView: View {
                     Circle()
                         .trim(from: 0, to: bandLength)
                         .stroke(
-                            i.isMultiple(of: 2) ? p : s,
+                            all[i % all.count],
                             style: StrokeStyle(lineWidth: lw(scale) * 1.5, lineCap: .round)
                         )
                         .rotationEffect(.radians(bandPhase))
@@ -770,7 +803,7 @@ public struct RingView: View {
                         .blur(radius: lw(scale) * 0.4)
                 }
             },
-            color: p,
+            color: all[0],
             boost: voiceLevel,
             scale: scale
         )

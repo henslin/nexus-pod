@@ -74,6 +74,23 @@ public final class RingConfig: ObservableObject {
     @Published public var primaryColor: Color = Color(red: 0.30, green: 0.62, blue: 1.0)   // cyan-blue
     @Published public var secondaryColor: Color = Color(red: 0.55, green: 0.35, blue: 0.98) // violet
 
+    /// Extra color stops beyond Primary/Secondary, added via the "+ Add
+    /// Color" button in `ColorSection` (`ControlsSections.swift`) — capped
+    /// at `maxAdditionalColors` (4 more, 6 total). Kept as its own array
+    /// rather than folding Primary/Secondary into one combined list, so
+    /// every existing `ColorPicker` binding, preset field, and cue
+    /// parameter keeps working exactly as it did before this only ever
+    /// extends what's already there. `RingView.activeColors(elapsed:)` is
+    /// what actually reads `[primaryColor, secondaryColor] +
+    /// additionalColors` for rendering — every animation type cycles
+    /// through however many colors are configured instead of a fixed pair.
+    @Published public var additionalColors: [Color] = []
+
+    /// Hard cap matching what the Controls panel's "+ Add Color" button
+    /// enforces — 2 fixed slots (Primary/Secondary) plus up to this many
+    /// more.
+    public static let maxAdditionalColors = 4
+
     @Published public var glowEnabled: Bool = true
     @Published public var glowRadius: Double = 10
 
