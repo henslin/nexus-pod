@@ -22,7 +22,19 @@ struct AnimationSection: View {
     var body: some View {
         Picker("Pattern style", selection: $config.patternStyle) {
             Text("Continuous (Animation Type below)").tag(LEDPatternStyle?.none)
-            ForEach(LEDPatternStyle.allCases.filter { $0 != .continuousAnimation }) { style in
+            // Excludes a few Cue Library-only styles that don't make sense
+            // as a live override on the ring you're actually looking at:
+            // `.earConOnly`/`.notApplicable` describe cues with no LED
+            // behavior at all, `.voiceAssistantColor` defers to a platform
+            // color this app doesn't own, and `.custom` only means anything
+            // alongside a cue's free-text `notes` field, which this picker
+            // has no home for. All four stay selectable from the Cue
+            // Library's own "Style" picker (`CueExplorerView`), where they
+            // describe a specific spec-sheet row rather than override the
+            // live preview.
+            ForEach(LEDPatternStyle.allCases.filter {
+                ![.continuousAnimation, .earConOnly, .notApplicable, .voiceAssistantColor, .custom].contains($0)
+            }) { style in
                 Text(style.displayName).tag(LEDPatternStyle?.some(style))
             }
         }
