@@ -223,6 +223,15 @@ private struct GlassSectionCard<Content: View>: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        // Without this, the collapse/expand transition's opacity+move
+        // animates the content sliding and fading past the card's own
+        // edges instead of being masked by them — the rounded-rect glass
+        // background sits behind an unclipped VStack, so a section with
+        // tall content briefly overflows the card's shape mid-animation.
+        // Clipping to the same shape `cardBackground()` draws keeps every
+        // frame of the collapse contained to the card, not just the
+        // settled start/end states.
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .cardBackground()
     }
 }

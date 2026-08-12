@@ -97,13 +97,27 @@ struct ContentView: View {
 
     @ViewBuilder
     private var designerDetail: some View {
-        Group {
-            switch designerTab {
-            case .preview:
-                PreviewTab(config: config)
-            case .export:
-                ExportView(config: config)
-            }
+        // Both tabs stay mounted the whole time instead of a `switch` that
+        // swaps one for the other — a `switch` gives each case a different
+        // branch identity, so SwiftUI tears down and rebuilds whichever
+        // view isn't showing from scratch. That silently reset every piece
+        // of `PreviewTab`'s own state on every trip back to Preview: the
+        // Large Preview card's corner/collapsed state, and — worse —
+        // `PhoneMockupView`'s `ZoomableCanvas`, whose pan/zoom lives in a
+        // wrapped `NSScrollView` that has no SwiftUI state to restore once
+        // its `NSViewRepresentable` itself gets recreated. Keeping both
+        // views alive and just toggling which one is visible/hit-testable
+        // preserves all of that across tab switches, matching what a
+        // person expects from "the two panes I keep flipping between."
+        ZStack {
+            PreviewTab(config: config)
+                .opacity(designerTab == .preview ? 1 : 0)
+                .allowsHitTesting(designerTab == .preview)
+                .accessibilityHidden(designerTab != .preview)
+            ExportView(config: config)
+                .opacity(designerTab == .export ? 1 : 0)
+                .allowsHitTesting(designerTab == .export)
+                .accessibilityHidden(designerTab != .export)
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
