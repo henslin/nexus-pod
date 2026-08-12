@@ -134,9 +134,9 @@ struct CueExportView: View {
         }
     }
 
-    /// Reads a `.py` file — either one Ring Pod exported for this cue, or a
+    /// Reads a `.py` file — either one Nexus exported for this cue, or a
     /// teammate's hand-edited copy of one — and applies whatever
-    /// `RING_POD_PARAMS` it finds back onto this cue, the same "load it and
+    /// `NEXUS_PARAMS` it finds back onto this cue, the same "load it and
     /// see it" pattern `ExportView`'s own Blender Import uses for Nexus.
     private func importBlender() {
         let panel = NSOpenPanel()
@@ -153,7 +153,7 @@ struct CueExportView: View {
             store.update(updated, for: cue)
             importSuccessMessage = "Updated \(cue.name) from \(url.lastPathComponent)."
         case .failure:
-            importErrorMessage = "That doesn't look like a Ring Pod Blender export — couldn't find a RING_POD_PARAMS block to read."
+            importErrorMessage = "That doesn't look like a Nexus Blender export — couldn't find a NEXUS_PARAMS block to read."
         }
     }
 }

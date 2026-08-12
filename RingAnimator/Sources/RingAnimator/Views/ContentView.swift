@@ -92,7 +92,7 @@ struct ContentView: View {
                 EmptyView()
             }
         }
-        .navigationTitle(section?.rawValue ?? "Ring Pod")
+        .navigationTitle(section?.rawValue ?? "Nexus")
     }
 
     @ViewBuilder

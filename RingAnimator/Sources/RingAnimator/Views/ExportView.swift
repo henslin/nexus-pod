@@ -136,8 +136,8 @@ struct ExportView: View {
         }
     }
 
-    /// Reads a `.py` file — either one Ring Pod exported, or a teammate's
-    /// hand-edited copy of one — and applies whatever `RING_POD_PARAMS` it
+    /// Reads a `.py` file — either one Nexus exported, or a teammate's
+    /// hand-edited copy of one — and applies whatever `NEXUS_PARAMS` it
     /// finds straight onto the live ring, the same "load it and see it"
     /// pattern `SavedPresetsView` uses for its own Import.
     private func importBlender() {
@@ -154,7 +154,7 @@ struct ExportView: View {
         case .success:
             importSuccessMessage = "Updated the ring from \(url.lastPathComponent)."
         case .failure:
-            importErrorMessage = "That doesn't look like a Ring Pod Blender export — couldn't find a RING_POD_PARAMS block to read."
+            importErrorMessage = "That doesn't look like a Nexus Blender export — couldn't find a NEXUS_PARAMS block to read."
         }
     }
 }

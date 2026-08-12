@@ -92,7 +92,7 @@ struct AnimationExportView: View {
     private func beginExport() {
         let panel = NSSavePanel()
         panel.prompt = "Export"
-        panel.nameFieldStringValue = "Ring Pod Animation"
+        panel.nameFieldStringValue = "Nexus Animation"
         // Only offering the leading format as the panel's own extension —
         // when both are requested, the second file is derived from
         // whatever base name/directory the user picks here (see below)

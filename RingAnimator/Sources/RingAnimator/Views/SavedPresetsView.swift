@@ -195,7 +195,7 @@ struct SavedPresetsView: View {
                 ? "Added 1 saved animation."
                 : "Added \(count) saved animations."
         case .failure:
-            importErrorMessage = "That file isn't a saved animation or animation library exported from Ring Pod."
+            importErrorMessage = "That file isn't a saved animation or animation library exported from Nexus."
         }
     }
 }

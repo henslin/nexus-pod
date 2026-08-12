@@ -270,7 +270,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Ring Pod";
+				INFOPLIST_KEY_CFBundleDisplayName = "Nexus";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used to react to your voice — the ring's level-driven animation and the demo/speech-to-text mode both need microphone access.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Used to transcribe what you say so the ring can react to a live transcript, not just raw microphone level.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -311,7 +311,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Ring Pod";
+				INFOPLIST_KEY_CFBundleDisplayName = "Nexus";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used to react to your voice — the ring's level-driven animation and the demo/speech-to-text mode both need microphone access.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Used to transcribe what you say so the ring can react to a live transcript, not just raw microphone level.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;

@@ -13,7 +13,7 @@ import SwiftUI
 ///
 /// Neither is a big per-case switch on the Swift side — each fixed Python
 /// body branches on its own params dict at Blender-run-time instead
-/// (`RING_POD_PARAMS["animation_type"]` / `["style"]`). That means a
+/// (`NEXUS_PARAMS["animation_type"]` / `["style"]`). That means a
 /// designer can flip that one string in Blender and re-run to explore a
 /// different animation entirely, without re-exporting from the app —
 /// closer to what "translate the ring animations for Blender" actually
@@ -38,18 +38,18 @@ public extension CodeGenerators {
 
         let header = """
         # ============================================================
-        # Ring Pod -> Blender import (Nexus)
+        # Nexus -> Blender import (current ring)
         # Animation: \(config.animationType.rawValue) - Easing: \(config.easingStyle.rawValue)
         #
         # Paste into Blender's Scripting tab and hit Run (or run headless
         # via `blender --python this_file.py`). Safe to re-run — it deletes
-        # and rebuilds its own "RingPod_*" objects each time rather than
+        # and rebuilds its own "Nexus_*" objects each time rather than
         # duplicating them. Built for Blender 4.0+; on older versions the
         # material falls back to a flat Base Color (no glow), but the
         # geometry and motion still work.
         #
-        # RING_POD_PARAMS below is the only part "Import Blender Python…"
-        # in Ring Pod reads back — change these values (including
+        # NEXUS_PARAMS below is the only part "Import Blender Python…"
+        # in Nexus reads back — change these values (including
         # animation_type, to preview a different one), re-run in Blender,
         # then use Import in the app to carry your edits back into the
         # live ring. Everything after the params block is generated scene
@@ -60,7 +60,7 @@ public extension CodeGenerators {
         import bmesh
         import math
 
-        RING_POD_PARAMS = {
+        NEXUS_PARAMS = {
             "animation_type": "\(config.animationType.rawValue)",
             "easing": "\(config.easingStyle.rawValue)",
             "speed": \(config.speed),
@@ -87,7 +87,7 @@ public extension CodeGenerators {
                 pass  # Renamed/moved in some Blender versions — enable
                       # Bloom manually under Render Properties if needed.
 
-        print(f"Ring Pod: built '{p['animation_type']}' in Blender.")
+        print(f"Nexus: built '{p['animation_type']}' in Blender.")
         """
 
         return header + "\n\n" + blenderHelpers + tail
@@ -106,7 +106,7 @@ public extension CodeGenerators {
 
         let header = """
         # ============================================================
-        # Ring Pod -> Blender import (Cue Library)
+        # Nexus -> Blender import (Cue Library)
         # Cue: \(cue.name) (\([cue.category, cue.subcategory].compactMap { $0 }.joined(separator: " · ")))
         # Style: \(parameters.style.displayName)
         #
@@ -114,13 +114,13 @@ public extension CodeGenerators {
         #
         # Paste into Blender's Scripting tab and hit Run (or run headless
         # via `blender --python this_file.py`). Safe to re-run — it deletes
-        # and rebuilds its own "RingPod_*" objects each time rather than
+        # and rebuilds its own "Nexus_*" objects each time rather than
         # duplicating them. Built for Blender 4.0+; on older versions the
         # material falls back to a flat Base Color (no glow), but the
         # geometry and motion still work.
         #
-        # RING_POD_PARAMS below is the only part "Import Blender Python…"
-        # in Ring Pod reads back — change these values (including style,
+        # NEXUS_PARAMS below is the only part "Import Blender Python…"
+        # in Nexus reads back — change these values (including style,
         # to preview a different cue behavior), re-run in Blender, then use
         # Import in the app to carry your edits back into this cue.
         # Everything after the params block is generated scene setup and
@@ -131,7 +131,7 @@ public extension CodeGenerators {
         import bmesh
         import math
 
-        RING_POD_PARAMS = {
+        NEXUS_PARAMS = {
             "style": "\(parameters.style.rawValue)",
             "animation_type": "\(parameters.animationType.rawValue)",
             "easing": "\(parameters.easingStyle.rawValue)",
@@ -161,7 +161,7 @@ public extension CodeGenerators {
 
     private static var blenderHelpers: String {
         """
-        p = RING_POD_PARAMS
+        p = NEXUS_PARAMS
 
 
         def _hex_to_rgb(hex_str):
@@ -171,7 +171,7 @@ public extension CodeGenerators {
 
         PRIMARY = _hex_to_rgb(p["primary_color"])
         SECONDARY = _hex_to_rgb(p["secondary_color"])
-        SCALE = 0.01  # Ring Pod px -> Blender meters, purely a display convenience
+        SCALE = 0.01  # Nexus px -> Blender meters, purely a display convenience
         RADIUS = (p["diameter"] / 2) * SCALE
         TUBE = max(p["line_width"] * SCALE, 0.001)
         GLOW_STRENGTH = 3.0 if p["glow_enabled"] else 1.4
@@ -278,10 +278,10 @@ public extension CodeGenerators {
 
         # ---- cleanup from any previous run ----
         for name in list(bpy.data.objects.keys()):
-            if name.startswith("RingPod_"):
+            if name.startswith("Nexus_"):
                 bpy.data.objects.remove(bpy.data.objects[name], do_unlink=True)
         for name in list(bpy.data.materials.keys()):
-            if name.startswith("RingPod_"):
+            if name.startswith("Nexus_"):
                 bpy.data.materials.remove(bpy.data.materials[name])
 
 
@@ -377,36 +377,36 @@ public extension CodeGenerators {
                 # so the sweep is approximated as two colored half-arcs
                 # rotating together — the color boundary sweeping around
                 # reads as the same continuous motion.
-                a = _ring_curve("RingPod_WaveA", RADIUS, TUBE, PRIMARY, glow_strength, bevel_start=0.0, bevel_end=0.5)
-                b = _ring_curve("RingPod_WaveB", RADIUS, TUBE, SECONDARY, glow_strength, bevel_start=0.5, bevel_end=1.0)
+                a = _ring_curve("Nexus_WaveA", RADIUS, TUBE, PRIMARY, glow_strength, bevel_start=0.0, bevel_end=0.5)
+                b = _ring_curve("Nexus_WaveB", RADIUS, TUBE, SECONDARY, glow_strength, bevel_start=0.5, bevel_end=1.0)
                 for obj in (a, b):
                     _driver(obj, "rotation_euler", "ringpod_phase(frame)", index=2)
 
             elif anim == "Chasing":
                 trail = p["trail_fraction"]
-                _ring_curve("RingPod_Track", RADIUS, TUBE * 0.6, PRIMARY, 0.3)
+                _ring_curve("Nexus_Track", RADIUS, TUBE * 0.6, PRIMARY, 0.3)
                 if p["chasing_draw_undraw"]:
-                    ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength, bevel_end=0.0001)
+                    ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength, bevel_end=0.0001)
                     _driver(ring.data, "bevel_factor_end", f"max(math.sin(ringpod_fraction(frame) * math.pi) * {trail}, 0.0001)")
                 else:
-                    ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength, bevel_end=trail)
+                    ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength, bevel_end=trail)
                 _driver(ring, "rotation_euler", "ringpod_phase(frame)", index=2)
 
             elif anim == "Dual Chase":
                 trail = p["trail_fraction"]
-                _ring_curve("RingPod_Track", RADIUS, TUBE * 0.6, PRIMARY, 0.3)
-                a = _ring_curve("RingPod_ArcA", RADIUS, TUBE, PRIMARY, glow_strength, bevel_end=trail)
+                _ring_curve("Nexus_Track", RADIUS, TUBE * 0.6, PRIMARY, 0.3)
+                a = _ring_curve("Nexus_ArcA", RADIUS, TUBE, PRIMARY, glow_strength, bevel_end=trail)
                 _driver(a, "rotation_euler", "ringpod_phase(frame)", index=2)
-                b = _ring_curve("RingPod_ArcB", RADIUS, TUBE, SECONDARY, glow_strength, bevel_end=trail)
+                b = _ring_curve("Nexus_ArcB", RADIUS, TUBE, SECONDARY, glow_strength, bevel_end=trail)
                 _driver(b, "rotation_euler", "-ringpod_phase(frame)", index=2)
 
             elif anim == "Pulse":
-                ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+                ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
                 _driver(ring.data, "bevel_depth", f"{TUBE} * (0.7 + 0.6 * ringpod_pulse(frame))")
 
             elif anim == "Liquid Fill":
-                _ring_curve("RingPod_Track", RADIUS, TUBE * 0.6, PRIMARY, 0.3)
-                fill = _ring_curve("RingPod_Fill", RADIUS, TUBE, PRIMARY, glow_strength, bevel_end=0.5)
+                _ring_curve("Nexus_Track", RADIUS, TUBE * 0.6, PRIMARY, 0.3)
+                fill = _ring_curve("Nexus_Fill", RADIUS, TUBE, PRIMARY, glow_strength, bevel_end=0.5)
                 fill.rotation_euler.z = math.pi / 2  # fill originates at the bottom, like the app
                 _driver(
                     fill.data, "bevel_factor_end",
@@ -415,22 +415,22 @@ public extension CodeGenerators {
                 )
 
             elif anim == "Ripple":
-                _ring_curve("RingPod_Track", RADIUS, TUBE, PRIMARY, 0.5)
+                _ring_curve("Nexus_Track", RADIUS, TUBE, PRIMARY, 0.5)
                 for i in range(3):
                     color = PRIMARY if i % 2 == 0 else SECONDARY
-                    band = _ring_curve(f"RingPod_Wave{i}", RADIUS, TUBE, color, glow_strength)
+                    band = _ring_curve(f"Nexus_Wave{i}", RADIUS, TUBE, color, glow_strength)
                     local_t = f"((ringpod_fraction(frame) + {i} / 3) % 1)"
                     _driver(band, "scale", f"1 + {local_t} * 0.6", index=0)
                     _driver(band, "scale", f"1 + {local_t} * 0.6", index=1)
                     _drive_emission(band, f"(1 - {local_t}) * {glow_strength}")
 
             elif anim == "Aurora":
-                _ring_curve("RingPod_Track", RADIUS, TUBE * 0.4, PRIMARY, 0.2)
+                _ring_curve("Nexus_Track", RADIUS, TUBE * 0.4, PRIMARY, 0.2)
                 for i in range(3):
                     seed = (math.sin(i * 12.9898) * 43758.5453) % 1
                     color = PRIMARY if i % 2 == 0 else SECONDARY
                     band = _ring_curve(
-                        f"RingPod_Band{i}", RADIUS, TUBE * 1.5, color, glow_strength,
+                        f"Nexus_Band{i}", RADIUS, TUBE * 1.5, color, glow_strength,
                         bevel_end=0.22 + seed * 0.16
                     )
                     _driver(band, "rotation_euler", f"ringpod_phase(frame) * (0.12 + {seed} * 0.22) + {seed} * 2 * math.pi", index=2)
@@ -441,7 +441,7 @@ public extension CodeGenerators {
                     angle = (i / count) * 2 * math.pi - math.pi / 2
                     pos = (math.cos(angle) * RADIUS, math.sin(angle) * RADIUS, 0)
                     color = PRIMARY if i % 2 == 0 else SECONDARY
-                    dot = _dot(f"RingPod_Dot{i}", pos, TUBE / 2, color, glow_strength)
+                    dot = _dot(f"Nexus_Dot{i}", pos, TUBE / 2, color, glow_strength)
                     blink = "((math.sin(ringpod_phase(frame)) + 1) / 2)"
                     expr = f"{blink} * {glow_strength}" if i % 2 == 0 else f"(1 - {blink}) * {glow_strength}"
                     _drive_emission(dot, expr)
@@ -453,7 +453,7 @@ public extension CodeGenerators {
                     pos = (math.cos(angle) * RADIUS, math.sin(angle) * RADIUS, 0)
                     color = PRIMARY if i % 2 == 0 else SECONDARY
                     seed = (math.sin(i * 12.9898) * 43758.5453) % 1
-                    dot = _dot(f"RingPod_Dot{i}", pos, TUBE / 2, color, glow_strength)
+                    dot = _dot(f"Nexus_Dot{i}", pos, TUBE / 2, color, glow_strength)
                     expr = (
                         f"max(0, 1 - (((frame / (bpy.context.scene.render.fps or 24)) * {p['speed']} "
                         f"* (0.5 + {seed}) + {seed} * 4) % 1) * 4) * {glow_strength}"
@@ -463,12 +463,12 @@ public extension CodeGenerators {
             elif anim == "Equalizer":
                 count = max(int(p["diode_count"]), 4)
                 seg = (1 / count) * 0.7
-                _ring_curve("RingPod_Track", RADIUS, TUBE * 0.4, PRIMARY, 0.2)
+                _ring_curve("Nexus_Track", RADIUS, TUBE * 0.4, PRIMARY, 0.2)
                 for i in range(count):
                     start = i / count
                     color = PRIMARY if i % 2 == 0 else SECONDARY
                     seed = (math.sin(i * 12.9898) * 43758.5453) % 1
-                    bar = _ring_curve(f"RingPod_Bar{i}", RADIUS, TUBE, color, glow_strength, bevel_start=start, bevel_end=start + seg)
+                    bar = _ring_curve(f"Nexus_Bar{i}", RADIUS, TUBE, color, glow_strength, bevel_start=start, bevel_end=start + seg)
                     value = f"min((math.sin(ringpod_phase(frame) * (0.6 + {seed} * 0.8) + {seed} * 2 * math.pi) + 1) / 2, 1)"
                     _driver(bar.data, "bevel_depth", f"{TUBE} * (0.3 + {value} * 0.7)")
 
@@ -476,7 +476,7 @@ public extension CodeGenerators {
                 # Wobble — approximated as a breathing tube thickness rather
                 # than true per-vertex radial noise, which would need a
                 # Geometry Nodes driver setup beyond the scope of this script.
-                ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+                ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
                 _driver(ring.data, "bevel_depth", f"{TUBE} * (0.85 + 0.3 * ringpod_pulse(frame, period_cycles=0.3))")
         """
     }
@@ -498,40 +498,40 @@ public extension CodeGenerators {
             _build_continuous_animation()
 
         elif style == "solid":
-            _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
 
         elif style in ("off", "notApplicable"):
-            _ring_curve("RingPod_Ring", RADIUS, TUBE, (1, 1, 1), 0.3)
+            _ring_curve("Nexus_Ring", RADIUS, TUBE, (1, 1, 1), 0.3)
 
         elif style == "earConOnly":
             # Audio-only cue — no LED motion in the app either, so this is
             # just a faint static ring for context, not an attempt at a
             # speaker icon.
-            _ring_curve("RingPod_Ring", RADIUS, TUBE * 0.6, (1, 1, 1), 0.15)
+            _ring_curve("Nexus_Ring", RADIUS, TUBE * 0.6, (1, 1, 1), 0.15)
 
         elif style == "custom":
-            _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength * 0.5)
+            _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength * 0.5)
 
         elif style == "flash":
-            ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
             _drive_emission(ring, f"ringpod_flash(frame, {speed}) * {glow_strength}")
 
         elif style == "quickFlash":
-            ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
             _drive_emission(ring, f"ringpod_quick_flash(frame, {flash_count}) * {glow_strength}")
 
         elif style == "ripple":
-            _ring_curve("RingPod_Track", RADIUS, TUBE * 0.4, PRIMARY, 0.2)
+            _ring_curve("Nexus_Track", RADIUS, TUBE * 0.4, PRIMARY, 0.2)
             for i in range(2):
                 color = PRIMARY if i % 2 == 0 else SECONDARY
-                band = _ring_curve(f"RingPod_Ripple{i}", RADIUS, TUBE * 0.6, color, glow_strength)
+                band = _ring_curve(f"Nexus_Ripple{i}", RADIUS, TUBE * 0.6, color, glow_strength)
                 eased = f"ringpod_ripple_progress(frame, {speed}, {i})"
                 _driver(band, "scale", f"0.55 + 0.55 * {eased}", index=0)
                 _driver(band, "scale", f"0.55 + 0.55 * {eased}", index=1)
                 _drive_emission(band, f"(1 - {eased}) * {glow_strength}")
 
         elif style == "transitionToSolid":
-            ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
             _drive_emission(ring, f"ringpod_envelope(frame, 0.5, {hold}, {fade}) * {glow_strength}")
 
         elif style == "spinThenSolidFade":
@@ -541,12 +541,12 @@ public extension CodeGenerators {
             # animating bevel_factor and emission from two envelopes at
             # once (the same kind of simplification Wobble uses above for
             # its radial noise).
-            ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
             _driver(ring, "rotation_euler", "ringpod_phase(frame)", index=2)
             _drive_emission(ring, f"ringpod_envelope(frame, 1.1 / max({speed}, 0.05), {hold}, {fade}) * {glow_strength}")
 
         elif style == "pulseAccelerateThenSolidFade":
-            ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
             t_expr = f"ringpod_envelope_t(frame, 2.2, {hold}, {fade})"
             _drive_emission(
                 ring,
@@ -560,13 +560,13 @@ public extension CodeGenerators {
             # this script skips for simplicity — timing (spin, hold, fade)
             # is exact; the color itself stays this cue's primary color
             # rather than sweeping the full rainbow.
-            ring = _ring_curve("RingPod_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
             _driver(ring, "rotation_euler", "ringpod_phase(frame)", index=2)
             _drive_emission(ring, f"ringpod_envelope(frame, 1.5 / max({speed}, 0.05), {hold}, {fade}) * {glow_strength}")
 
         else:  # voiceAssistantColor
-            a = _ring_curve("RingPod_VoiceA", RADIUS, TUBE, PRIMARY, glow_strength, bevel_start=0.0, bevel_end=0.5)
-            b = _ring_curve("RingPod_VoiceB", RADIUS, TUBE, SECONDARY, glow_strength, bevel_start=0.5, bevel_end=1.0)
+            a = _ring_curve("Nexus_VoiceA", RADIUS, TUBE, PRIMARY, glow_strength, bevel_start=0.0, bevel_end=0.5)
+            b = _ring_curve("Nexus_VoiceB", RADIUS, TUBE, SECONDARY, glow_strength, bevel_start=0.5, bevel_end=1.0)
             for obj in (a, b):
                 _driver(obj, "rotation_euler", "ringpod_phase(frame)", index=2)
 
@@ -577,7 +577,7 @@ public extension CodeGenerators {
                 pass  # Renamed/moved in some Blender versions — enable
                       # Bloom manually under Render Properties if needed.
 
-        print(f"Ring Pod: built cue style '{style}' in Blender.")
+        print(f"Nexus: built cue style '{style}' in Blender.")
         """
     }
 }
@@ -589,7 +589,7 @@ public enum BlenderImportError: Error {
 }
 
 public extension CodeGenerators {
-    /// Reads the `RING_POD_PARAMS = { ... }` block back out of a script —
+    /// Reads the `NEXUS_PARAMS = { ... }` block back out of a script —
     /// either one this app exported, or a hand-edited copy of one (same
     /// keys, tweaked values, which is exactly the "see how it translates
     /// back" round trip this is for). Applies whatever fields it finds
@@ -679,7 +679,7 @@ public extension CodeGenerators {
 }
 
 private func blenderParamsBlock(in text: String) -> String? {
-    guard let startRange = text.range(of: "RING_POD_PARAMS = {") else { return nil }
+    guard let startRange = text.range(of: "NEXUS_PARAMS = {") else { return nil }
     guard let closeRange = text.range(of: "\n}", range: startRange.upperBound..<text.endIndex) else { return nil }
     return String(text[startRange.upperBound..<closeRange.lowerBound])
 }
