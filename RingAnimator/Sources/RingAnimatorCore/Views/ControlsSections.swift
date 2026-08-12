@@ -582,14 +582,14 @@ private struct ApprovedColorSwatchGrid: View {
 /// scannable groups — used inside `ParticlesSection`, whose ~20 raw
 /// CAEmitterLayer/CAEmitterCell knobs otherwise read as one undifferentiated
 /// wall of sliders.
-struct GroupCaption: View {
+public struct GroupCaption: View {
     let title: String
 
-    init(_ title: String) {
+    public init(_ title: String) {
         self.title = title
     }
 
-    var body: some View {
+    public var body: some View {
         Text(title.uppercased())
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.tertiary)
