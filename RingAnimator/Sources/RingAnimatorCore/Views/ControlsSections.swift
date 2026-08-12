@@ -542,13 +542,18 @@ struct ColorSection: View {
 /// the comparison come out of `Color.hexString`/`ApprovedColor.hex`'s
 /// shared uppercase `"#RRGGBB"` format, so a plain `==` is enough — no
 /// case-folding needed.
-private struct ApprovedColorSwatchGrid: View {
+public struct ApprovedColorSwatchGrid: View {
     let selectedHex: String
     let onSelect: (Color) -> Void
 
+    public init(selectedHex: String, onSelect: @escaping (Color) -> Void) {
+        self.selectedHex = selectedHex
+        self.onSelect = onSelect
+    }
+
     private let columns = [GridItem(.adaptive(minimum: 20, maximum: 22), spacing: 8)]
 
-    var body: some View {
+    public var body: some View {
         GroupCaption("App Hues")
         LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
             ForEach(ApprovedColorPalette.colors) { approved in

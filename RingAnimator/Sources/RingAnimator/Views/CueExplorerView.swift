@@ -253,11 +253,14 @@ struct CueDetailView: View {
                     set: { params.primaryColorHex = $0.hexString }
                 ))
                 Text(params.primaryColorHex).font(.caption).foregroundStyle(.secondary)
+                ApprovedColorSwatchGrid(selectedHex: params.primaryColorHex) { params.primaryColorHex = $0.hexString }
+
                 ColorPicker("Secondary", selection: Binding(
                     get: { Color(hex: params.secondaryColorHex) },
                     set: { params.secondaryColorHex = $0.hexString }
                 ))
                 Text(params.secondaryColorHex).font(.caption).foregroundStyle(.secondary)
+                ApprovedColorSwatchGrid(selectedHex: params.secondaryColorHex) { params.secondaryColorHex = $0.hexString }
             }
 
             card("animation", "Animation", "play.circle") {
