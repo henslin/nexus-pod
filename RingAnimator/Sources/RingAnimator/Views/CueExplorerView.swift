@@ -125,20 +125,47 @@ struct CueDetailView: View {
 
     private var isModified: Bool { params != cue.defaultParameters }
 
+    /// Same `HSplitView` shape as Nexus's own detail pane
+    /// (`ContentView.detail`'s `.ringDesigner` case): the preview stands on
+    /// its own in the wider left/center pane — the Cue Library's equivalent
+    /// of Nexus's iPhone mockup as "the thing you're looking at" — while
+    /// every control lives in a `ControlsView`-style panel pinned to the
+    /// right edge, instead of both being stacked in one long scrolling
+    /// column above the controls.
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
-                preview
-                specReference
-                controls
-            }
-            .padding(24)
+        HSplitView {
+            previewPane
+                .frame(minWidth: 420, idealWidth: 640)
+            controlsPanel
+                .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
         }
         .onChange(of: params) { _, newValue in
             store.update(newValue, for: cue)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Left/center pane: cue name, the live preview (now the pane's own
+    /// centerpiece rather than a small thumbnail squeezed above the
+    /// controls), and the spec-sheet reference text.
+    private var previewPane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                header
+                centeredPreview
+                specReference
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Right pane: every `GlassSectionCard` from `controls`, in its own
+    /// scroll view — the Cue Library's equivalent of `ControlsView.body`.
+    private var controlsPanel: some View {
+        ScrollView {
+            controls
+                .padding(16)
+        }
     }
 
     private var header: some View {
@@ -166,19 +193,24 @@ struct CueDetailView: View {
         }
     }
 
-    private var preview: some View {
-        HStack(spacing: 24) {
-            LEDCuePreviewView(parameters: params, diameter: 120, lineWidth: 12)
-                .frame(width: 160, height: 160)
-                .background(RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(0.9)))
-            VStack(alignment: .leading, spacing: 6) {
+    /// Bigger and horizontally centered now that it has a whole pane to
+    /// itself instead of sharing a row with the style/color caption —
+    /// same "the animation gets to be the centerpiece" reasoning as
+    /// Nexus's phone mockup/large preview.
+    private var centeredPreview: some View {
+        VStack(spacing: 12) {
+            LEDCuePreviewView(parameters: params, diameter: 200, lineWidth: 14)
+                .frame(width: 260, height: 260)
+                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.black.opacity(0.9)))
+            VStack(spacing: 4) {
                 Text(params.style.displayName).font(.headline)
                 Text("Primary \(params.primaryColorHex) · Secondary \(params.secondaryColorHex)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
     }
 
     private var specReference: some View {
