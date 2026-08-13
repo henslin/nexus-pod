@@ -77,8 +77,25 @@ public final class SpeechToTextService: ObservableObject, @unchecked Sendable {
     }
 
     /// Cancels the current utterance without firing `onFinalTranscript` —
-    /// used when the conversation loop is turned off mid-listen.
+    /// used when the conversation loop is turned off mid-listen, and (via
+    /// `VoiceConversationController.handleAgentTurnStarted()`) the instant
+    /// the agent starts an unprompted greeting, to stop the mic before it
+    /// can pick up that greeting through the speaker.
+    ///
+    /// Sets `finished` here too, not just in `finishUtterance()` — without
+    /// it, `task?.cancel()` inside `teardown()` can still let the
+    /// recognition task's completion handler fire *once more* right after
+    /// `stop()` returns, with whatever fragment of audio it had already
+    /// captured (e.g. the first word or two of the agent's own greeting,
+    /// caught in the brief window before `handleAgentTurnStarted()` reacted).
+    /// Without this guard, `finishUtterance()` would treat that late
+    /// fragment as a real final transcript and forward it to the agent as
+    /// a user message — the agent then replies to its own greeting, which
+    /// is the "talks to itself for the first message or two" bug. Was
+    /// already guarded on the *cancel* path (`finishUtterance()`'s own
+    /// `guard !finished`); this closes the same hole on the *stop* path.
     public func stop() {
+        finished = true
         teardown()
         isListening = false
         partialTranscript = ""
