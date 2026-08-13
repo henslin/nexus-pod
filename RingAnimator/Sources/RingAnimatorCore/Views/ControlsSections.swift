@@ -165,17 +165,6 @@ struct VoiceSection: View {
 
         Divider()
 
-        Picker("Agent Voice", selection: $config.selectedVoiceID) {
-            ForEach(AgentVoicePalette.voices) { voice in
-                Text(voice.name).tag(voice.id)
-            }
-        }
-        if voice.connectionState == .connected {
-            Text("Reconnect to hear the new voice — switching mid-conversation isn't supported.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-
         HStack {
             connectButton
             Spacer()
@@ -212,10 +201,9 @@ struct VoiceSection: View {
                 .ringGlassButtonStyle()
         case .disconnected, .error:
             // No Agent ID/API Key fields anymore — this just connects
-            // straight to the preconfigured agent in `config.elevenLabsAgentID`,
-            // in whichever voice is currently selected above.
+            // straight to the preconfigured agent in `config.elevenLabsAgentID`.
             Button("Use AI Agent") {
-                voice.connect(apiKey: config.elevenLabsAPIKey, agentID: config.elevenLabsAgentID, voiceID: config.selectedVoiceID)
+                voice.connect(apiKey: config.elevenLabsAPIKey, agentID: config.elevenLabsAgentID)
             }
             .ringGlassButtonStyle()
         }

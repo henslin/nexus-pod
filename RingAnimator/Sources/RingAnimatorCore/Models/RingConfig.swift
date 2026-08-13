@@ -276,15 +276,6 @@ public final class RingConfig: ObservableObject {
     /// with zero typing or pasting — override it via the paste button if
     /// you want to point at a different agent.
     @Published public var elevenLabsAgentID: String = "agent_2001kzed7cjnf7ca4382rtnykg5y"
-    /// Which of `AgentVoicePalette.voices` to speak the agent's replies in —
-    /// sent as a `conversation_config_override.tts.voice_id` on connect
-    /// (see `ElevenLabsVoiceService.connect(apiKey:agentID:voiceID:)`).
-    /// Defaulted to the first entry rather than left blank so "Use AI
-    /// Agent" always has a valid voice to send, same reasoning as
-    /// `elevenLabsAgentID` above. Only takes effect on the *next* connect —
-    /// changing it while already connected doesn't hot-swap the voice
-    /// mid-conversation.
-    @Published public var selectedVoiceID: String = AgentVoicePalette.voices.first?.id ?? ""
     /// The API key, by contrast, is a real credential — persisted to the
     /// Keychain (see `KeychainHelper`) rather than left in memory only or
     /// dropped in `UserDefaults`. Loaded once in `init()`.

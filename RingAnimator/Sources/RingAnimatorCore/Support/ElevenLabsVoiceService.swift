@@ -126,24 +126,9 @@ public final class ElevenLabsVoiceService: ObservableObject, @unchecked Sendable
     /// reads as the waveform "not responding," not just going quiet.
     private let responseSilenceTimeout: TimeInterval = 3.5
 
-    /// Set by `connect(apiKey:agentID:voiceID:)`, read once by
-    /// `openSocket(url:)` when it sends `conversation_initiation_client_data`
-    /// — held as a property rather than threaded through as a parameter
-    /// since `openSocket` is also the reconnect path called after the
-    /// async signed-URL fetch resolves.
-    private var pendingVoiceID: String = ""
-
     public init() {}
 
-    /// `voiceID`, if non-empty, is sent once the socket opens as a
-    /// `conversation_config_override.tts.voice_id` (see `openSocket(url:)`)
-    /// — lets one preconfigured agent speak in any of
-    /// `AgentVoicePalette.voices` instead of just its own dashboard-default
-    /// voice. Requires "Enable overrides → Voice ID" to be turned on for
-    /// this agent in its ElevenLabs dashboard Security tab; if it's off,
-    /// the override is silently ignored server-side and the agent's
-    /// default voice speaks regardless of what's passed here.
-    public func connect(apiKey: String, agentID: String, voiceID: String = "") {
+    public func connect(apiKey: String, agentID: String) {
         let trimmedID = agentID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedID.isEmpty else {
             connectionState = .error("Agent ID is required.")
@@ -151,7 +136,6 @@ public final class ElevenLabsVoiceService: ObservableObject, @unchecked Sendable
         }
         disconnect()
         connectionState = .connecting
-        pendingVoiceID = voiceID.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedKey.isEmpty {
@@ -250,19 +234,10 @@ public final class ElevenLabsVoiceService: ObservableObject, @unchecked Sendable
         webSocketTask = task
         task.resume()
         listen()
-        // An empty `conversation_config_override` just tells the server
-        // "use the agent's own configured defaults" — same as omitting it
-        // entirely. Only actually overrides the voice when `pendingVoiceID`
-        // is non-empty *and* this agent has "Enable overrides → Voice ID"
-        // turned on in its ElevenLabs dashboard; otherwise this field is
-        // silently ignored server-side.
-        var initiationPayload: [String: Any] = ["type": "conversation_initiation_client_data"]
-        if !pendingVoiceID.isEmpty {
-            initiationPayload["conversation_config_override"] = [
-                "tts": ["voice_id": pendingVoiceID]
-            ]
-        }
-        send(json: initiationPayload)
+        // Optional — an empty override just tells the server "use the
+        // agent's own configured defaults." Skipping this entirely also
+        // works; sending it makes the handshake explicit.
+        send(json: ["type": "conversation_initiation_client_data"])
         startLevelDecay()
     }
 
