@@ -63,8 +63,18 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(AppSection.allCases, selection: $section) { item in
-                Label(item.rawValue, systemImage: item.icon).tag(item)
+            // A plain `ForEach` here (rather than the `List(data:selection:
+            // content:)` shorthand) so a `Divider()` can sit between Cue
+            // Library and Use Cases — visually groups them apart from
+            // Nexus without needing a full `Section` header for just two
+            // items.
+            List(selection: $section) {
+                ForEach(AppSection.allCases) { item in
+                    Label(item.rawValue, systemImage: item.icon).tag(item)
+                    if item == .cueLibrary {
+                        Divider()
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(180)
         } content: {
