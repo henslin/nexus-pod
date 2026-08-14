@@ -307,13 +307,23 @@ private struct PreviewTab: View {
                     // cancels its own tap if the pointer moves enough to
                     // count as a drag, so this doesn't risk double-firing.
                     .simultaneousGesture(
-                        DragGesture(minimumDistance: 3)
+                        // minimumDistance: 0 rather than 3 — this gesture
+                        // now also has to catch plain, near-motionless
+                        // clicks on the collapsed button (see the
+                        // isPreviewCollapsed check in onEnded below), which
+                        // a minimumDistance of 3 would simply never
+                        // recognize at all.
+                        DragGesture(minimumDistance: 0)
                             .onChanged { value in
                                 previewDragTranslation = value.translation
                             }
                             .onEnded { value in
                                 let dropPoint = cardPosition(canvasSize: proxy.size)
                                     .addingTranslation(value.translation)
+                                let dragDistance = (
+                                    value.translation.width * value.translation.width
+                                    + value.translation.height * value.translation.height
+                                ).squareRoot()
                                 // Both state changes belong in the *same*
                                 // animated transaction: resetting the drag
                                 // translation and switching corners
@@ -329,6 +339,26 @@ private struct PreviewTab: View {
                                 // a visible jump-then-slide instead of one
                                 // smooth motion.
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    // Collapsed state has no `Button` of its
+                                    // own anymore (see
+                                    // `collapsedPreviewButton`) — a real
+                                    // macOS `Button` there didn't reliably
+                                    // cancel its own tap just because this
+                                    // sibling drag gesture also recognized
+                                    // the same pointer movement, so both
+                                    // fired on release: the card snapped to
+                                    // the nearest corner *and* the button's
+                                    // tap flipped `isPreviewCollapsed` back
+                                    // to false, undoing the collapse on
+                                    // every single drag. Treating a
+                                    // near-motionless release as "tap to
+                                    // expand" here, inside this one gesture,
+                                    // removes that race instead of trying
+                                    // to make two independent recognizers
+                                    // agree.
+                                    if isPreviewCollapsed && dragDistance < 6 {
+                                        isPreviewCollapsed = false
+                                    }
                                     previewCorner = .nearest(to: dropPoint, in: proxy.size)
                                     previewDragTranslation = .zero
                                 }
@@ -409,17 +439,18 @@ private struct PreviewTab: View {
     /// The collapsed state: just the ring itself, small and round, so it
     /// still reads as "the large preview, tucked away" rather than an
     /// unrelated icon — tapping anywhere on it expands the card back.
+    ///
+    /// Deliberately *not* a `Button` — expand-on-tap is instead handled by
+    /// the drag gesture on `largePreviewCard` in `body` (see its `onEnded`),
+    /// which is what makes drag-to-reposition and tap-to-expand agree on
+    /// what happened instead of racing each other. `.contentShape` keeps
+    /// the whole circle (not just the ring stroke) hit-testable for that
+    /// gesture, matching what a real `Button` gave it for free before.
     private var collapsedPreviewButton: some View {
-        Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                isPreviewCollapsed = false
-            }
-        } label: {
-            glassRing(outerDiameter: collapsedPreviewSize.width, ringDiameter: collapsedPreviewSize.width * 0.6)
-        }
-        .buttonStyle(.plain)
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
-        .help("Show Large Preview")
+        glassRing(outerDiameter: collapsedPreviewSize.width, ringDiameter: collapsedPreviewSize.width * 0.6)
+            .contentShape(Circle())
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            .help("Show Large Preview")
     }
 
     // The tab bar's ring pod: a 34pt ring centered in a 62pt circle (see
