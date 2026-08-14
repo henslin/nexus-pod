@@ -80,6 +80,14 @@ struct RootView: View {
     var body: some View {
         GeometryReader { geo in
             let rowWidth = geo.size.width - 32
+            // `.ignoresSafeArea()` below (on the reader itself) makes `geo`
+            // report the *true* full-screen size, not the safe-area-inset
+            // one — see that modifier's own doc comment for why. The tab
+            // bar still needs to rest above the home indicator though, so
+            // its own bottom padding adds this back explicitly rather than
+            // relying on the automatic safe-area layout it used to get for
+            // free.
+            let bottomInset = geo.safeAreaInsets.bottom
 
             ZStack(alignment: .bottom) {
                 background(size: geo.size)
@@ -103,15 +111,17 @@ struct RootView: View {
                 }
                 // Fixed constants, not a fraction of `geo.size.height` —
                 // the old version tried to guess the sheet's height as a
-                // percentage of screen height, but `geo` here reports the
-                // *safe-area-constrained* size while `.presentationDetents`
-                // measures from the true screen edge, so the two were
-                // never quite measuring the same thing (that's what caused
-                // both the "still overlapping" and "settles too low"
-                // reports). `sheetDetentHeight` below is a height *we*
-                // chose for the sheet, so lining this up against it is
-                // exact math, not an estimate.
-                .padding(.bottom, showingSettings ? Self.sheetDetentHeight + Self.tabBarLiftMargin : Self.tabBarRestPadding)
+                // percentage of screen height, but `.presentationDetents`
+                // measures from the true screen edge, and (now that `geo`
+                // itself reports the true full-screen size too — see the
+                // reader's own `.ignoresSafeArea()` below) the two finally
+                // measure from the same edge. `sheetDetentHeight` below is
+                // a height *we* chose for the sheet, so lining this up
+                // against it is exact math, not an estimate. `bottomInset`
+                // is added on top of both cases so the tab bar still clears
+                // the home indicator by the same visual margin it always
+                // has, now that it's no longer inset there automatically.
+                .padding(.bottom, (showingSettings ? Self.sheetDetentHeight + Self.tabBarLiftMargin : Self.tabBarRestPadding) + bottomInset)
                 .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showingSettings)
                 .onAppear {
                     // Sync without animating in case the loop is already
@@ -144,6 +154,21 @@ struct RootView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
+        // Makes the `GeometryReader` above report the *true* full-screen
+        // size (including the status bar and home indicator strips)
+        // instead of the safe-area-inset one it gets by default. Previously
+        // `background(size:)` was handed the smaller, safe-area-inset size,
+        // sized and `.clipped()` an Image to exactly that box, and *then*
+        // tried to `.ignoresSafeArea()` just that already-fixed-size result
+        // — which stretched/repositioned a crop that was never computed
+        // against the true screen bounds in the first place, instead of
+        // actually re-cropping against them. That mismatch is what caused
+        // the "everything's pushed up, with a sliver of the image peeking
+        // out above the tab bar" bug: the background was shifted relative
+        // to the real screen edges. Computing everything from the true
+        // full size up front (here) and adding `bottomInset` back only
+        // where the tab bar actually needs it (above) fixes both at once.
+        .ignoresSafeArea()
         // `.preferredColorScheme`, not plain `.environment(\.colorScheme,
         // ...)` — the sheet's `Form`/grouped list chrome and the
         // presentation's own material are UIKit-backed and follow the
@@ -197,17 +222,21 @@ struct RootView: View {
     /// Genuinely blank by default — the ring is the only thing drawn
     /// until you turn one of these on.
     ///
-    /// Explicitly pinned to `size` (the same `geo.size` the rest of
-    /// `body` uses) *before* `.ignoresSafeArea()`, rather than left to
-    /// size itself — a resizable `Image` with `.scaledToFill()` can
-    /// report a different size to the parent `ZStack` than a plain
-    /// `Color` does depending on its own aspect ratio, and since `ZStack`
-    /// sizes itself from its largest child before any outer `.frame()`
-    /// clamps things down, that mismatch was shifting the tab bar's
-    /// bottom-alignment guide specifically when the "App UI" screenshot
-    /// was showing. Pinning every branch to the same explicit size first
-    /// means the `ZStack` always sees the same reported size regardless
-    /// of which background is active.
+    /// Explicitly pinned to `size` — the *true* full-screen size, since
+    /// `body`'s `GeometryReader` now ignores the safe area itself (see its
+    /// `.ignoresSafeArea()` call for the full story) — rather than left to
+    /// size itself. A resizable `Image` with `.scaledToFill()` can report a
+    /// different size to the parent `ZStack` than a plain `Color` does
+    /// depending on its own aspect ratio, and since `ZStack` sizes itself
+    /// from its largest child before any outer `.frame()` clamps things
+    /// down, that mismatch was shifting the tab bar's bottom-alignment
+    /// guide specifically when the "App UI" screenshot was showing.
+    /// Pinning every branch to the same explicit size first means the
+    /// `ZStack` always sees the same reported size regardless of which
+    /// background is active. No `.ignoresSafeArea()` needed here anymore —
+    /// `size` already *is* the full screen, so `.clipped()` alone crops
+    /// each branch to exactly the real device bounds with no separate
+    /// expand-after-the-fact step to get subtly out of sync with it.
     @ViewBuilder
     private func background(size: CGSize) -> some View {
         Group {
@@ -226,7 +255,6 @@ struct RootView: View {
         }
         .frame(width: size.width, height: size.height)
         .clipped()
-        .ignoresSafeArea()
     }
 
     private var customBackgroundImage: Image? {
