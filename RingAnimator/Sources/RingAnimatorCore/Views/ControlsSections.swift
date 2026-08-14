@@ -21,7 +21,7 @@ struct AnimationSection: View {
 
     var body: some View {
         Picker("Pattern Style", selection: $config.patternStyle) {
-            Text("Continuous (Animation Type Below)").tag(LEDPatternStyle?.none)
+            Text("Continuous").tag(LEDPatternStyle?.none)
             // Excludes a few Cue Library-only styles that don't make sense
             // as a live override on the ring you're actually looking at:
             // `.earConOnly`/`.notApplicable` describe cues with no LED

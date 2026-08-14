@@ -26,7 +26,7 @@ public enum CodeGenerators {
         // (see the Animation section), which this exporter doesn't yet
         // translate into code — it only exports the continuous Animation
         // Type loop. To export code:
-        //   1. Set Pattern Style back to "Continuous (Animation Type below)", or
+        //   1. Set Pattern Style back to "Continuous", or
         //   2. Recreate this look as a Cue Library cue with that same style
         //      and export it from there instead — the Cue Library's own
         //      exporter fully supports every Pattern Style.
