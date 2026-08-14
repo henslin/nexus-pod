@@ -25,16 +25,23 @@ struct ContentView: View {
     @StateObject private var config = RingConfig()
     @StateObject private var cueStore = LEDCueStore()
     @StateObject private var presetStore = RingPresetStore()
+    /// A second, independent `RingPresetStore` — same shape of data (a
+    /// named, fully-tunable `RingPreset`) as Nexus's own Saved Animations,
+    /// just its own JSON file (`use-cases.json`) so the two lists never
+    /// intermix. See `UseCaseListView`/`UseCaseDetailView`.
+    @StateObject private var useCaseStore = RingPresetStore(fileName: "use-cases.json")
 
     @State private var section: AppSection? = .ringDesigner
     @State private var designerTab: DesignerTab = .preview
     @State private var cueTab: DesignerTab = .preview
     @State private var selectedCueID: String? = LEDCueLibrary.all.first?.id
     @State private var cueSearchText: String = ""
+    @State private var selectedUseCaseID: RingPreset.ID?
 
     enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case ringDesigner = "Nexus"
         case cueLibrary = "Cue Library"
+        case useCases = "Use Cases"
 
         var id: String { rawValue }
 
@@ -42,6 +49,7 @@ struct ContentView: View {
             switch self {
             case .ringDesigner: return "sparkles"
             case .cueLibrary: return "books.vertical"
+            case .useCases: return "target"
             }
         }
     }
@@ -67,6 +75,9 @@ struct ContentView: View {
             case .cueLibrary:
                 CueListView(store: cueStore, selectedCueID: $selectedCueID, searchText: $cueSearchText)
                     .navigationSplitViewColumnWidth(min: 260, ideal: 300)
+            case .useCases:
+                UseCaseListView(store: useCaseStore, selectedUseCaseID: $selectedUseCaseID)
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
             case .none:
                 ContentUnavailableView("Select a tool", systemImage: "sidebar.left")
             }
@@ -88,6 +99,8 @@ struct ContentView: View {
                 }
             case .cueLibrary:
                 cueDetail
+            case .useCases:
+                useCaseDetail
             case .none:
                 EmptyView()
             }
@@ -157,6 +170,20 @@ struct ContentView: View {
             }
         } else {
             ContentUnavailableView("Select a cue", systemImage: "sparkles")
+        }
+    }
+
+    /// `.id(preset.id)` is load-bearing here, not decorative — see
+    /// `UseCaseDetailView.init`'s doc comment: without it, switching which
+    /// use case is selected would keep editing the first one's private
+    /// `RingConfig` instead of loading the newly selected preset's.
+    @ViewBuilder
+    private var useCaseDetail: some View {
+        if let id = selectedUseCaseID, let preset = useCaseStore.presets.first(where: { $0.id == id }) {
+            UseCaseDetailView(preset: preset, store: useCaseStore)
+                .id(preset.id)
+        } else {
+            ContentUnavailableView("Select or create a use case", systemImage: "target")
         }
     }
 }

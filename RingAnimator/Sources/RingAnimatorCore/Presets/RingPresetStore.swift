@@ -1,7 +1,13 @@
 import Foundation
 
-/// Persists the user's bookmarked `RingConfig` snapshots — the "Saved
-/// Animations" column in Nexus (see `SavedPresetsView`).
+/// Persists a collection of bookmarked `RingConfig` snapshots. Originally
+/// just the "Saved Animations" column in Nexus (see `SavedPresetsView`),
+/// now also reused as-is for the "Use Cases" section (see
+/// `UseCaseListView`/`UseCaseDetailView`) — same shape of data (a named,
+/// fully-tunable `RingPreset`), just a second independent collection with
+/// its own JSON file, so the two lists never intermix. `fileName`
+/// distinguishes the two on disk.
+///
 /// Modeled directly on `LEDCueStore`: same Application Support JSON file
 /// convention, same plain load/save-on-mutation approach. Kept here in
 /// `RingAnimatorCore` (like `LEDCueStore`) even though today's UI for it is
@@ -9,8 +15,10 @@ import Foundation
 /// ever gets a matching feature.
 public final class RingPresetStore: ObservableObject {
     @Published public private(set) var presets: [RingPreset] = []
+    private let fileName: String
 
-    public init() {
+    public init(fileName: String = "saved-presets.json") {
+        self.fileName = fileName
         load()
     }
 
@@ -33,6 +41,18 @@ public final class RingPresetStore: ObservableObject {
 
     public func delete(_ id: RingPreset.ID) {
         presets.removeAll { $0.id == id }
+        save()
+    }
+
+    /// Overwrites an existing preset's full field set in place — used by
+    /// `UseCaseDetailView` for continuous autosave while editing, as
+    /// opposed to `rename(_:to:)` (name only) or `add(_:)` (a brand new
+    /// entry). A no-op if `preset.id` isn't already in the list, so a
+    /// stray call after a preset's been deleted elsewhere can't
+    /// resurrect it.
+    public func update(_ preset: RingPreset) {
+        guard let index = presets.firstIndex(where: { $0.id == preset.id }) else { return }
+        presets[index] = preset
         save()
     }
 
@@ -94,16 +114,16 @@ public final class RingPresetStore: ObservableObject {
 
     // MARK: - Persistence
 
-    private static var storageURL: URL {
+    private var storageURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         let dir = base.appendingPathComponent("RingAnimator", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("saved-presets.json")
+        return dir.appendingPathComponent(fileName)
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: Self.storageURL) else { return }
+        guard let data = try? Data(contentsOf: storageURL) else { return }
         presets = (try? JSONDecoder().decode([RingPreset].self, from: data)) ?? []
     }
 
@@ -111,6 +131,6 @@ public final class RingPresetStore: ObservableObject {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(presets) else { return }
-        try? data.write(to: Self.storageURL, options: .atomic)
+        try? data.write(to: storageURL, options: .atomic)
     }
 }
