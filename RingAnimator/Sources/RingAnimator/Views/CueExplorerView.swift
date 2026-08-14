@@ -22,9 +22,14 @@ struct CueListView: View {
                     Section(category) {
                         ForEach(groups, id: \.subcategory) { group in
                             if let subcategory = group.subcategory {
-                                Text(subcategory)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                // Same `GroupCaption` treatment the control
+                                // cards use for their own sub-groups (e.g.
+                                // Particles' "Emission"/"Motion"/"Appearance")
+                                // — uppercase, small, tertiary — so this reads
+                                // as clearly one level below the native
+                                // Category `Section` header above it, instead
+                                // of blending in with the cue rows below it.
+                                GroupCaption(subcategory)
                             }
                             ForEach(group.cues) { cue in
                                 CueRow(cue: cue, isModified: store.isModified(cue))
