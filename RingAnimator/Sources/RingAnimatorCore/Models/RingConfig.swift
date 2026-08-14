@@ -336,6 +336,16 @@ public final class RingConfig: ObservableObject {
     /// they're not buttons, since `.interactive()` is a real, independent
     /// `Glass` parameter, not a button-only feature.
     @Published public var glassInteractive: Bool = false
+    /// Not a real `Glass` API parameter — the actual `Glass` struct has no
+    /// brightness/luminance knob at all (just the two styles above plus
+    /// `.tint(_:)`/`.interactive()`). This is a bespoke effect layered on
+    /// top of the real glass via `.brightness(_:)` wherever `glass` below
+    /// gets applied — the same kind of simulated visual boost
+    /// `vibrancyAmount` already applies to the ring itself, just for the
+    /// glass material instead. Uses `.brightness(_:)`'s own -1...1 scale
+    /// directly (0 = unchanged, negative dims, positive brightens) rather
+    /// than inventing a separate multiplier.
+    @Published public var glassLuminance: Double = 0.0
 }
 
 #if os(iOS) || os(macOS)
