@@ -24,15 +24,4 @@ public extension View {
             self.background(.regularMaterial, in: shape)
         }
     }
-
-    /// Layers `RingConfig.glassLuminance`'s bespoke brightness boost/dim on
-    /// top of whatever glass this view already has — see that property's
-    /// doc comment for why it's a `.brightness(_:)` overlay rather than a
-    /// real `Glass` parameter. A plain `View` extension (not gated behind
-    /// `#available`) since `.brightness(_:)` itself has always been
-    /// available on both platforms — only the real `Glass` API call this
-    /// sits on top of needs the availability check, at each call site.
-    func glassLuminance(_ config: RingConfig) -> some View {
-        self.brightness(config.glassLuminance)
-    }
 }

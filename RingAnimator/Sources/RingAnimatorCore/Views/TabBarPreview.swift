@@ -74,7 +74,6 @@ public struct TabBarPreview: View {
                     tabBarCapsule
                         .frame(maxWidth: .infinity)
                         .glassEffect(config.glass, in: Capsule())
-                        .glassLuminance(config)
 
                     ringPodStack
                 }
@@ -85,7 +84,6 @@ public struct TabBarPreview: View {
                 tabBarCapsule
                     .frame(maxWidth: .infinity)
                     .background(.ultraThinMaterial, in: Capsule())
-                    .glassLuminance(config)
 
                 ringPodStack
             }
@@ -126,9 +124,9 @@ public struct TabBarPreview: View {
     @ViewBuilder
     private var ringPodGlass: some View {
         if #available(iOS 26.0, macOS 26.0, *) {
-            ringPodTappable.glassEffect(config.glass, in: Capsule()).glassLuminance(config)
+            ringPodTappable.glassEffect(config.glass, in: Capsule())
         } else {
-            ringPodTappable.background(.ultraThinMaterial, in: Capsule()).glassLuminance(config)
+            ringPodTappable.background(.ultraThinMaterial, in: Capsule())
         }
     }
 

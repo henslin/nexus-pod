@@ -114,7 +114,7 @@ public struct ControlsView: View {
                 }
 
                 card("glass", "Liquid Glass", "wand.and.stars",
-                     footer: "The real Glass API's own parameters — style, tint, and interactive — plus a custom Luminance slider (not part of the real API) — applied to the floating tab bar and ring pod in the iPhone preview below, and the ring button on iOS.") {
+                     footer: "The real Glass API's own parameters — style, tint, and interactive — applied to the floating tab bar and ring pod in the iPhone preview below, and the ring button on iOS.") {
                     LiquidGlassSection(config: config)
                 }
             }

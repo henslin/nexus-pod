@@ -91,12 +91,6 @@ public struct RingPreset: Identifiable, Codable, Equatable {
     public var glassTintEnabled: Bool
     public var glassTintColorHex: String
     public var glassInteractive: Bool
-    /// Optional for the same reason `additionalColorHexes` is — a
-    /// synthesized `Decodable` only auto-fills a *missing* JSON key for
-    /// `Optional` properties, so a preset/use case saved before this field
-    /// existed still decodes instead of throwing `keyNotFound`. `nil` means
-    /// "no luminance adjustment," same as the property's own `0.0` default.
-    public var glassLuminance: Double?
 
     /// Snapshots every relevant knob off a live `RingConfig`.
     public init(id: UUID = UUID(), name: String, createdAt: Date = Date(), config: RingConfig) {
@@ -165,7 +159,6 @@ public struct RingPreset: Identifiable, Codable, Equatable {
         glassTintEnabled = config.glassTintEnabled
         glassTintColorHex = config.glassTintColor.hexString
         glassInteractive = config.glassInteractive
-        glassLuminance = config.glassLuminance
     }
 
     /// Applies every saved knob back onto a live `RingConfig` — used to load
@@ -232,6 +225,5 @@ public struct RingPreset: Identifiable, Codable, Equatable {
         config.glassTintEnabled = glassTintEnabled
         config.glassTintColor = Color(hex: glassTintColorHex)
         config.glassInteractive = glassInteractive
-        config.glassLuminance = glassLuminance ?? 0.0
     }
 }

@@ -519,6 +519,5 @@ private struct PreviewTab: View {
             }
         }
         .environment(\.colorScheme, isDarkMode ? .dark : .light)
-        .glassLuminance(config)
     }
 }

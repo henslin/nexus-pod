@@ -179,7 +179,7 @@ public struct RingSettingsMenu: View {
                         Section {
                             LiquidGlassSection(config: config)
                         } footer: {
-                            Text("The real Glass API's own parameters — style, tint, and interactive — plus a custom Luminance slider (not part of the real API), applied to the tab bar and ring pod below.")
+                            Text("The real Glass API's own parameters — style, tint, and interactive — applied to the tab bar and ring pod below.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

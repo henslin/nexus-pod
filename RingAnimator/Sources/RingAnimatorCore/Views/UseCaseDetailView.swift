@@ -193,7 +193,7 @@ public struct UseCaseDetailView: View {
             }
 
             card("glass", "Liquid Glass", "wand.and.stars",
-                 footer: "The real Glass API's own parameters — style, tint, and interactive — plus a custom Luminance slider (not part of the real API).") {
+                 footer: "The real Glass API's own parameters — style, tint, and interactive — applied to this preview.") {
                 LiquidGlassSection(config: editingConfig)
             }
         }

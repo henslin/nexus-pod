@@ -434,14 +434,6 @@ struct LiquidGlassSection: View {
         }
 
         Toggle("Interactive", isOn: $config.glassInteractive)
-
-        // Not one of the real Glass API's own parameters above (see
-        // `RingConfig.glassLuminance`'s doc comment) — a bespoke
-        // brightness boost/dim layered on top of the real glass, so it's
-        // visually separated from Style/Tint/Interactive by the caption
-        // rather than presented as if Apple's API had a fourth knob.
-        GroupCaption("Luminance (Custom)")
-        LabeledSlider(title: "Luminance", value: $config.glassLuminance, range: -0.4...0.4, format: "%+.2f")
     }
 }
 
