@@ -199,9 +199,9 @@ struct CueDetailView: View {
     /// Nexus's phone mockup/large preview.
     private var centeredPreview: some View {
         VStack(spacing: 12) {
-            LEDCuePreviewView(parameters: params, diameter: 200, lineWidth: 14)
-                .frame(width: 260, height: 260)
-                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.black.opacity(0.9)))
+            LargePreviewCard(diameter: 200) {
+                LEDCuePreviewView(parameters: params, diameter: 200, lineWidth: 14)
+            }
             VStack(spacing: 4) {
                 Text(params.style.displayName).font(.headline)
                 Text("Primary \(params.primaryColorHex) · Secondary \(params.secondaryColorHex)")
