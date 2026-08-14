@@ -1,32 +1,32 @@
 import SwiftUI
 
-/// The same Liquid Glass "Large Preview" card Nexus's own preview canvas
-/// uses (`ContentView`'s `PreviewTab.largePreviewCard`/`glassRing`) —
-/// extracted here so Cue Library (`CueDetailView`) and Use Cases
-/// (`UseCaseDetailView`) can present their own live preview in identical
-/// chrome instead of each inventing its own plain box, so all three read
-/// as "the same app" rather than three slightly different preview
-/// treatments.
+/// The same Liquid Glass preview pod Nexus's own preview canvas uses
+/// (`ContentView`'s `PreviewTab.glassRing`) — extracted here so Cue
+/// Library (`CueDetailView`) and Use Cases (`UseCaseDetailView`) can
+/// present their own live preview in identical chrome instead of each
+/// inventing its own plain box, so all three read as "the same app"
+/// rather than three slightly different preview treatments.
+///
+/// Just the circular glass pod and its dropshadow — no outer rounded-rect
+/// card behind it. An earlier version of this wrapped the pod in the same
+/// glass card Nexus's floating Large Preview sits in, but that read as an
+/// extra, unnecessary box once seen next to the plain circle; the circle
+/// (with its own glass + shadow) is the part that actually needed to
+/// match across sections.
 ///
 /// Nexus's own `PreviewTab` keeps its existing, independent
 /// implementation rather than switching to this one — it also needs
-/// draggable-to-corner/collapse behavior this deliberately doesn't have
-/// (per the request that led to this file: reuse the box/container, no
-/// need for it to be drag-and-drop-able), and touching that already-
-/// verified view purely to deduplicate a shared box isn't worth the risk
-/// (same reasoning `glassBackground(in:)`'s own doc comment gives for not
-/// retrofitting `ControlsView`'s private copy).
+/// draggable-to-corner/collapse behavior this deliberately doesn't have,
+/// and touching that already-verified view purely to deduplicate a shared
+/// pod isn't worth the risk (same reasoning `glassBackground(in:)`'s own
+/// doc comment gives for not retrofitting `ControlsView`'s private copy).
 ///
-/// Two glass surfaces, same as Nexus's: the outer rounded-rect card (via
-/// `glassBackground(in:)`, already shared with Nexus) and an inner
-/// circular "pod" directly behind the preview content itself, sized at
-/// the same ratio (62/34) `TabBarPreview`'s ring pod and Nexus's own
-/// Large Preview use. Both use plain, untinted glass here rather than a
-/// per-item `Glass` value — Cue Library's `LEDCueParameters` has no
-/// Liquid Glass fields to draw one from at all, so a neutral, always-
-/// consistent pod (rather than tinted for one caller and plain for
-/// another) is what actually reads as "the same box" across all three
-/// sections, rather than three subtly different ones.
+/// Plain, untinted glass here rather than a per-item `Glass` value — Cue
+/// Library's `LEDCueParameters` has no Liquid Glass fields to draw one
+/// from at all, so a neutral, always-consistent pod (rather than tinted
+/// for one caller and plain for another) is what actually reads as "the
+/// same pod" across all three sections, rather than three subtly
+/// different ones.
 public struct LargePreviewCard<RingContent: View>: View {
     let title: String?
     let diameter: CGFloat
@@ -80,10 +80,8 @@ public struct LargePreviewCard<RingContent: View>: View {
                     .frame(width: outerDiameter, alignment: .leading)
             }
             glassPod
+                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
         }
-        .padding(16)
-        .glassBackground(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
     }
 
     @ViewBuilder
