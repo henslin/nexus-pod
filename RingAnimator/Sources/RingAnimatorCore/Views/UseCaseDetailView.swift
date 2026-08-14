@@ -74,15 +74,37 @@ public struct UseCaseDetailView: View {
     }
 
     public var body: some View {
+        platformLayout
+            .onReceive(editingConfig.objectWillChange.debounce(for: .seconds(0.3), scheduler: RunLoop.main)) { _ in
+                persist()
+            }
+    }
+
+    /// `HSplitView` is a macOS-only API, but this type lives in the shared
+    /// `RingAnimatorCore` target (needed for direct access to
+    /// `ControlsSections.swift`'s internal section structs — see the type's
+    /// own doc comment), so it has to compile for iOS too even though
+    /// `UseCaseListView` — the Mac-only list that actually creates/selects a
+    /// use case — has no iOS entry point yet. A stacked layout here keeps
+    /// this genuinely usable if iOS ever grows its own way to reach this
+    /// screen, rather than leaving a dead `#if os(macOS)` stub around the
+    /// whole view.
+    @ViewBuilder
+    private var platformLayout: some View {
+        #if os(macOS)
         HSplitView {
             previewPane
                 .frame(minWidth: 420, idealWidth: 640)
             controlsPanel
                 .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
         }
-        .onReceive(editingConfig.objectWillChange.debounce(for: .seconds(0.3), scheduler: RunLoop.main)) { _ in
-            persist()
+        #else
+        VStack(spacing: 0) {
+            previewPane
+            Divider()
+            controlsPanel
         }
+        #endif
     }
 
     private func persist() {
