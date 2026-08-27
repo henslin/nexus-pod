@@ -65,6 +65,39 @@ form of what `LEDPatternStyle` already carried as fixed cases
 Not built (deliberately): interpolation between steps, per-property
 keyframes, parallel tracks.
 
+### Pattern styles: primitives vs composites
+
+`LEDPatternStyle` now splits two ways, and `isComposite` is the test:
+
+- **Primitives** (`.spin`, `.pulseAccelerate`, `.rainbow`, plus `.solid`,
+  `.off`, `.flash`, `.quickFlash`, `.ripple`) do one thing and keep doing
+  it. Build new work from these and sequence them on the timeline.
+- **Composites** (`.spinThenSolidFade`, `.pulseAccelerateThenSolidFade`,
+  `.rainbowThenWhiteFade`, `.transitionToSolid`) are each a primitive
+  followed by a solid hold and a fade, welded into one case back when
+  there was no way to arrange phases yourself.
+
+**Don't delete the composites.** `LEDCueLibrary` transcribes the Ziris
+spec sheet and its rows reference them as ground truth, and saved cue
+JSON (`LEDCueStore`) decodes by these exact rawValues. They're grouped
+apart in the picker instead, and their renderers *delegate* to the
+primitives so the drawing code exists once.
+
+**`.spin` turns at exactly `speed` revolutions/second — that's a
+contract.** `SegmentLength.rotations` converts a step's length via
+`rotations = seconds × speed`, so a spin at any other rate makes "spin
+three times" untrue. The composite `.spinThenSolidFade` scales the
+primitive's clock by `3 / 1.1` to reproduce the three turns its
+spec-sheet cues were transcribed against — note the factor has no `speed`
+in it, since `spinDuration` already carries that dependence.
+
+Adding a style means four generator backends: SwiftUI, Compose and JS in
+`CodeGenerators.swift` (exhaustive switches, so the compiler finds them)
+and `BlenderCodeGenerator.swift`, which **dispatches on strings and won't
+fail to compile** — it now has an explicit fallback that draws a solid
+ring and prints the unhandled style name rather than silently rendering
+something else.
+
 Both apps display as **"Nexus Pod"** (rebranded from "RingAnimator"/"Ring
 Pod" — display name only, internal identifiers/executable/module names are
 still `RingAnimator` throughout, intentionally, see Packaging section).
