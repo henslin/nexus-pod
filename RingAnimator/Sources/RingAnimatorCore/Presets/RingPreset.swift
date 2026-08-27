@@ -43,6 +43,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// `.steady` and 2.0.
     public var diodeShape: DiodeShape?
     public var diodeScale: Double?
+    public var diodeGap: Double?
     public var diodeModeEnabled: Bool?
     public var blinkPattern: BlinkPattern?
     public var blinkRate: Double?
@@ -128,6 +129,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         diodeCount = config.diodeCount
         diodeShape = config.diodeShape
         diodeScale = config.diodeScale
+        diodeGap = config.diodeGap
         diodeModeEnabled = config.diodeModeEnabled
         blinkPattern = config.blinkPattern
         blinkRate = config.blinkRate
@@ -200,6 +202,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.diodeCount = diodeCount
         config.diodeShape = diodeShape ?? .round
         config.diodeScale = diodeScale ?? 1.0
+        config.diodeGap = diodeGap ?? 0.12
         config.diodeModeEnabled = diodeModeEnabled ?? false
         config.blinkPattern = blinkPattern ?? .steady
         config.blinkRate = blinkRate ?? 2.0

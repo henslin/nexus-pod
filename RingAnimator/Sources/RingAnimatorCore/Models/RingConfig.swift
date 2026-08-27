@@ -89,6 +89,10 @@ public final class RingConfig: ObservableObject {
     /// diffuser, so you see a cropped rectangle of a larger emitter rather
     /// than the whole component.
     @Published public var diodeScale: Double = 1.0
+    /// Gap between neighboring `.segment` diodes, as a fraction of each
+    /// segment's own angular width. 0 makes them meet edge to edge as one
+    /// continuous ring; higher values separate them into distinct wedges.
+    @Published public var diodeGap: Double = 0.12
     /// Renders *any* animation as a fixed ring of diodes that stay put and
     /// simply light differently, the way addressable LED hardware
     /// actually works — rather than as continuous arcs and gradients that

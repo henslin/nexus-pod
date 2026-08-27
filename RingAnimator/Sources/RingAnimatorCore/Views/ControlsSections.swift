@@ -121,11 +121,19 @@ struct AnimationSection: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            LabeledSlider(title: "Diode Size", value: $config.diodeScale, range: 0.4...3.0, format: "%.2fx")
+            if config.diodeShape.dividesTheRing {
+                LabeledSlider(title: "Segment Gap", value: $config.diodeGap, range: 0...0.6, format: "%.2f")
 
-            Text("Relative to the ring's width, which crops them — above 1x the diode is wider than the band and gets trimmed by it, the way an LED reads through a slot. Ring width is \"Line Width\" under Shape.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("Space between wedges, as a fraction of each one's width. 0 makes them meet edge to edge as one continuous ring.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                LabeledSlider(title: "Diode Size", value: $config.diodeScale, range: 0.4...3.0, format: "%.2fx")
+
+                Text("Relative to the ring's width, which crops them — above 1x the diode is taller than the band and gets trimmed by it, the way an LED reads through a slot.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
 
         if config.diodeModeEnabled || config.animationType == .alternating || config.animationType == .equalizer

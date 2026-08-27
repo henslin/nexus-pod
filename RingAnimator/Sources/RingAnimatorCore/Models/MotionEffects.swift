@@ -59,6 +59,15 @@ public enum DiodeShape: String, CaseIterable, Identifiable, Codable, Sendable, H
     case square = "Square"
     /// Rectangular package, elongated along the ring's arc.
     case bar = "Bar"
+    /// Equal arc segments that divide the ring itself — the donut-chart
+    /// look, where each diode is a wedge of the annulus rather than a
+    /// shape sitting on top of it.
+    ///
+    /// Structurally different from the three above: those are objects
+    /// positioned on the ring's circumference, this *is* the ring, sliced.
+    /// So it ignores `diodeScale` (a segment always fills the band's full
+    /// thickness) and uses `diodeGap` instead to separate neighbors.
+    case segment = "Segment"
 
     public var id: String { rawValue }
 
@@ -66,16 +75,22 @@ public enum DiodeShape: String, CaseIterable, Identifiable, Codable, Sendable, H
     /// along the arc while the others stay square to it.
     public var aspect: CGFloat {
         switch self {
-        case .round, .square: return 1
+        case .round, .square, .segment: return 1
         case .bar: return 1.9
         }
     }
+
+    /// True for shapes that slice the ring rather than sit on it — see
+    /// `.segment`. Drives which controls are relevant and which drawing
+    /// path `RingView` takes.
+    public var dividesTheRing: Bool { self == .segment }
 
     public var summary: String {
         switch self {
         case .round: return "Round through-hole LEDs."
         case .square: return "Square surface-mount packages, tangent to the ring."
         case .bar: return "Rectangular packages stretched along the ring's arc."
+        case .segment: return "Equal wedges dividing the ring itself, like a donut chart."
         }
     }
 }

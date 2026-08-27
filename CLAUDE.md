@@ -106,8 +106,14 @@ over ring position instead.
 - Ripple and Wobble are **interpretations**, not translations: both are
   radial effects and a fixed pixel ring has no radius to vary, so they
   become a travelling front and a standing wave. That's deliberate.
-- `DiodeShape` (Round/Square/Bar) rotates square and bar diodes tangent
-  to the ring — axis-aligned ones read as scattered dots, not hardware.
+- `DiodeShape` has two structurally different kinds, which is why
+  `dividesTheRing` exists. Round/Square/Bar are *objects positioned on*
+  the ring (square and bar rotated tangent to it — axis-aligned ones read
+  as scattered dots, not hardware), sized by `diodeScale` and cropped to
+  the band. `.segment` *is* the ring, sliced into equal wedges — the
+  donut-chart look — so it ignores `diodeScale` and uses `diodeGap`
+  instead. `RingView.diodeLayer` is the single place that branches
+  between them; all four diode animations go through it.
 
 **Not in the code generators.** They draw each animation the continuous
 way, and neither diode mode nor diode shape is reflected there — twelve
