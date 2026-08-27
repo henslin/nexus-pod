@@ -143,6 +143,34 @@ GeometryReader { geo in
     .frame(width: geo.size.width, height: geo.size.height)
 }
 """
+        case .bloom:
+            // Same seeded field as the app (`RingView.blooms`): widths,
+            // centers and swell rates all derived from `pseudoRandom` so
+            // the generated file reproduces identical frames.
+            animationBody = """
+let bloomCount = 6
+ZStack {
+    Circle().stroke(p.opacity(0.10), lineWidth: lineWidth)
+    ForEach(0..<bloomCount, id: \\.self) { i in
+        let widthSeed = pseudoRandom(i)
+        let placeSeed = pseudoRandom(i + 97)
+        let rateSeed = pseudoRandom(i + 211)
+        let length = max(trailFraction, 0.02) * (0.35 + widthSeed * 1.65)
+        let center = Double(i) / Double(bloomCount) + (placeSeed - 0.5) / Double(bloomCount)
+        let rate = speed * 0.18 * (0.5 + rateSeed * 1.2)
+        let swell = (sin(t * rate * 2 * .pi + rateSeed * 2 * .pi) + 1) / 2
+        let intensity = pow(swell, 1.8)
+        Circle()
+            .trim(from: center - length / 2, to: center + length / 2)
+            .stroke(i.isMultiple(of: 2) ? p : s,
+                    style: StrokeStyle(lineWidth: lineWidth * CGFloat(0.75 + intensity * 0.5), lineCap: .round))
+            .rotationEffect(.degrees(-90))
+            .opacity(intensity)
+            .blur(radius: lineWidth * 0.5)
+            .blendMode(.plusLighter)
+    }
+}
+"""
         case .pulse:
             animationBody = """
 let value = (sin(phase) + 1) / 2
@@ -615,6 +643,28 @@ for (i in 0 until diodeCount) {
             (size.width / 2f) + (cos(angle) * ringRadius).toFloat(),
             (size.height / 2f) + (sin(angle) * ringRadius).toFloat()
         )
+    )
+}
+"""
+        case .bloom:
+            animationBody = """
+val bloomCount = 6
+drawCircle(color = p.copy(alpha = 0.10f), radius = radiusPx, style = Stroke(width = lineWidthPx))
+for (i in 0 until bloomCount) {
+    val widthSeed = pseudoRandom(i)
+    val placeSeed = pseudoRandom(i + 97)
+    val rateSeed = pseudoRandom(i + 211)
+    val length = maxOf(trailFraction, 0.02) * (0.35 + widthSeed * 1.65)
+    val center = i.toDouble() / bloomCount + (placeSeed - 0.5) / bloomCount
+    val rate = speed * 0.18 * (0.5 + rateSeed * 1.2)
+    val swell = (sin(t * rate * 2 * PI + rateSeed * 2 * PI) + 1) / 2
+    val intensity = Math.pow(swell, 1.8)
+    drawArc(
+        color = (if (i % 2 == 0) p else s).copy(alpha = intensity.toFloat()),
+        startAngle = ((center - length / 2) * 360.0 - 90.0).toFloat(),
+        sweepAngle = (length * 360.0).toFloat(),
+        useCenter = false,
+        style = Stroke(width = (lineWidthPx * (0.75 + intensity * 0.5)).toFloat(), cap = StrokeCap.Round)
     )
 }
 """
@@ -1108,6 +1158,32 @@ for (let i = 0; i < diodeCount; i++) {
   ctx.arc(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, lineWidth / 2, 0, 2 * Math.PI);
   ctx.fillStyle = withAlpha(bestIndex === 0 ? primary(t) : secondary(t), Math.max(bestBrightness, 0.06));
   ctx.fill();
+}
+"""
+        case .bloom:
+            drawBody = """
+const bloomCount = 6;
+ctx.beginPath();
+ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+ctx.strokeStyle = withAlpha(primary(t), 0.10);
+ctx.lineWidth = lineWidth;
+ctx.stroke();
+for (let i = 0; i < bloomCount; i++) {
+  const widthSeed = pseudoRandom(i);
+  const placeSeed = pseudoRandom(i + 97);
+  const rateSeed = pseudoRandom(i + 211);
+  const length = Math.max(config.trailFraction, 0.02) * (0.35 + widthSeed * 1.65);
+  const center = i / bloomCount + (placeSeed - 0.5) / bloomCount;
+  const rate = config.speed * 0.18 * (0.5 + rateSeed * 1.2);
+  const swell = (Math.sin(t * rate * 2 * Math.PI + rateSeed * 2 * Math.PI) + 1) / 2;
+  const intensity = Math.pow(swell, 1.8);
+  const from = (center - length / 2) * 2 * Math.PI - Math.PI / 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, from, from + length * 2 * Math.PI);
+  ctx.strokeStyle = withAlpha(i % 2 === 0 ? primary(t) : secondary(t), intensity);
+  ctx.lineWidth = lineWidth * (0.75 + intensity * 0.5);
+  ctx.lineCap = 'round';
+  ctx.stroke();
 }
 """
         case .pulse:

@@ -144,6 +144,19 @@ struct AnimationSection: View {
             )
         }
 
+        if config.animationType == .bloom {
+            LabeledSlider(title: "Patches", value: $config.bloomCount, range: 2...14, format: "%.0f")
+            // `trailFraction` again, relabelled: for Bloom it's the
+            // *average* patch width, which each patch then varies from by
+            // its own seed. Same knob, different reading — same trick as
+            // Line Width becoming Ring Width in diode mode.
+            LabeledSlider(title: "Average Size", value: $config.trailFraction, range: 0.05...0.5, format: "%.2f")
+
+            Text("Each patch varies from this by its own amount, so one may cover an eighth of the ring and the next a sixteenth. Add colors above and the patches share them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
         if config.animationType == .multiChase {
             // Trail length is what sets how long each color's comet is, so
             // it belongs with the chase's own controls rather than only

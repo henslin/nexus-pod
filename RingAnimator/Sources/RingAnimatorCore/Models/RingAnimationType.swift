@@ -28,6 +28,17 @@ public enum RingAnimationType: String, CaseIterable, Identifiable, Codable, Send
     /// spaced around the ring and all travelling the same direction — so
     /// "three colors chasing each other" is just three colors configured.
     case multiChase = "Multi Chase"
+    /// Soft patches of color that swell and fade in place at irregular
+    /// sizes and irregular spots around the ring.
+    ///
+    /// Distinct from `.aurora`, which drifts a fixed number of
+    /// equal-length bands *around* the ring at steady rates. Bloom's
+    /// patches don't travel much; they differ in width (one may cover an
+    /// eighth of the ring, the next a sixteenth), sit at unevenly spaced
+    /// centers, and brighten on their own slow, unsynchronized cycles —
+    /// so no two moments look alike and nothing reads as a repeating
+    /// pattern.
+    case bloom = "Bloom"
 
     public var id: String { rawValue }
 
@@ -57,6 +68,8 @@ public enum RingAnimationType: String, CaseIterable, Identifiable, Codable, Send
             return "The ring fills like rising liquid, its level slowly rising and falling with a sloshing edge."
         case .multiChase:
             return "Discrete diodes, with one comet per configured color chasing around the ring."
+        case .bloom:
+            return "Patches of color swell and fade at irregular sizes and uneven spots around the ring."
         }
     }
 }

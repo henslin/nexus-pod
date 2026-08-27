@@ -93,6 +93,11 @@ public final class RingConfig: ObservableObject {
     /// segment's own angular width. 0 makes them meet edge to edge as one
     /// continuous ring; higher values separate them into distinct wedges.
     @Published public var diodeGap: Double = 0.12
+    /// How many independent patches `RingAnimationType.bloom` spreads
+    /// around the ring. Each one gets its own seeded width, center and
+    /// swell rate, so this is a density control rather than a count of
+    /// anything evenly divided.
+    @Published public var bloomCount: Double = 6
     /// Renders *any* animation as a fixed ring of diodes that stay put and
     /// simply light differently, the way addressable LED hardware
     /// actually works — rather than as continuous arcs and gradients that

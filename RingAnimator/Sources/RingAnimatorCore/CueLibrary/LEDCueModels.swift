@@ -160,6 +160,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     public var diodeShape: DiodeShape?
     public var diodeScale: Double?
     public var diodeGap: Double?
+    public var bloomCount: Double?
     public var diodeModeEnabled: Bool?
     public var blinkPattern: BlinkPattern?
     public var blinkRate: Double?
@@ -234,6 +235,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         diodeShape: DiodeShape? = nil,
         diodeScale: Double? = nil,
         diodeGap: Double? = nil,
+        bloomCount: Double? = nil,
         diodeModeEnabled: Bool? = nil,
         blinkPattern: BlinkPattern? = nil,
         blinkRate: Double? = nil,
@@ -291,6 +293,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         self.diodeShape = diodeShape
         self.diodeScale = diodeScale
         self.diodeGap = diodeGap
+        self.bloomCount = bloomCount
         self.diodeModeEnabled = diodeModeEnabled
         self.blinkPattern = blinkPattern
         self.blinkRate = blinkRate

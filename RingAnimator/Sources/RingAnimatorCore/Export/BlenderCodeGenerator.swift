@@ -486,6 +486,28 @@ public extension CodeGenerators {
                                       bevel_start=start, bevel_end=start + max(trail, 0.02))
                     _driver(seg, "rotation_euler", "ringpod_phase(frame)", index=2)
 
+            elif anim == "Bloom":
+                # Six patches at seeded widths and centers, each swelling
+                # on its own slow rate. Same seeded field as the app, so
+                # the arrangement matches — only the blur and additive
+                # overlap are dropped, since both would need a compositor
+                # pass rather than object emission.
+                trail = p["trail_fraction"]
+                for i in range(6):
+                    width_seed = (math.sin(i * 12.9898) * 43758.5453) % 1
+                    place_seed = (math.sin((i + 97) * 12.9898) * 43758.5453) % 1
+                    rate_seed = (math.sin((i + 211) * 12.9898) * 43758.5453) % 1
+                    length = max(trail, 0.02) * (0.35 + width_seed * 1.65)
+                    center = i / 6 + (place_seed - 0.5) / 6
+                    color = PRIMARY if i % 2 == 0 else SECONDARY
+                    patch_obj = _ring_curve(f"Nexus_Bloom{i}", RADIUS, TUBE, color, glow_strength,
+                                            bevel_start=max(center - length / 2, 0.0),
+                                            bevel_end=min(center + length / 2, 1.0))
+                    rate = f"{speed} * 0.18 * (0.5 + {rate_seed} * 1.2)"
+                    swell = (f"((math.sin(frame / (bpy.context.scene.render.fps or 24) "
+                             f"* {rate} * 2 * math.pi + {rate_seed} * 2 * math.pi) + 1) / 2)")
+                    _drive_emission(patch_obj, f"pow({swell}, 1.8) * {glow_strength}")
+
             elif anim == "Wobble":
                 # Wobble — approximated as a breathing tube thickness rather
                 # than true per-vertex radial noise, which would need a

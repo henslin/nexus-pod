@@ -392,6 +392,8 @@ public struct RingView: View {
             dualChaseRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         case .multiChase:
             multiChaseRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
+        case .bloom:
+            bloomRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         case .sparkle:
             sparkleRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         case .aurora:
@@ -731,6 +733,110 @@ public struct RingView: View {
     /// Two constant-length arcs (`trailFraction` each) chase in opposite
     /// directions — solid primary/secondary colors rather than the shared
     /// gradient, so the two stay visually distinct as they cross.
+    // MARK: - Bloom
+
+    /// One patch of color: where it sits, how wide it is, and how strongly
+    /// it's glowing right now.
+    private struct Bloom {
+        var center: Double
+        var length: Double
+        var colorIndex: Int
+        var intensity: Double
+
+        var start: Double { center - length / 2 }
+    }
+
+    /// The whole bloom field at a moment in time.
+    ///
+    /// Every property is derived from `pseudoRandom(seed)` rather than a
+    /// real RNG, for the same reason `.sparkle` and `.equalizer` are — the
+    /// export path has to reproduce identical frames, and a live RNG would
+    /// make that impossible. "Random" here means unrelated-looking and
+    /// stable, not unpredictable.
+    ///
+    /// The irregularity is the point, so it's built in three independent
+    /// places rather than one:
+    ///
+    /// - **Width** varies from roughly a third to twice `trailFraction`,
+    ///   so with the default one patch covers about an eighth of the ring
+    ///   and another about a sixteenth.
+    /// - **Center** is a seeded position nudged off the even spacing, so
+    ///   patches clump and leave gaps instead of sitting on a grid.
+    /// - **Swell** runs on its own slow, seeded rate and offset, so no two
+    ///   patches peak together and the ring never visibly repeats.
+    ///
+    /// Speed is scaled well down (`0.18`) because this reads as breathing
+    /// rather than motion — at the same rate as the travelling animations
+    /// it looks like flickering instead.
+    private func blooms(elapsed: Double, colorCount: Int) -> [Bloom] {
+        let count = max(Int(config.bloomCount.rounded()), 2)
+        let base = max(config.trailFraction, 0.02)
+
+        return (0..<count).map { i in
+            let widthSeed = pseudoRandom(i)
+            let placeSeed = pseudoRandom(i + 97)
+            let rateSeed = pseudoRandom(i + 211)
+
+            let length = base * (0.35 + widthSeed * 1.65)
+            // Even spacing as a starting point, then pushed up to half a
+            // slot either way — enough to break the grid without letting
+            // every patch pile into one place.
+            let even = Double(i) / Double(count)
+            let center = even + (placeSeed - 0.5) / Double(count)
+
+            let rate = config.speed * 0.18 * (0.5 + rateSeed * 1.2)
+            let swell = (sin(elapsed * rate * 2 * Double.pi + rateSeed * 2 * Double.pi) + 1) / 2
+            // Eased so patches spend longer dim than bright — a slow
+            // gather, a brief peak, rather than an even in-out.
+            let intensity = pow(swell, 1.8)
+
+            return Bloom(
+                center: center,
+                length: length,
+                colorIndex: i % max(colorCount, 1),
+                intensity: intensity
+            )
+        }
+    }
+
+    /// Soft irregular patches that swell in place — see `blooms`.
+    ///
+    /// Drawn as overlapping blurred arcs on a dim track, with
+    /// `.plusLighter` so two patches crossing genuinely add up instead of
+    /// one covering the other. That accumulation is what makes overlaps
+    /// read as brighter *and* more saturated, which is the "vibrancy"
+    /// half of the effect.
+    private func bloomRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
+        let all = activeColors(elapsed: elapsed)
+        let field = blooms(elapsed: elapsed, colorCount: all.count)
+
+        return glow(
+            ZStack {
+                Circle().stroke(all[0].opacity(0.10), lineWidth: lw(scale))
+                ForEach(Array(field.enumerated()), id: \.offset) { _, bloom in
+                    Circle()
+                        .trim(from: bloom.start, to: bloom.start + bloom.length)
+                        .stroke(
+                            all[bloom.colorIndex % all.count],
+                            style: StrokeStyle(
+                                // Wider as it brightens, so a peak blooms
+                                // outward rather than only getting paler.
+                                lineWidth: lw(scale) * CGFloat(0.75 + bloom.intensity * 0.5),
+                                lineCap: .round
+                            )
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .opacity(min(bloom.intensity + voiceLevel * 0.25, 1))
+                        .blur(radius: lw(scale) * 0.5)
+                        .blendMode(.plusLighter)
+                }
+            },
+            color: all[0],
+            boost: voiceLevel,
+            scale: scale
+        )
+    }
+
     // MARK: - Diodes
 
     /// The ring's band width at the current scale — what `lineWidth` means
@@ -1040,6 +1146,25 @@ public struct RingView: View {
                 let brightness = min(edge * (0.35 + 0.5 * pulse) + voiceLevel * 0.2, 1)
                 if brightness > best.brightness {
                     best = (all[band % all.count], brightness)
+                }
+            }
+            return best
+
+        case .bloom:
+            // Strongest patch covering this diode wins, with a cosine
+            // falloff from its center so a patch's edges fade rather than
+            // cutting off — the diode reading of the blurred arc.
+            var best = (color: all[0], brightness: floorBrightness)
+            for bloom in blooms(elapsed: elapsed, colorCount: all.count) {
+                var offset = (position - bloom.center).truncatingRemainder(dividingBy: 1)
+                if offset < -0.5 { offset += 1 }
+                if offset > 0.5 { offset -= 1 }
+                let half = bloom.length / 2
+                guard abs(offset) < half, half > 0 else { continue }
+                let falloff = (cos(offset / half * Double.pi) + 1) / 2
+                let brightness = min(falloff * bloom.intensity + voiceLevel * 0.2, 1)
+                if brightness > best.brightness {
+                    best = (all[bloom.colorIndex % all.count], brightness)
                 }
             }
             return best
