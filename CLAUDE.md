@@ -91,6 +91,31 @@ primitive's clock by `3 / 1.1` to reproduce the three turns its
 spec-sheet cues were transcribed against — note the factor has no `speed`
 in it, since `spinDuration` already carries that dependence.
 
+### Diode mode
+
+`RingConfig.diodeModeEnabled` renders *any* animation as a fixed ring of
+diodes that only change brightness and color — how addressable LED
+hardware works. Every continuous renderer draws the opposite way (arcs
+rotating, gradients sweeping, rings scaling), so none of them is reusable
+here; `RingView.diodeIntensity` restates each animation as a scalar field
+over ring position instead.
+
+- Alternating, Sparkle, Equalizer and Multi Chase translate **exactly** —
+  their mappings are the same expressions their own renderers use, so
+  diode mode doesn't change how they look. Keep it that way.
+- Ripple and Wobble are **interpretations**, not translations: both are
+  radial effects and a fixed pixel ring has no radius to vary, so they
+  become a travelling front and a standing wave. That's deliberate.
+- `DiodeShape` (Round/Square/Bar) rotates square and bar diodes tangent
+  to the ring — axis-aligned ones read as scattered dots, not hardware.
+
+**Not in the code generators.** They draw each animation the continuous
+way, and neither diode mode nor diode shape is reflected there — twelve
+animations across four backends is its own piece of work. `ExportView`
+says so on screen when either is active rather than silently exporting
+something that doesn't match the preview. If you do that work, that
+notice is what should come out.
+
 Adding a style means four generator backends: SwiftUI, Compose and JS in
 `CodeGenerators.swift` (exhaustive switches, so the compiler finds them)
 and `BlenderCodeGenerator.swift`, which **dispatches on strings and won't
