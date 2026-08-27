@@ -186,6 +186,7 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         )
         timeline.segments.append(segment)
         select(segment.id)
+        saveNow()
         return segment
     }
 
@@ -200,10 +201,26 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
             let next = min(index, timeline.segments.count - 1)
             select(timeline.segments.indices.contains(next) ? timeline.segments[next].id : nil)
         }
+        saveNow()
     }
 
-    public func move(fromOffsets source: IndexSet, toOffset destination: Int) {
-        timeline.segments.move(fromOffsets: source, toOffset: destination)
+    /// Moves one step to an absolute position in the list.
+    ///
+    /// Index-based rather than SwiftUI's `move(fromOffsets:toOffset:)`
+    /// because the strip reorders *during* a drag, by asking "which slot
+    /// is the pointer over right now" — and `toOffset`'s
+    /// before-removal-adjustment semantics are a persistent off-by-one
+    /// trap when the answer is already an absolute index. Remove-then-
+    /// insert says exactly what it does.
+    public func moveSegment(_ id: UUID, toIndex target: Int) {
+        guard
+            let from = timeline.segments.firstIndex(where: { $0.id == id }),
+            timeline.segments.indices.contains(target),
+            from != target
+        else { return }
+        let segment = timeline.segments.remove(at: from)
+        timeline.segments.insert(segment, at: target)
+        saveNow()
     }
 
     public func duplicateSegment(_ id: UUID) {
@@ -213,6 +230,7 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         copy.name = "\(copy.name) copy"
         timeline.segments.insert(copy, at: index + 1)
         select(copy.id)
+        saveNow()
     }
 
     /// In-place edit of one segment's timeline-level fields (length, fades,
@@ -242,6 +260,20 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         let work = DispatchWorkItem { [weak self] in self?.save() }
         pendingSave = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    /// Writes immediately, cancelling any debounced write already queued.
+    ///
+    /// The debounce exists for continuous edits — dragging a fade slider
+    /// mutates the timeline on every frame — but it opens a window where
+    /// quitting loses the last change. That's fine for "the fade is now
+    /// 0.4 instead of 0.3" and not fine for "this step exists", so the
+    /// structural edits below flush instead of waiting. Discrete actions
+    /// are rare enough that writing on each one costs nothing.
+    private func saveNow() {
+        pendingSave?.cancel()
+        pendingSave = nil
+        save()
     }
 
     private var fileURL: URL? {

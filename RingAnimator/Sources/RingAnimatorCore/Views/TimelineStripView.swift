@@ -52,11 +52,26 @@ public struct TimelineStripView: View {
     /// under the pointer is worse than one with a little empty space in
     /// it.
     private static let inspectorHeight: CGFloat = 26
+    /// Height of the scrub ruler above the blocks.
+    private static let rulerHeight: CGFloat = 12
+    /// Name for the track's coordinate space, so a block's own drag can
+    /// report its pointer position in *track* coordinates rather than its
+    /// own. That's what lets "which slot am I over" stay a simple lookup
+    /// even as the blocks reorder underneath the pointer mid-drag.
+    private static let trackSpace = "timeline.track"
+
+    /// The step currently being dragged, if any. Only drives the lifted
+    /// appearance — the actual reordering happens live in the drag handler,
+    /// so there's no pending-move state to commit or roll back.
+    @State private var draggingID: UUID?
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            track
+            VStack(spacing: 4) {
+                scrubRuler
+                track
+            }
             Divider()
             inspectorRow
                 .frame(height: Self.inspectorHeight, alignment: .leading)
@@ -136,6 +151,46 @@ public struct TimelineStripView: View {
 
     // MARK: - Track
 
+    /// Scrubbing lives here rather than on the blocks below, because the
+    /// blocks now own a drag of their own for reordering and the two would
+    /// otherwise compete for the same pointer movement. Splitting them is
+    /// also just how a timeline usually works: you scrub the ruler and you
+    /// drag the clips.
+    ///
+    /// Converting x back to seconds uses the *laid-out* widths rather than
+    /// a flat time-to-pixels ratio, since `minBlockWidth` means short steps
+    /// take up more width than their duration strictly earns — without
+    /// that, clicking above a padded-out short block would jump the
+    /// playhead somewhere else.
+    @ViewBuilder
+    private var scrubRuler: some View {
+        if player.timeline.isEmpty {
+            Color.clear.frame(height: Self.rulerHeight)
+        } else {
+            GeometryReader { geo in
+                let widths = blockWidths(in: geo.size.width)
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.quaternary.opacity(0.6))
+                        .frame(height: 4)
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: Self.rulerHeight, height: Self.rulerHeight)
+                        .offset(x: x(forTime: position, widths: widths) - Self.rulerHeight / 2)
+                }
+                .frame(height: Self.rulerHeight)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            onScrub(time(atX: value.location.x, widths: widths))
+                        }
+                )
+            }
+            .frame(height: Self.rulerHeight)
+        }
+    }
+
     @ViewBuilder
     private var track: some View {
         if player.timeline.isEmpty {
@@ -147,26 +202,59 @@ public struct TimelineStripView: View {
                     HStack(spacing: 4) {
                         ForEach(Array(player.timeline.segments.enumerated()), id: \.element.id) { index, segment in
                             block(segment, width: widths[index])
+                                .gesture(reorderGesture(for: segment, widths: widths))
                         }
                     }
+                    .animation(.spring(response: 0.28, dampingFraction: 0.82), value: player.timeline.segments.map(\.id))
                     playheadIndicator(totalWidth: geo.size.width)
                 }
-                .contentShape(Rectangle())
-                // Click or drag anywhere on the track to scrub. Converting
-                // x back to seconds uses the *laid-out* widths rather than
-                // a flat time-to-pixels ratio, since `minBlockWidth` above
-                // means short steps take up more width than their duration
-                // strictly earns — without this, clicking a padded-out
-                // short block would jump the playhead somewhere else.
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            onScrub(time(atX: value.location.x, widths: widths))
-                        }
-                )
+                .coordinateSpace(name: Self.trackSpace)
             }
             .frame(height: Self.trackHeight)
         }
+    }
+
+    /// Drag a block sideways to reorder. The list is rearranged *during*
+    /// the drag rather than on release, so the gap opens where the step
+    /// will land instead of everything jumping at the end.
+    ///
+    /// Reading the pointer in the track's coordinate space (not the
+    /// block's own) is what makes that stable: once a move happens the
+    /// dragged block sits under the pointer again, so the next lookup
+    /// returns the same slot rather than oscillating between two.
+    ///
+    /// `minimumDistance: 4` leaves click-to-select to the block's own tap
+    /// gesture — a plain click never travels far enough to start this.
+    private func reorderGesture(for segment: TimelineSegment, widths: [CGFloat]) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.trackSpace))
+            .onChanged { value in
+                if draggingID != segment.id {
+                    draggingID = segment.id
+                    // Dragging a step also selects it, so the Controls
+                    // panel follows what you're manipulating — same
+                    // expectation as clicking it.
+                    if player.selectedSegmentID != segment.id {
+                        player.select(segment.id)
+                    }
+                }
+                guard let target = index(atX: value.location.x, widths: widths) else { return }
+                player.moveSegment(segment.id, toIndex: target)
+            }
+            .onEnded { _ in
+                draggingID = nil
+            }
+    }
+
+    /// Which block slot a track-space x lands in.
+    private func index(atX x: CGFloat, widths: [CGFloat]) -> Int? {
+        guard !widths.isEmpty else { return nil }
+        var cursor: CGFloat = 0
+        for (index, width) in widths.enumerated() {
+            let end = cursor + width + 4
+            if x < end { return index }
+            cursor = end
+        }
+        return widths.count - 1
     }
 
     private var emptyTrack: some View {
@@ -265,6 +353,14 @@ public struct TimelineStripView: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
         )
+        // Lifted while dragging. Deliberately a scale/shadow rather than
+        // following the pointer with an offset: the block is already being
+        // reordered live, so it's under the pointer anyway, and an offset
+        // on top of that reads as the block lagging its own drop target.
+        .scaleEffect(draggingID == segment.id ? 1.04 : 1)
+        .shadow(color: .black.opacity(draggingID == segment.id ? 0.35 : 0), radius: 8, y: 2)
+        .zIndex(draggingID == segment.id ? 1 : 0)
+        .animation(.easeOut(duration: 0.15), value: draggingID)
         // A plain tap gesture rather than a `Button`: the track's own scrub
         // drag gesture sits underneath, and a Button's tap handling fights
         // with it the same way it did in `PreviewTab`'s draggable preview
