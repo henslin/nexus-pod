@@ -487,11 +487,15 @@ public extension CodeGenerators {
                     _driver(seg, "rotation_euler", "ringpod_phase(frame)", index=2)
 
             elif anim == "Bloom":
-                # Six patches at seeded widths and centers, each swelling
-                # on its own slow rate. Same seeded field as the app, so
-                # the arrangement matches — only the blur and additive
-                # overlap are dropped, since both would need a compositor
-                # pass rather than object emission.
+                # An approximation, and the furthest from the app of
+                # any branch here. In the app each patch surfaces
+                # somewhere new every cycle, growing from and shrinking
+                # back to nothing; reproducing that needs drivers on each
+                # curve's bevel_factor_start/end, not just emission. What
+                # this builds is six fixed patches whose brightness swells
+                # on their own rates — right palette and rhythm, static
+                # positions. Blur and additive overlap are dropped too,
+                # both needing a compositor pass.
                 trail = p["trail_fraction"]
                 for i in range(6):
                     width_seed = (math.sin(i * 12.9898) * 43758.5453) % 1

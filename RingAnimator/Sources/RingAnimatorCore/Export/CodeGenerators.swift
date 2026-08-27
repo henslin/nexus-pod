@@ -154,16 +154,21 @@ ZStack {
         .stroke(gradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
         .opacity(bloomBase)
     ForEach(0..<bloomCount, id: \\.self) { i in
-        let widthSeed = pseudoRandom(i)
-        let placeSeed = pseudoRandom(i + 97)
         let rateSeed = pseudoRandom(i + 211)
-        let length = max(trailFraction, 0.02) * (0.35 + widthSeed * 1.65)
-        let center = Double(i) / Double(bloomCount) + (placeSeed - 0.5) / Double(bloomCount)
-        let rate = speed * 0.18 * (0.5 + rateSeed * 1.2)
-        let swell = (sin(elapsed * rate * 2 * .pi + rateSeed * 2 * .pi) + 1) / 2
-        let intensity = pow(swell, 1.8)
+        let period = max(6.0 / max(speed, 0.05) * (0.55 + rateSeed), 0.3)
+        let local = elapsed / period
+        let cycle = Int(local.rounded(.down))
+        let f = local - Double(cycle)
+        let placeSeed = pseudoRandom2(i, cycle)
+        let peakSeed = pseudoRandom2(i, cycle + 4096)
+        let driftSeed = pseudoRandom2(i, cycle + 8192)
+        let envelope = sin(f * .pi)
+        let length = max(trailFraction, 0.02) * (0.33 + peakSeed * 0.67) * envelope
+        let center = placeSeed + (driftSeed - 0.5) * 0.15 * f
+        let intensity = pow(envelope, 1.4) * (0.55 + peakSeed * 0.45)
+        let drawn = max(length, 0.0005)
         Circle()
-            .trim(from: center - length / 2, to: center + length / 2)
+            .trim(from: center - drawn / 2, to: center + drawn / 2)
             .stroke(i.isMultiple(of: 2) ? p : s,
                     style: StrokeStyle(lineWidth: lineWidth * CGFloat(0.75 + intensity * 0.5), lineCap: .round))
             .rotationEffect(.degrees(-90))
@@ -481,6 +486,14 @@ struct ThinkingRingView: View {
         return x - x.rounded(.down)
     }
 
+    /// Two-input hash — Bloom rerolls a patch's position and size on every
+    /// surfacing, so its seed depends on which surfacing this is, not just
+    /// which patch.
+    private func pseudoRandom2(_ a: Int, _ b: Int) -> Double {
+        let x = sin(Double(a) * 12.9898 + Double(b) * 78.233) * 43758.5453
+        return x - x.rounded(.down)
+    }
+
     // Deliberately exaggerated RGB split, inspired by Siri's colorful
     // "wavelengths" — three color-isolated (`.colorMultiply` zeroes out the
     // other two channels), offset, screen-blended copies of the same ring.
@@ -660,14 +673,18 @@ drawCircle(
     style = Stroke(width = lineWidthPx)
 )
 for (i in 0 until bloomCount) {
-    val widthSeed = pseudoRandom(i)
-    val placeSeed = pseudoRandom(i + 97)
     val rateSeed = pseudoRandom(i + 211)
-    val length = maxOf(trailFraction, 0.02) * (0.35 + widthSeed * 1.65)
-    val center = i.toDouble() / bloomCount + (placeSeed - 0.5) / bloomCount
-    val rate = speed * 0.18 * (0.5 + rateSeed * 1.2)
-    val swell = (sin(elapsedSeconds * rate * 2 * PI + rateSeed * 2 * PI) + 1) / 2
-    val intensity = Math.pow(swell, 1.8)
+    val period = maxOf(6.0 / maxOf(speed, 0.05) * (0.55 + rateSeed), 0.3)
+    val local = elapsedSeconds / period
+    val cycle = Math.floor(local).toInt()
+    val f = local - cycle
+    val placeSeed = pseudoRandom2(i, cycle)
+    val peakSeed = pseudoRandom2(i, cycle + 4096)
+    val driftSeed = pseudoRandom2(i, cycle + 8192)
+    val envelope = sin(f * PI)
+    val length = maxOf(maxOf(trailFraction, 0.02) * (0.33 + peakSeed * 0.67) * envelope, 0.0005)
+    val center = placeSeed + (driftSeed - 0.5) * 0.15 * f
+    val intensity = Math.pow(envelope, 1.4) * (0.55 + peakSeed * 0.45)
     // Compose's Canvas has no per-draw blur, so `bloomSoftness` is not
     // applied here — the patches are crisp. Wrap the Canvas in a
     // `graphicsLayer { renderEffect = BlurEffect(...) }` if you want it.
@@ -944,6 +961,13 @@ private fun pseudoRandom(i: Int): Double {
     return x - floor(x)
 }
 
+// Two-input hash — Bloom rerolls a patch's position and size on every
+// surfacing, so its seed depends on which surfacing this is.
+private fun pseudoRandom2(a: Int, b: Int): Double {
+    val x = sin(a.toDouble() * 12.9898 + b.toDouble() * 78.233) * 43758.5453
+    return x - floor(x)
+}
+
 @Composable
 fun ThinkingRingView(
     modifier: Modifier = Modifier,
@@ -1190,14 +1214,18 @@ ctx.lineWidth = lineWidth;
 ctx.stroke();
 ctx.restore();
 for (let i = 0; i < bloomCount; i++) {
-  const widthSeed = pseudoRandom(i);
-  const placeSeed = pseudoRandom(i + 97);
   const rateSeed = pseudoRandom(i + 211);
-  const length = Math.max(config.trailFraction, 0.02) * (0.35 + widthSeed * 1.65);
-  const center = i / bloomCount + (placeSeed - 0.5) / bloomCount;
-  const rate = config.speed * 0.18 * (0.5 + rateSeed * 1.2);
-  const swell = (Math.sin(elapsed * rate * 2 * Math.PI + rateSeed * 2 * Math.PI) + 1) / 2;
-  const intensity = Math.pow(swell, 1.8);
+  const period = Math.max(6 / Math.max(config.speed, 0.05) * (0.55 + rateSeed), 0.3);
+  const local = elapsed / period;
+  const cycle = Math.floor(local);
+  const f = local - cycle;
+  const placeSeed = pseudoRandom2(i, cycle);
+  const peakSeed = pseudoRandom2(i, cycle + 4096);
+  const driftSeed = pseudoRandom2(i, cycle + 8192);
+  const envelope = Math.sin(f * Math.PI);
+  const length = Math.max(Math.max(config.trailFraction, 0.02) * (0.33 + peakSeed * 0.67) * envelope, 0.0005);
+  const center = placeSeed + (driftSeed - 0.5) * 0.15 * f;
+  const intensity = Math.pow(envelope, 1.4) * (0.55 + peakSeed * 0.45);
   const from = (center - length / 2) * 2 * Math.PI - Math.PI / 2;
   ctx.beginPath();
   ctx.arc(cx, cy, radius, from, from + length * 2 * Math.PI);
@@ -1520,6 +1548,13 @@ ctx.stroke();
   // SwiftUI/Compose exports, so all three stay visually in sync.
   function pseudoRandom(i) {
     const x = Math.sin(i * 12.9898) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  // Two-input hash — Bloom rerolls a patch's position and size on every
+  // surfacing, so its seed depends on which surfacing this is.
+  function pseudoRandom2(a, b) {
+    const x = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
     return x - Math.floor(x);
   }
 

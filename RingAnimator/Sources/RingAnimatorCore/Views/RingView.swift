@@ -748,53 +748,68 @@ public struct RingView: View {
 
     /// The whole bloom field at a moment in time.
     ///
-    /// Every property is derived from `pseudoRandom(seed)` rather than a
-    /// real RNG, for the same reason `.sparkle` and `.equalizer` are — the
-    /// export path has to reproduce identical frames, and a live RNG would
-    /// make that impossible. "Random" here means unrelated-looking and
-    /// stable, not unpredictable.
+    /// Each patch runs a surface-and-submerge cycle rather than pulsing in
+    /// place: its exposed width grows from nothing to a peak and shrinks
+    /// back to nothing, and the next time it comes up it does so somewhere
+    /// else, at a different size, in a different color. Like something
+    /// breaking the surface of water and sinking again.
     ///
-    /// The irregularity is the point, so it's built in three independent
-    /// places rather than one:
+    /// That's why the seeds take the cycle number as well as the patch
+    /// index — see `pseudoRandom(_:_:)`. Seeding on the index alone is
+    /// what pinned the earlier version to fixed spots.
     ///
-    /// - **Width** varies from roughly a third to twice `trailFraction`,
-    ///   so with the default one patch covers about an eighth of the ring
-    ///   and another about a sixteenth.
-    /// - **Center** is a seeded position nudged off the even spacing, so
-    ///   patches clump and leave gaps instead of sitting on a grid.
-    /// - **Swell** runs on its own slow, seeded rate and offset, so no two
-    ///   patches peak together and the ring never visibly repeats.
+    /// Every value is still hashed rather than drawn from a real RNG, for
+    /// the same reason `.sparkle` and `.equalizer` are: the export path
+    /// has to reproduce identical frames. "Random" here means
+    /// unrelated-looking and stable, not unpredictable.
     ///
-    /// Speed is scaled well down (`0.18`) because this reads as breathing
-    /// rather than motion — at the same rate as the travelling animations
-    /// it looks like flickering instead.
+    /// The period is deliberately long (a `6 /` divisor against a speed
+    /// already low) because this reads as breathing rather than motion —
+    /// at the rate the travelling animations run it looks like flicker.
     private func blooms(elapsed: Double, colorCount: Int) -> [Bloom] {
         let count = max(Int(config.bloomCount.rounded()), 2)
         let base = max(config.trailFraction, 0.02)
+        let colors = max(colorCount, 1)
 
         return (0..<count).map { i in
-            let widthSeed = pseudoRandom(i)
-            let placeSeed = pseudoRandom(i + 97)
+            // Each patch keeps its own period, so they never fall into
+            // step with each other.
             let rateSeed = pseudoRandom(i + 211)
+            let period = max(6.0 / max(config.speed, 0.05) * (0.55 + rateSeed), 0.3)
 
-            let length = base * (0.35 + widthSeed * 1.65)
-            // Even spacing as a starting point, then pushed up to half a
-            // slot either way — enough to break the grid without letting
-            // every patch pile into one place.
-            let even = Double(i) / Double(count)
-            let center = even + (placeSeed - 0.5) / Double(count)
+            let local = elapsed / period
+            let cycle = Int(local.rounded(.down))
+            // Progress through *this* surfacing, 0...1.
+            let f = local - Double(cycle)
 
-            let rate = config.speed * 0.18 * (0.5 + rateSeed * 1.2)
-            let swell = (sin(elapsed * rate * 2 * Double.pi + rateSeed * 2 * Double.pi) + 1) / 2
-            // Eased so patches spend longer dim than bright — a slow
-            // gather, a brief peak, rather than an even in-out.
-            let intensity = pow(swell, 1.8)
+            // Rerolled per surfacing: where it comes up, how far it comes
+            // up, which way it drifts while up, and what color it is.
+            let placeSeed = pseudoRandom(i, cycle)
+            let peakSeed = pseudoRandom(i, cycle + 4096)
+            let driftSeed = pseudoRandom(i, cycle + 8192)
+            let colorSeed = pseudoRandom(i, cycle + 16384)
+
+            // 0 → 1 → 0 across the cycle: the whole shape of surfacing and
+            // sinking back. Both width and brightness follow it, so a
+            // patch genuinely shrinks into nothing rather than just fading
+            // while staying the same size.
+            let envelope = sin(f * Double.pi)
+
+            // How exposed it gets *this* time — a third to full size, so
+            // consecutive surfacings of the same patch differ.
+            let peak = 0.33 + peakSeed * 0.67
+            let length = base * peak * envelope
+
+            // A slow sideways travel while it's up, so a patch isn't
+            // pinned to one spot even within a single surfacing.
+            let drift = (driftSeed - 0.5) * 0.15 * f
+            let center = placeSeed + drift
 
             return Bloom(
                 center: center,
                 length: length,
-                colorIndex: i % max(colorCount, 1),
-                intensity: intensity
+                colorIndex: Int(colorSeed * Double(colors)) % colors,
+                intensity: pow(envelope, 1.4) * (0.55 + peakSeed * 0.45)
             )
         }
     }
@@ -825,8 +840,14 @@ public struct RingView: View {
                     .opacity(min(max(config.bloomBase, 0), 1))
 
                 ForEach(Array(field.enumerated()), id: \.offset) { _, bloom in
+                    // A patch is fully submerged for part of its cycle.
+                    // `trim` with a zero-length range draws a *full
+                    // circle* in some renderers rather than nothing (the
+                    // same trap `chasingArc` guards against), so hold a
+                    // hair of length and let opacity do the hiding.
+                    let drawn = max(bloom.length, 0.0005)
                     Circle()
-                        .trim(from: bloom.start, to: bloom.start + bloom.length)
+                        .trim(from: bloom.start, to: bloom.start + drawn)
                         .stroke(
                             all[bloom.colorIndex % all.count],
                             style: StrokeStyle(
@@ -1424,6 +1445,18 @@ public struct RingView: View {
     /// and mirrored exactly in the code exporters).
     private func pseudoRandom(_ i: Int) -> Double {
         let x = sin(Double(i) * 12.9898) * 43758.5453
+        return x - x.rounded(.down)
+    }
+
+    /// Two-input version of the same hash, for values that must differ per
+    /// *occurrence* rather than per index.
+    ///
+    /// `.bloom` needs this: a patch's position and size are rerolled every
+    /// time it surfaces, so the seed has to depend on which surfacing this
+    /// is, not just which patch. Seeding on the index alone is what made
+    /// the first version sit in fixed spots forever.
+    private func pseudoRandom(_ a: Int, _ b: Int) -> Double {
+        let x = sin(Double(a) * 12.9898 + Double(b) * 78.233) * 43758.5453
         return x - x.rounded(.down)
     }
 
