@@ -44,15 +44,22 @@ public struct TimelineStripView: View {
     /// instead of collapsing to a hairline.
     private static let minBlockWidth: CGFloat = 44
     private static let trackHeight: CGFloat = 56
+    /// The inspector row's height, reserved whether or not a step is
+    /// selected. Without this the strip grows the moment you select
+    /// something and shrinks when you deselect, which moves every control
+    /// above it — including the Add Step button, so a second click meant
+    /// for it lands on the track instead. A strip that changes height
+    /// under the pointer is worse than one with a little empty space in
+    /// it.
+    private static let inspectorHeight: CGFloat = 26
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
             track
-            if let segment = player.selectedSegment {
-                Divider()
-                inspector(for: segment)
-            }
+            Divider()
+            inspectorRow
+                .frame(height: Self.inspectorHeight, alignment: .leading)
         }
         .padding(12)
         .background(.regularMaterial)
@@ -308,6 +315,23 @@ public struct TimelineStripView: View {
     }
 
     // MARK: - Selected step inspector
+
+    /// Always occupies `inspectorHeight` — see that constant. Falls back to
+    /// a hint when there are steps but none is selected, and to nothing at
+    /// all when the timeline is empty (the track's own empty state already
+    /// says what to do, and repeating it here would just be noise).
+    @ViewBuilder
+    private var inspectorRow: some View {
+        if let segment = player.selectedSegment {
+            inspector(for: segment)
+        } else if !player.timeline.isEmpty {
+            Text("Select a step to edit its timing.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            Color.clear
+        }
+    }
 
     @ViewBuilder
     private func inspector(for segment: TimelineSegment) -> some View {
