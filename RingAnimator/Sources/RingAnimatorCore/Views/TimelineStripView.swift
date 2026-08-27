@@ -116,8 +116,15 @@ public struct TimelineStripView: View {
         }
     }
 
+    /// Where the playhead actually sits *within* the timeline. `playhead`
+    /// itself is a free-running clock, so everything on screen has to go
+    /// through the timeline's own mapping — see `normalizedTime`.
+    private var position: Double {
+        player.timeline.normalizedTime(playhead)
+    }
+
     private var timecode: String {
-        String(format: "%.2fs / %.2fs", playhead, player.timeline.duration)
+        String(format: "%.2fs / %.2fs", position, player.timeline.duration)
     }
 
     // MARK: - Track
@@ -277,7 +284,7 @@ public struct TimelineStripView: View {
             Rectangle()
                 .fill(Color.accentColor)
                 .frame(width: 2, height: Self.trackHeight)
-                .offset(x: x(forTime: playhead, widths: widths))
+                .offset(x: x(forTime: position, widths: widths))
                 .allowsHitTesting(false)
         }
     }

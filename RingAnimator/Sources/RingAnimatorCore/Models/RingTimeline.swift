@@ -207,6 +207,27 @@ public struct RingTimeline: Codable, Equatable {
         return acc
     }
 
+    /// Maps a raw playhead (which just counts up forever while playing)
+    /// onto a position within the timeline: wrapped when looping, clamped
+    /// to the ends when not.
+    ///
+    /// Exposed rather than kept private inside `resolve(at:)` because the
+    /// editor needs the exact same number to draw its playhead and
+    /// timecode. Deriving that independently is how they drift — the strip
+    /// originally formatted the raw value and showed "11.88s / 6.00s" on
+    /// the second lap, with the playhead pinned to the far right instead
+    /// of tracking.
+    public func normalizedTime(_ time: Double) -> Double {
+        let total = duration
+        guard total > 0 else { return 0 }
+        guard loops else { return min(max(time, 0), total) }
+        let wrapped = time.truncatingRemainder(dividingBy: total)
+        // `truncatingRemainder` keeps the sign of the dividend, so a
+        // negative playhead (possible if a scrub ever goes below zero)
+        // would land outside the timeline without this.
+        return wrapped < 0 ? wrapped + total : wrapped
+    }
+
     /// Everything needed to draw one frame of the timeline.
     public struct Resolved: Equatable {
         /// Which segment is on screen, and where it sits in the array —
@@ -260,12 +281,7 @@ public struct RingTimeline: Codable, Equatable {
             )
         }
 
-        let t: Double
-        if loops {
-            t = time.truncatingRemainder(dividingBy: total)
-        } else {
-            t = min(max(time, 0), total)
-        }
+        let t = normalizedTime(time)
 
         let starts = startTimes
         let rotationOffsets = startRotations
