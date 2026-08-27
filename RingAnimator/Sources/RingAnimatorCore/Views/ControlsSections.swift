@@ -352,6 +352,7 @@ struct PlaybackSection: View {
     var body: some View {
         Toggle("Sequence Playback", isOn: $config.sequencePlaybackEnabled)
         if config.sequencePlaybackEnabled {
+            LabeledSlider(title: "Fade In", value: $config.fadeInSeconds, range: 0...3, format: "%.1fs")
             LabeledSlider(title: "Hold", value: $config.holdSeconds, range: 0...6, format: "%.1fs")
             LabeledSlider(title: "Fade Out", value: $config.fadeOutSeconds, range: 0...3, format: "%.1fs")
             Stepper(loopsLabel, value: $config.loops, in: 0...10)

@@ -77,10 +77,15 @@ struct PhoneMockupView: View {
     /// in via `controlsBar` below.
     @State private var isExportingAnimation = false
 
-    init(config: RingConfig, isDarkMode: Binding<Bool>) {
+    /// Non-nil while a timeline is driving the pod — passed straight down
+    /// to `TabBarPreview`, see its own `playback` property.
+    var playback: TimelinePlayback?
+
+    init(config: RingConfig, isDarkMode: Binding<Bool>, playback: TimelinePlayback? = nil) {
         self.config = config
         self.voiceConversation = config.voiceConversation
         self._isDarkMode = isDarkMode
+        self.playback = playback
     }
 
     /// Shared with `PreviewTab`'s large preview — see the type doc comment.
@@ -214,7 +219,7 @@ struct PhoneMockupView: View {
                         .offset(y: pillLiftOffset)
                         .transition(.growFromRing(rowWidth: screenWidth - 42))
                 }
-                TabBarPreview(config: config, selectedTab: $selectedTab, width: screenWidth - 42)
+                TabBarPreview(config: config, selectedTab: $selectedTab, width: screenWidth - 42, playback: playback)
             }
             .padding(.bottom, 21)
             .onAppear {

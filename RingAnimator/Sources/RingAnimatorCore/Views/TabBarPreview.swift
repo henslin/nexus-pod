@@ -42,11 +42,28 @@ public struct TabBarPreview: View {
     /// Siri/Assistant glyph has with its own settings.
     var onRingTap: (() -> Void)?
 
-    public init(config: RingConfig, selectedTab: Binding<DemoTab>, width: CGFloat = 340, onRingTap: (() -> Void)? = nil) {
+    /// Timeline playback, when a sequence is driving the pod instead of the
+    /// live config's own infinite loop. `nil` (the default) is the original
+    /// behavior in full: `RingView` runs off its own `TimelineView`
+    /// clock and nothing is dimmed.
+    ///
+    /// Threaded through as a value rather than read from a shared object so
+    /// this stays a pure function of its inputs — the same reason
+    /// `RingView` takes `overrideElapsed` instead of reaching for a clock.
+    var playback: TimelinePlayback?
+
+    public init(
+        config: RingConfig,
+        selectedTab: Binding<DemoTab>,
+        width: CGFloat = 340,
+        onRingTap: (() -> Void)? = nil,
+        playback: TimelinePlayback? = nil
+    ) {
         self.config = config
         self._selectedTab = selectedTab
         self.width = width
         self.onRingTap = onRingTap
+        self.playback = playback
     }
 
     /// Drives the selected-tab pill's slide between items.
@@ -115,10 +132,14 @@ public struct TabBarPreview: View {
     }
 
     private var ringPodBackgroundDuplicate: some View {
-        RingView(config: config, diameter: 34)
+        RingView(config: config, diameter: 34, overrideElapsed: playback?.elapsed)
             .frame(width: 62, height: 62)
             .blur(radius: 4)
-            .opacity(0.8)
+            // Multiplied into the existing 0.8, not replacing it — this
+            // layer is deliberately dimmer than the pod itself (see
+            // `ringPodStack`), and a timeline fade should scale that
+            // relationship rather than flatten it.
+            .opacity(0.8 * (playback?.opacity ?? 1))
     }
 
     @ViewBuilder
@@ -146,8 +167,9 @@ public struct TabBarPreview: View {
     }
 
     private var ringPod: some View {
-        RingView(config: config, diameter: 34)
+        RingView(config: config, diameter: 34, overrideElapsed: playback?.elapsed)
             .frame(width: 62, height: 62)
+            .opacity(playback?.opacity ?? 1)
     }
 
     /// A single tab item: custom outline artwork when unselected, filled

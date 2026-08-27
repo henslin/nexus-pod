@@ -401,12 +401,19 @@ public struct RingView: View {
     // MARK: - Playback envelope
 
     /// When `sequencePlaybackEnabled` is off, always fully visible (the
-    /// original infinite-loop behavior). When on, holds at full opacity for
-    /// `holdSeconds`, fades out over `fadeOutSeconds`, and either repeats
-    /// forever (`loops == 0`) or plays that many times and stays faded.
+    /// original infinite-loop behavior). When on, ramps up over
+    /// `fadeInSeconds`, holds at full opacity for `holdSeconds`, fades out
+    /// over `fadeOutSeconds`, and either repeats forever (`loops == 0`) or
+    /// plays that many times and stays faded.
+    ///
+    /// `fadeInSeconds` defaults to 0, which collapses the first branch below
+    /// to a no-op and leaves this behaving exactly as it did before fade-in
+    /// existed — worth keeping in mind, since every saved preset written
+    /// before that field decodes with it at 0.
     private func sequenceEnvelopeOpacity(elapsed: Double) -> Double {
         guard config.sequencePlaybackEnabled else { return 1 }
-        let envelopeDuration = max(config.holdSeconds + config.fadeOutSeconds, 0.1)
+        let fadeIn = max(config.fadeInSeconds, 0)
+        let envelopeDuration = max(fadeIn + config.holdSeconds + config.fadeOutSeconds, 0.1)
 
         if config.loops > 0 {
             let totalDuration = envelopeDuration * Double(config.loops)
@@ -414,10 +421,17 @@ public struct RingView: View {
         }
 
         let t = elapsed.truncatingRemainder(dividingBy: envelopeDuration)
-        if t < config.holdSeconds {
+        if t < fadeIn {
+            // Guarded division: `t < fadeIn` already implies `fadeIn > 0`,
+            // so this branch can't divide by zero — but the `max` keeps it
+            // safe against a denormal fadeIn slipping through.
+            return min(t / max(fadeIn, 0.001), 1)
+        }
+        let heldUntil = fadeIn + config.holdSeconds
+        if t < heldUntil {
             return 1
         }
-        let fadeT = (t - config.holdSeconds) / max(config.fadeOutSeconds, 0.001)
+        let fadeT = (t - heldUntil) / max(config.fadeOutSeconds, 0.001)
         return max(1 - fadeT, 0)
     }
 

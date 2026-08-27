@@ -30,6 +30,10 @@ struct ContentView: View {
     /// just its own JSON file (`use-cases.json`) so the two lists never
     /// intermix. See `UseCaseListView`/`UseCaseDetailView`.
     @StateObject private var useCaseStore = RingPresetStore(fileName: "use-cases.json")
+    /// The sequencing document — see `TimelinePlayer`. Bound to `config`
+    /// in `.onAppear` below, which is what makes the Controls panel edit
+    /// the selected step in place rather than a detached scratch copy.
+    @StateObject private var timelinePlayer = TimelinePlayer()
 
     @State private var section: AppSection? = .ringDesigner
     @State private var designerTab: DesignerTab = .preview
@@ -116,6 +120,12 @@ struct ContentView: View {
             }
         }
         .navigationTitle(section?.rawValue ?? "Nexus")
+        .onAppear {
+            // Deferred to `.onAppear` rather than done in an initializer:
+            // `@StateObject`s aren't guaranteed to be constructed until the
+            // view first appears, and binding needs both objects to exist.
+            timelinePlayer.bind(to: config)
+        }
     }
 
     @ViewBuilder
@@ -133,7 +143,7 @@ struct ContentView: View {
         // preserves all of that across tab switches, matching what a
         // person expects from "the two panes I keep flipping between."
         ZStack {
-            PreviewTab(config: config)
+            PreviewTab(config: config, player: timelinePlayer)
                 .opacity(designerTab == .preview ? 1 : 0)
                 .allowsHitTesting(designerTab == .preview)
                 .accessibilityHidden(designerTab != .preview)
@@ -200,6 +210,18 @@ struct ContentView: View {
 
 private struct PreviewTab: View {
     @ObservedObject var config: RingConfig
+    @ObservedObject var player: TimelinePlayer
+
+    /// Where the playhead sits when the clock isn't running. Playback
+    /// itself is computed from `TimelineView`'s own date (see
+    /// `currentTime(at:)`) rather than accumulated into state frame by
+    /// frame — writing state sixty times a second would both fight
+    /// SwiftUI's render pass and republish through `player` for no reason.
+    @State private var pausedPlayhead: Double = 0
+    /// Wall-clock instant playback started, paired with the playhead
+    /// position it started from. Rebuilt whenever play is pressed or the
+    /// user scrubs mid-playback.
+    @State private var playAnchor: (date: Date, offset: Double)?
     /// Owned here rather than inside `PhoneMockupView` so both previews can
     /// share one toggle — `PhoneMockupView` gets it as a `@Binding` (it
     /// still hosts the actual picker control, and needs the raw value
@@ -287,13 +309,79 @@ private struct PreviewTab: View {
     /// `.overlay(alignment:)` so the drag and the snap-back both animate
     /// as plain point movement instead of fighting SwiftUI's alignment
     /// geometry).
+    /// What the previews actually render. While a sequence is playing
+    /// that's the player's own read-only config (see
+    /// `TimelinePlayer.playbackConfig`); otherwise it's the live config,
+    /// which — thanks to the Controls⇄segment binding — already *is* the
+    /// selected step. So editing shows the step you're editing and playing
+    /// shows the sequence, with no third state to keep in sync.
+    private var displayConfig: RingConfig {
+        player.isPlaying ? player.playbackConfig : config
+    }
+
     var body: some View {
+        // One clock for the whole tab. `paused:` stops it dead when not
+        // playing, so a parked timeline costs nothing.
+        TimelineView(.animation(paused: !player.isPlaying)) { context in
+            let now = currentTime(at: context.date)
+            let resolved = player.timeline.resolve(at: now)
+            let playback = playbackFrame(for: resolved)
+
+            VStack(spacing: 0) {
+                canvas(playback: playback)
+                Divider()
+                TimelineStripView(
+                    player: player,
+                    config: config,
+                    playhead: now,
+                    onScrub: { scrub(to: $0) }
+                )
+            }
+        }
+        .onChange(of: player.isPlaying) { _, isPlaying in
+            if isPlaying {
+                playAnchor = (date: Date(), offset: pausedPlayhead)
+            } else {
+                // Freeze wherever the playhead had got to, so pressing play
+                // again resumes instead of restarting.
+                playAnchor.map { pausedPlayhead = $0.offset + Date().timeIntervalSince($0.date) }
+                playAnchor = nil
+            }
+        }
+    }
+
+    /// Seconds into the timeline at a given wall-clock instant.
+    private func currentTime(at date: Date) -> Double {
+        guard let anchor = playAnchor else { return pausedPlayhead }
+        return anchor.offset + date.timeIntervalSince(anchor.date)
+    }
+
+    private func scrub(to time: Double) {
+        let clamped = max(time, 0)
+        pausedPlayhead = clamped
+        // Re-anchor rather than stop: scrubbing mid-playback should jump
+        // and keep running, the way a video scrubber does.
+        if player.isPlaying {
+            playAnchor = (date: Date(), offset: clamped)
+        }
+    }
+
+    /// Nil whenever nothing should override the ring's own clock — an
+    /// empty timeline, or simply not playing. `TabBarPreview`/`RingView`
+    /// both treat nil as "behave exactly as you always did".
+    private func playbackFrame(for resolved: RingTimeline.Resolved?) -> TimelinePlayback? {
+        guard player.isPlaying, let resolved else { return nil }
+        player.prepareForPlayback(resolved)
+        return TimelinePlayback(resolved)
+    }
+
+    private func canvas(playback: TimelinePlayback?) -> some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
-                PhoneMockupView(config: config, isDarkMode: $isDarkMode)
+                PhoneMockupView(config: displayConfig, isDarkMode: $isDarkMode, playback: playback)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                largePreviewCard
+                largePreviewCard(playback: playback)
                     .position(
                         cardPosition(canvasSize: proxy.size).addingTranslation(previewDragTranslation)
                     )
@@ -391,7 +479,7 @@ private struct PreviewTab: View {
     /// reachable without hunting for a separate control; the collapsed
     /// state's entire button doubles as the expand target.
     @ViewBuilder
-    private var largePreviewCard: some View {
+    private func largePreviewCard(playback: TimelinePlayback?) -> some View {
         if isPreviewCollapsed {
             collapsedPreviewButton
                 .frame(width: collapsedPreviewSize.width, height: collapsedPreviewSize.height)
@@ -413,7 +501,7 @@ private struct PreviewTab: View {
                 // ring's own width keeps the collapse button at the
                 // card's actual top-right corner.
                 .frame(width: previewOuterDiameter)
-                largePreview
+                largePreview(playback: playback)
             }
             .padding(16)
             .glassBackground(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -483,8 +571,12 @@ private struct PreviewTab: View {
     /// iPhone mockup's screen content (see `PhoneMockupView.screen`), for
     /// testing arbitrary reference images beyond the bundled "App UI" set.
     /// This preview stays exactly the ring, always.
-    private var largePreview: some View {
-        glassRing(outerDiameter: previewOuterDiameter, ringDiameter: CGFloat(config.previewDiameter))
+    private func largePreview(playback: TimelinePlayback?) -> some View {
+        glassRing(
+            outerDiameter: previewOuterDiameter,
+            ringDiameter: CGFloat(config.previewDiameter),
+            playback: playback
+        )
     }
 
     /// Also used by `largePreviewCard`'s header row (see the `.frame`
@@ -507,13 +599,14 @@ private struct PreviewTab: View {
     /// `PhoneMockupView` applies to its own `deviceFrame`, so both glass
     /// surfaces render the same appearance at once.
     @ViewBuilder
-    private func glassRing(outerDiameter: CGFloat, ringDiameter: CGFloat) -> some View {
-        let ring = RingView(config: config, diameter: ringDiameter)
+    private func glassRing(outerDiameter: CGFloat, ringDiameter: CGFloat, playback: TimelinePlayback? = nil) -> some View {
+        let ring = RingView(config: displayConfig, diameter: ringDiameter, overrideElapsed: playback?.elapsed)
             .frame(width: outerDiameter, height: outerDiameter)
+            .opacity(playback?.opacity ?? 1)
 
         Group {
             if #available(macOS 26.0, *) {
-                ring.glassEffect(config.glass, in: Circle())
+                ring.glassEffect(displayConfig.glass, in: Circle())
             } else {
                 ring.background(.ultraThinMaterial, in: Circle())
             }

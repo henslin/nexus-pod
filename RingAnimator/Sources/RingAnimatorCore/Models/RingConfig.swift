@@ -231,6 +231,11 @@ public final class RingConfig: ObservableObject {
     /// envelope, so you can preview exactly how it'd read as a one-shot cue
     /// instead of an ambient loop.
     @Published public var sequencePlaybackEnabled: Bool = false
+    /// How long the ring takes to ramp up from invisible to full opacity at
+    /// the start of the envelope. Defaults to 0 — a hard cut in, which is
+    /// exactly how the envelope behaved before this existed, so every saved
+    /// preset and cue keeps reading the same way until it's turned up.
+    @Published public var fadeInSeconds: Double = 0
     @Published public var holdSeconds: Double = 1.5
     @Published public var fadeOutSeconds: Double = 0.6
     /// 0 = repeat the hold/fade envelope forever; >0 = play that many

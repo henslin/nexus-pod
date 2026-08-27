@@ -19,7 +19,11 @@ import SwiftUI
 /// (`Support/Color+Hex.swift`) since `Color` itself isn't `Codable` — the
 /// same convention `LEDCueParameters` already uses, which this type mirrors
 /// closely on purpose.
-public struct RingPreset: Identifiable, Codable, Equatable {
+/// `Sendable`: a plain value type of `Codable` scalars and enums —
+/// the same conformance `LEDCueParameters` already carries for the same
+/// reason. Needed so a snapshot can be captured into the deferred
+/// main-queue apply in `TimelinePlayer.prepareForPlayback`.
+public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
     public var name: String
     public var createdAt: Date
@@ -83,6 +87,12 @@ public struct RingPreset: Identifiable, Codable, Equatable {
     public var particleBlurRadius: Double
 
     public var sequencePlaybackEnabled: Bool
+    /// Optional for the same reason `additionalColorHexes` is (see its doc
+    /// comment): synthesized `Decodable` only auto-fills a missing JSON key
+    /// for `Optional` properties, so a saved-presets.json written before
+    /// fade-in existed would throw `keyNotFound` on a plain defaulted
+    /// `Double`. `nil` means "no fade in", same as 0.
+    public var fadeInSeconds: Double?
     public var holdSeconds: Double
     public var fadeOutSeconds: Double
     public var loops: Int
@@ -151,6 +161,7 @@ public struct RingPreset: Identifiable, Codable, Equatable {
         particleBlurRadius = config.particleBlurRadius
 
         sequencePlaybackEnabled = config.sequencePlaybackEnabled
+        fadeInSeconds = config.fadeInSeconds
         holdSeconds = config.holdSeconds
         fadeOutSeconds = config.fadeOutSeconds
         loops = config.loops
@@ -217,6 +228,7 @@ public struct RingPreset: Identifiable, Codable, Equatable {
         config.particleBlurRadius = particleBlurRadius
 
         config.sequencePlaybackEnabled = sequencePlaybackEnabled
+        config.fadeInSeconds = fadeInSeconds ?? 0
         config.holdSeconds = holdSeconds
         config.fadeOutSeconds = fadeOutSeconds
         config.loops = loops
