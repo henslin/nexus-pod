@@ -156,17 +156,23 @@ enum RingParticleEmitter {
     // NOTE: CAEmitterLayerEmitterShape/EmitterMode/RenderMode are bridged
     // into Swift as `RawRepresentable` *structs* (backed by NSString
     // constants under the hood), not true `enum`s — despite the dot-syntax
-    // (`.circle`, `.outline`, ...) looking exactly like an enum. The
-    // compiler can't prove a switch over a struct's static members is
-    // exhaustive, so every switch below needs a `default:` — omitting it
-    // fails the whole build with "switch must be exhaustive."
+    // (`.circle`, `.outline`, ...) looking exactly like an enum. That's
+    // about the *return* types, though: each switch below is over one of
+    // this package's own `Codable` enums, so it's exhaustive on its own
+    // and needs no `default:`.
+    //
+    // There used to be one on each, with a comment claiming the build
+    // failed without it. Whether or not that was ever true, it isn't now —
+    // the compiler flags all three as unreachable. Leaving them off is
+    // also what makes adding a case to one of those enums a build error
+    // here rather than a silent fallback to `.circle`/`.outline`/
+    // `.unordered`.
     private static func caShape(_ shape: ParticleEmitterShape) -> CAEmitterLayerEmitterShape {
         switch shape {
         case .point: return .point
         case .line: return .line
         case .rectangle: return .rectangle
         case .circle: return .circle
-        default: return .circle
         }
     }
 
@@ -176,7 +182,6 @@ enum RingParticleEmitter {
         case .outline: return .outline
         case .surface: return .surface
         case .volume: return .volume
-        default: return .outline
         }
     }
 
@@ -187,7 +192,6 @@ enum RingParticleEmitter {
         case .oldestLast: return .oldestLast
         case .backToFront: return .backToFront
         case .additive: return .additive
-        default: return .unordered
         }
     }
 

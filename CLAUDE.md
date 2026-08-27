@@ -258,6 +258,19 @@ none of them should be picked up piecemeal while feature work continues.
   have explicit fallbacks that print the unhandled name, after two
   separate incidents of new cases silently rendering as something else.
   Worth converting to something the compiler can check.
+- **Nine concurrency warnings, deliberately left.** Five in
+  `ZoomableCanvas` (a KVO observer on `magnification` touching
+  main-actor state from a closure the compiler treats as `@Sendable`) and
+  four in `AnimationExporter` (AVAssetWriter/Input/Adaptor captured in a
+  `@Sendable` continuation). Both are correct at runtime — AppKit fires
+  that KVO on the main thread, and the writer callbacks are serialized on
+  their own queue — the compiler just can't prove it.
+  `MainActor.assumeIsolated` is the likely fix for the first. They were
+  left alone because silencing them means restructuring a hard-won
+  pinch-to-zoom path (see `ZoomableCanvas`'s own comments) and a working
+  movie exporter, and a wrong "fix" there is a runtime bug traded for a
+  clean build log. Verify movie export end to end and the zoom gesture by
+  hand before touching either.
 
 ## Verifying the code generators
 
