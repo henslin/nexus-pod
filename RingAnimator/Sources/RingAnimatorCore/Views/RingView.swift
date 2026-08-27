@@ -799,20 +799,31 @@ public struct RingView: View {
         }
     }
 
-    /// Soft irregular patches that swell in place — see `blooms`.
+    /// Irregular patches that swell on top of an always-lit ring — see
+    /// `blooms`.
     ///
-    /// Drawn as overlapping blurred arcs on a dim track, with
-    /// `.plusLighter` so two patches crossing genuinely add up instead of
-    /// one covering the other. That accumulation is what makes overlaps
-    /// read as brighter *and* more saturated, which is the "vibrancy"
-    /// half of the effect.
+    /// The base is the same full angular gradient `.wave` sweeps, held
+    /// still at `bloomBase` strength. That's what keeps every part of the
+    /// ring showing its color at all times: patches *add* brightness to a
+    /// lit ring rather than being the only thing lit, so there are no dark
+    /// or dull stretches between them.
+    ///
+    /// Patches composite with `.plusLighter` so two crossing genuinely add
+    /// up instead of one covering the other, and so a patch over the base
+    /// lifts it rather than replacing it. That accumulation is what makes
+    /// a peak read as brighter *and* more saturated, which is the
+    /// "vibrancy" half of the effect.
     private func bloomRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let all = activeColors(elapsed: elapsed)
         let field = blooms(elapsed: elapsed, colorCount: all.count)
+        let softness = max(config.bloomSoftness, 0)
 
         return glow(
             ZStack {
-                Circle().stroke(all[0].opacity(0.10), lineWidth: lw(scale))
+                Circle()
+                    .stroke(gradient(elapsed: elapsed), style: StrokeStyle(lineWidth: lw(scale), lineCap: .round))
+                    .opacity(min(max(config.bloomBase, 0), 1))
+
                 ForEach(Array(field.enumerated()), id: \.offset) { _, bloom in
                     Circle()
                         .trim(from: bloom.start, to: bloom.start + bloom.length)
@@ -827,7 +838,11 @@ public struct RingView: View {
                         )
                         .rotationEffect(.degrees(-90))
                         .opacity(min(bloom.intensity + voiceLevel * 0.25, 1))
-                        .blur(radius: lw(scale) * 0.5)
+                        // Zero softness has to skip the modifier entirely —
+                        // `.blur(radius: 0)` still forces an offscreen pass
+                        // and softens edges slightly, which is exactly what
+                        // turning it to 0 is meant to avoid.
+                        .modifier(OptionalBlur(radius: softness > 0 ? lw(scale) * CGFloat(softness) : nil))
                         .blendMode(.plusLighter)
                 }
             },
@@ -835,6 +850,20 @@ public struct RingView: View {
             boost: voiceLevel,
             scale: scale
         )
+    }
+
+    /// Applies `.blur` only when there's a radius to apply — see the call
+    /// site in `bloomRing`.
+    private struct OptionalBlur: ViewModifier {
+        var radius: CGFloat?
+
+        func body(content: Content) -> some View {
+            if let radius {
+                content.blur(radius: radius)
+            } else {
+                content
+            }
+        }
     }
 
     // MARK: - Diodes
@@ -1151,10 +1180,18 @@ public struct RingView: View {
             return best
 
         case .bloom:
+            // The lit floor, matching what `bloomRing` draws underneath:
+            // this diode's share of the gradient, at `bloomBase`. Never
+            // the generic dim fallback, so no diode sits dark.
+            let band = Int(position * Double(all.count)) % all.count
+            let base = min(max(config.bloomBase, 0), 1)
+            var best = (color: all[band], brightness: base)
+
             // Strongest patch covering this diode wins, with a cosine
             // falloff from its center so a patch's edges fade rather than
-            // cutting off — the diode reading of the blurred arc.
-            var best = (color: all[0], brightness: floorBrightness)
+            // cutting off — the diode reading of the blurred arc. Its
+            // brightness is added to the floor rather than replacing it,
+            // matching `.plusLighter` in the continuous path.
             for bloom in blooms(elapsed: elapsed, colorCount: all.count) {
                 var offset = (position - bloom.center).truncatingRemainder(dividingBy: 1)
                 if offset < -0.5 { offset += 1 }
@@ -1162,7 +1199,7 @@ public struct RingView: View {
                 let half = bloom.length / 2
                 guard abs(offset) < half, half > 0 else { continue }
                 let falloff = (cos(offset / half * Double.pi) + 1) / 2
-                let brightness = min(falloff * bloom.intensity + voiceLevel * 0.2, 1)
+                let brightness = min(base + falloff * bloom.intensity + voiceLevel * 0.2, 1)
                 if brightness > best.brightness {
                     best = (all[bloom.colorIndex % all.count], brightness)
                 }

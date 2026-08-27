@@ -161,6 +161,8 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     public var diodeScale: Double?
     public var diodeGap: Double?
     public var bloomCount: Double?
+    public var bloomBase: Double?
+    public var bloomSoftness: Double?
     public var diodeModeEnabled: Bool?
     public var blinkPattern: BlinkPattern?
     public var blinkRate: Double?
@@ -236,6 +238,8 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         diodeScale: Double? = nil,
         diodeGap: Double? = nil,
         bloomCount: Double? = nil,
+        bloomBase: Double? = nil,
+        bloomSoftness: Double? = nil,
         diodeModeEnabled: Bool? = nil,
         blinkPattern: BlinkPattern? = nil,
         blinkRate: Double? = nil,
@@ -294,6 +298,8 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         self.diodeScale = diodeScale
         self.diodeGap = diodeGap
         self.bloomCount = bloomCount
+        self.bloomBase = bloomBase
+        self.bloomSoftness = bloomSoftness
         self.diodeModeEnabled = diodeModeEnabled
         self.blinkPattern = blinkPattern
         self.blinkRate = blinkRate

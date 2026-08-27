@@ -45,6 +45,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     public var diodeScale: Double?
     public var diodeGap: Double?
     public var bloomCount: Double?
+    public var bloomBase: Double?
+    public var bloomSoftness: Double?
     public var diodeModeEnabled: Bool?
     public var blinkPattern: BlinkPattern?
     public var blinkRate: Double?
@@ -132,6 +134,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         diodeScale = config.diodeScale
         diodeGap = config.diodeGap
         bloomCount = config.bloomCount
+        bloomBase = config.bloomBase
+        bloomSoftness = config.bloomSoftness
         diodeModeEnabled = config.diodeModeEnabled
         blinkPattern = config.blinkPattern
         blinkRate = config.blinkRate
@@ -206,6 +210,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.diodeScale = diodeScale ?? 1.0
         config.diodeGap = diodeGap ?? 0.12
         config.bloomCount = bloomCount ?? 6
+        config.bloomBase = bloomBase ?? 0.6
+        config.bloomSoftness = bloomSoftness ?? 0.15
         config.diodeModeEnabled = diodeModeEnabled ?? false
         config.blinkPattern = blinkPattern ?? .steady
         config.blinkRate = blinkRate ?? 2.0

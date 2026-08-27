@@ -98,6 +98,22 @@ public final class RingConfig: ObservableObject {
     /// swell rate, so this is a density control rather than a count of
     /// anything evenly divided.
     @Published public var bloomCount: Double = 6
+    /// The brightness every part of the ring holds even where no patch is
+    /// currently swelling, 0...1.
+    ///
+    /// Bloom draws a full gradient ring underneath at this strength, so
+    /// the base state is a normally-lit ring rather than darkness, and
+    /// patches add on top of it. At 0 it reverts to patches alone against
+    /// an unlit ring — which is where this started, and which left dull
+    /// gaps between them.
+    @Published public var bloomBase: Double = 0.6
+    /// How soft each patch's edge is, as a fraction of the ring's width.
+    /// 0 is a crisp band; higher values diffuse it into a glow.
+    ///
+    /// Was a hardcoded 0.5 when Bloom was added, which made every patch
+    /// hazy whether or not that was wanted. Defaulted low now, so softness
+    /// is something you reach for rather than something you fight.
+    @Published public var bloomSoftness: Double = 0.15
     /// Renders *any* animation as a fixed ring of diodes that stay put and
     /// simply light differently, the way addressable LED hardware
     /// actually works — rather than as continuous arcs and gradients that

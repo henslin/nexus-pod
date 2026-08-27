@@ -150,7 +150,9 @@ GeometryReader { geo in
             animationBody = """
 let bloomCount = 6
 ZStack {
-    Circle().stroke(p.opacity(0.10), lineWidth: lineWidth)
+    Circle()
+        .stroke(gradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+        .opacity(bloomBase)
     ForEach(0..<bloomCount, id: \\.self) { i in
         let widthSeed = pseudoRandom(i)
         let placeSeed = pseudoRandom(i + 97)
@@ -158,7 +160,7 @@ ZStack {
         let length = max(trailFraction, 0.02) * (0.35 + widthSeed * 1.65)
         let center = Double(i) / Double(bloomCount) + (placeSeed - 0.5) / Double(bloomCount)
         let rate = speed * 0.18 * (0.5 + rateSeed * 1.2)
-        let swell = (sin(t * rate * 2 * .pi + rateSeed * 2 * .pi) + 1) / 2
+        let swell = (sin(elapsed * rate * 2 * .pi + rateSeed * 2 * .pi) + 1) / 2
         let intensity = pow(swell, 1.8)
         Circle()
             .trim(from: center - length / 2, to: center + length / 2)
@@ -166,7 +168,7 @@ ZStack {
                     style: StrokeStyle(lineWidth: lineWidth * CGFloat(0.75 + intensity * 0.5), lineCap: .round))
             .rotationEffect(.degrees(-90))
             .opacity(intensity)
-            .blur(radius: lineWidth * 0.5)
+            .blur(radius: lineWidth * bloomSoftness)
             .blendMode(.plusLighter)
     }
 }
@@ -346,6 +348,8 @@ struct ThinkingRingView: View {
     var lineWidth: CGFloat = \(config.lineWidth)
     var speed: Double = \(config.speed) // cycles per second
     var trailFraction: Double = \(config.trailFraction)
+    var bloomBase: Double = \(config.bloomBase)
+    var bloomSoftness: Double = \(config.bloomSoftness)
     var chasingDrawUndraw: Bool = \(config.chasingFillStyle == .drawUndraw)
     var diodeCount: Int = \(Int(config.diodeCount.rounded()))
     var primaryColor: Color = Color(hex: "\(primaryHex)")
@@ -649,7 +653,12 @@ for (i in 0 until diodeCount) {
         case .bloom:
             animationBody = """
 val bloomCount = 6
-drawCircle(color = p.copy(alpha = 0.10f), radius = radiusPx, style = Stroke(width = lineWidthPx))
+drawCircle(
+    brush = Brush.sweepGradient(listOf(p, s, p)),
+    radius = radiusPx,
+    alpha = bloomBase.toFloat(),
+    style = Stroke(width = lineWidthPx)
+)
 for (i in 0 until bloomCount) {
     val widthSeed = pseudoRandom(i)
     val placeSeed = pseudoRandom(i + 97)
@@ -657,8 +666,11 @@ for (i in 0 until bloomCount) {
     val length = maxOf(trailFraction, 0.02) * (0.35 + widthSeed * 1.65)
     val center = i.toDouble() / bloomCount + (placeSeed - 0.5) / bloomCount
     val rate = speed * 0.18 * (0.5 + rateSeed * 1.2)
-    val swell = (sin(t * rate * 2 * PI + rateSeed * 2 * PI) + 1) / 2
+    val swell = (sin(elapsedSeconds * rate * 2 * PI + rateSeed * 2 * PI) + 1) / 2
     val intensity = Math.pow(swell, 1.8)
+    // Compose's Canvas has no per-draw blur, so `bloomSoftness` is not
+    // applied here — the patches are crisp. Wrap the Canvas in a
+    // `graphicsLayer { renderEffect = BlurEffect(...) }` if you want it.
     drawArc(
         color = (if (i % 2 == 0) p else s).copy(alpha = intensity.toFloat()),
         startAngle = ((center - length / 2) * 360.0 - 90.0).toFloat(),
@@ -939,6 +951,8 @@ fun ThinkingRingView(
     lineWidthDp: Float = \(config.lineWidth)f,
     speed: Double = \(config.speed), // cycles per second
     trailFraction: Double = \(config.trailFraction),
+    bloomBase: Double = \(config.bloomBase),
+    bloomSoftness: Double = \(config.bloomSoftness),
     chasingDrawUndraw: Boolean = \(config.chasingFillStyle == .drawUndraw),
     diodeCount: Int = \(Int(config.diodeCount.rounded())),
     primaryColor: Color = PrimaryColor,
@@ -1163,11 +1177,18 @@ for (let i = 0; i < diodeCount; i++) {
         case .bloom:
             drawBody = """
 const bloomCount = 6;
+const baseGradient = ctx.createConicGradient(-Math.PI / 2, cx, cy);
+baseGradient.addColorStop(0, primary(t));
+baseGradient.addColorStop(0.5, secondary(t));
+baseGradient.addColorStop(1, primary(t));
+ctx.save();
+ctx.globalAlpha = bloomBase;
 ctx.beginPath();
 ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-ctx.strokeStyle = withAlpha(primary(t), 0.10);
+ctx.strokeStyle = baseGradient;
 ctx.lineWidth = lineWidth;
 ctx.stroke();
+ctx.restore();
 for (let i = 0; i < bloomCount; i++) {
   const widthSeed = pseudoRandom(i);
   const placeSeed = pseudoRandom(i + 97);
@@ -1175,7 +1196,7 @@ for (let i = 0; i < bloomCount; i++) {
   const length = Math.max(config.trailFraction, 0.02) * (0.35 + widthSeed * 1.65);
   const center = i / bloomCount + (placeSeed - 0.5) / bloomCount;
   const rate = config.speed * 0.18 * (0.5 + rateSeed * 1.2);
-  const swell = (Math.sin(t * rate * 2 * Math.PI + rateSeed * 2 * Math.PI) + 1) / 2;
+  const swell = (Math.sin(elapsed * rate * 2 * Math.PI + rateSeed * 2 * Math.PI) + 1) / 2;
   const intensity = Math.pow(swell, 1.8);
   const from = (center - length / 2) * 2 * Math.PI - Math.PI / 2;
   ctx.beginPath();
@@ -1393,6 +1414,8 @@ ctx.stroke();
     lineWidth: \(config.lineWidth),
     speed: \(config.speed), // cycles per second
     trailFraction: \(config.trailFraction),
+    bloomBase: \(config.bloomBase),
+    bloomSoftness: \(config.bloomSoftness),
     chasingDrawUndraw: \(config.chasingFillStyle == .drawUndraw),
     diodeCount: \(Int(config.diodeCount.rounded())),
     primaryColor: '\(primaryHex)',
@@ -1539,6 +1562,8 @@ ctx.stroke();
     const cy = config.diameter / 2;
     const lineWidth = config.lineWidth;
     const trailFraction = config.trailFraction;
+    const bloomBase = config.bloomBase;
+    const bloomSoftness = config.bloomSoftness;
     const diodeCount = config.diodeCount;
     const ringRadius = config.diameter / 2 - lineWidth / 2 - 4;
 

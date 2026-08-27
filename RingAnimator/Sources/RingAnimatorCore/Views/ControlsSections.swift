@@ -152,7 +152,10 @@ struct AnimationSection: View {
             // Line Width becoming Ring Width in diode mode.
             LabeledSlider(title: "Average Size", value: $config.trailFraction, range: 0.05...0.5, format: "%.2f")
 
-            Text("Each patch varies from this by its own amount, so one may cover an eighth of the ring and the next a sixteenth. Add colors above and the patches share them.")
+            LabeledSlider(title: "Base Brightness", value: $config.bloomBase, range: 0...1, format: "%.2f")
+            LabeledSlider(title: "Softness", value: $config.bloomSoftness, range: 0...1, format: "%.2f")
+
+            Text("Each patch varies from Average Size by its own amount, so one may cover an eighth of the ring and the next a sixteenth. Base Brightness is how lit the ring stays where nothing is swelling — patches add on top of it, so there are no dark stretches. Softness diffuses their edges into a glow.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
