@@ -70,6 +70,15 @@ public final class RingConfig: ObservableObject {
     /// Number of individual "diode" dots in "Alternating" mode — string-lights
     /// style, where every other diode lights up and they swap back and forth.
     @Published public var diodeCount: Double = 30
+    /// Blink modulation layered under `RingAnimationType.multiChase` — see
+    /// `BlinkPattern`. `.steady` (no modulation) is the default so adding
+    /// this changed nothing about how anything already looked.
+    @Published public var blinkPattern: BlinkPattern = .steady
+    /// How fast the blink runs relative to the chase, in cycles per
+    /// second. Kept separate from `speed` so the blink and the travel can
+    /// be tuned against each other — a slow chase with a fast strobe is a
+    /// different look from both running together.
+    @Published public var blinkRate: Double = 2.0
 
     @Published public var primaryColor: Color = Color(red: 0.30, green: 0.62, blue: 1.0)   // cyan-blue
     @Published public var secondaryColor: Color = Color(red: 0.55, green: 0.35, blue: 0.98) // violet

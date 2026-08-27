@@ -472,12 +472,36 @@ public extension CodeGenerators {
                     value = f"min((math.sin(ringpod_phase(frame) * (0.6 + {seed} * 0.8) + {seed} * 2 * math.pi) + 1) / 2, 1)"
                     _driver(bar.data, "bevel_depth", f"{TUBE} * (0.3 + {value} * 0.7)")
 
-            else:
+            elif anim == "Multi Chase":
+                trail = p["trail_fraction"]
+                # One comet per color, evenly spaced and travelling
+                # together. Approximated with two rotating arc segments
+                # (the two colors this script carries) rather than
+                # `diode_count` individually-driven objects, which would
+                # mean dozens of curves and drivers per scene for a look
+                # that reads much the same in 3D.
+                for k, color in enumerate((PRIMARY, SECONDARY)):
+                    start = k / 2
+                    seg = _ring_curve(f"Nexus_Chase{k}", RADIUS, TUBE, color, glow_strength,
+                                      bevel_start=start, bevel_end=start + max(trail, 0.02))
+                    _driver(seg, "rotation_euler", "ringpod_phase(frame)", index=2)
+
+            elif anim == "Wobble":
                 # Wobble — approximated as a breathing tube thickness rather
                 # than true per-vertex radial noise, which would need a
                 # Geometry Nodes driver setup beyond the scope of this script.
                 ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
                 _driver(ring.data, "bevel_depth", f"{TUBE} * (0.85 + 0.3 * ringpod_pulse(frame, period_cycles=0.3))")
+
+            else:
+                # Explicit fallback. Wobble used to be the bare `else`,
+                # which meant any animation type added later silently
+                # rendered as Wobble. A plain glowing ring is the honest
+                # stand-in, and the print names the type so it's obvious in
+                # Blender's console which one had no branch.
+                ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+                print(f"Nexus: animation '{anim}' has no dedicated Blender build — "
+                      "rendered as a static ring.")
         """
     }
 

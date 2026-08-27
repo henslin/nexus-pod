@@ -98,11 +98,38 @@ struct AnimationSection: View {
                 value: $config.trailFraction, range: 0.05...1.0, format: "%.2f"
             )
         }
-        if config.animationType == .alternating || config.animationType == .equalizer || config.animationType == .sparkle {
+        if config.animationType == .alternating || config.animationType == .equalizer
+            || config.animationType == .sparkle || config.animationType == .multiChase {
             LabeledSlider(
                 title: config.animationType == .equalizer ? "Segment Count" : config.animationType == .sparkle ? "Sparkle Count" : "Diode Count",
                 value: $config.diodeCount, range: 8...60, format: "%.0f"
             )
+        }
+
+        if config.animationType == .multiChase {
+            // Trail length is what sets how long each color's comet is, so
+            // it belongs with the chase's own controls rather than only
+            // appearing for `.chasing` as it did before.
+            LabeledSlider(title: "Comet Length", value: $config.trailFraction, range: 0.05...1.0, format: "%.2f")
+
+            Picker("Blink", selection: $config.blinkPattern) {
+                ForEach(BlinkPattern.allCases) { pattern in
+                    Text(pattern.rawValue).tag(pattern)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text(config.blinkPattern.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if config.blinkPattern != .steady {
+                LabeledSlider(title: "Blink Rate", value: $config.blinkRate, range: 0.2...12, format: "%.1f/s")
+            }
+
+            Text("One comet per color in the Color section above — add a third or fourth color and each gets its own.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
 
         Picker("Easing", selection: $config.easingStyle) {

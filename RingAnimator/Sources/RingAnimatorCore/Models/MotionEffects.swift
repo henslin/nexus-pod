@@ -41,6 +41,37 @@ public enum ChasingFillStyle: String, CaseIterable, Identifiable, Codable, Senda
     public var id: String { rawValue }
 }
 
+/// How diodes blink underneath a chase, layered on top of whatever the
+/// chase itself is doing.
+///
+/// Applies to `RingAnimationType.multiChase` only. The existing
+/// `.alternating` type keeps its own hardcoded even/odd swap rather than
+/// reading this — it *is* a blink pattern by definition, and rerouting it
+/// through here would change how every saved preset using it looks.
+public enum BlinkPattern: String, CaseIterable, Identifiable, Codable, Sendable, Hashable {
+    /// Diodes are simply lit by the chase, no modulation. The default, and
+    /// what every preset saved before this existed decodes to.
+    case steady = "Steady"
+    /// Even and odd diodes swap on and off — the fairy-lights look
+    /// `.alternating` has, but travelling with the chase.
+    case alternate = "Alternate"
+    /// Every diode breathes together, in step with the chase's own cycle.
+    case pulse = "Pulse"
+    /// Hard on/off for the whole ring, no ramp.
+    case strobe = "Strobe"
+
+    public var id: String { rawValue }
+
+    public var summary: String {
+        switch self {
+        case .steady: return "No blink — diodes are lit purely by the chase."
+        case .alternate: return "Even and odd diodes swap on and off as the chase travels."
+        case .pulse: return "Every diode breathes together, in step with the chase."
+        case .strobe: return "The whole ring cuts on and off, no ramp."
+        }
+    }
+}
+
 /// Blend mode for compositing the ring against whatever's behind it —
 /// `.screen` / `.plusLighter` make overlapping glow stack into a brighter,
 /// more saturated neon look instead of sitting flat on top of the background.

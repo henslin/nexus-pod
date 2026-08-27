@@ -36,6 +36,13 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     public var trailFraction: Double
     public var chasingFillStyle: ChasingFillStyle
     public var diodeCount: Double
+    /// Optional for the same reason `additionalColorHexes` is (see its doc
+    /// comment): synthesized `Decodable` won't fill in a missing key for a
+    /// plain defaulted property, so a saved-presets.json written before
+    /// these existed would throw `keyNotFound`. `nil` means the defaults —
+    /// `.steady` and 2.0.
+    public var blinkPattern: BlinkPattern?
+    public var blinkRate: Double?
 
     public var primaryColorHex: String
     public var secondaryColorHex: String
@@ -116,6 +123,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         trailFraction = config.trailFraction
         chasingFillStyle = config.chasingFillStyle
         diodeCount = config.diodeCount
+        blinkPattern = config.blinkPattern
+        blinkRate = config.blinkRate
 
         primaryColorHex = config.primaryColor.hexString
         secondaryColorHex = config.secondaryColor.hexString
@@ -183,6 +192,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.trailFraction = trailFraction
         config.chasingFillStyle = chasingFillStyle
         config.diodeCount = diodeCount
+        config.blinkPattern = blinkPattern ?? .steady
+        config.blinkRate = blinkRate ?? 2.0
 
         config.primaryColor = Color(hex: primaryColorHex)
         config.secondaryColor = Color(hex: secondaryColorHex)

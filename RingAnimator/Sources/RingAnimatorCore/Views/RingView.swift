@@ -376,6 +376,8 @@ public struct RingView: View {
             equalizerRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         case .dualChase:
             dualChaseRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
+        case .multiChase:
+            multiChaseRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         case .sparkle:
             sparkleRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         case .aurora:
@@ -728,6 +730,101 @@ public struct RingView: View {
     /// Two constant-length arcs (`trailFraction` each) chase in opposite
     /// directions — solid primary/secondary colors rather than the shared
     /// gradient, so the two stay visually distinct as they cross.
+    /// Discrete diodes with one comet per configured color.
+    ///
+    /// The colors come from the Color section as-is — every configured
+    /// color gets its own comet, evenly spaced around the ring and all
+    /// travelling the same direction, so "three colors chasing each other"
+    /// needs no separate count to set. That's the same
+    /// `activeColors`-driven convention `alternating` and `sparkle`
+    /// already follow.
+    ///
+    /// Each diode's brightness is the *maximum* over the comets rather
+    /// than a sum: where two comets overlap the brighter one wins, instead
+    /// of the overlap blowing out to white and reading as a third color
+    /// that was never configured. The color drawn is whichever comet is
+    /// brightest there, so a crossing reads as one passing in front of the
+    /// other.
+    private func multiChaseRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
+        let all = activeColors(elapsed: elapsed)
+        let count = max(Int(config.diodeCount.rounded()), 2)
+        let diodeSize = lw(scale)
+        // Fraction of the ring each comet's tail covers. Guarded above
+        // zero so a comet is never zero-length (which would light nothing
+        // at all and look like the animation had stopped).
+        let tail = max(config.trailFraction, 0.02)
+        let head = phase / (2 * Double.pi)
+
+        return glow(
+            GeometryReader { geo in
+                let radius = min(geo.size.width, geo.size.height) / 2 - diodeSize / 2
+                ZStack {
+                    ForEach(0..<count, id: \.self) { i in
+                        let position = Double(i) / Double(count)
+                        let lit = brightestComet(at: position, head: head, tail: tail, colorCount: all.count)
+                        let angle = position * 2 * Double.pi - .pi / 2
+                        Circle()
+                            .fill(all[lit.colorIndex % all.count])
+                            .frame(width: diodeSize, height: diodeSize)
+                            .opacity(lit.brightness * blinkMultiplier(index: i, elapsed: elapsed))
+                            .position(
+                                x: geo.size.width / 2 + cos(angle) * radius,
+                                y: geo.size.height / 2 + sin(angle) * radius
+                            )
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+            },
+            color: all[0],
+            boost: voiceLevel,
+            scale: scale
+        )
+    }
+
+    /// Which comet is brightest at a given point on the ring, and how
+    /// bright. Comet `k` of `colorCount` sits `k / colorCount` of a lap
+    /// behind the head, and fades linearly back along `tail`.
+    private func brightestComet(
+        at position: Double,
+        head: Double,
+        tail: Double,
+        colorCount: Int
+    ) -> (colorIndex: Int, brightness: Double) {
+        var best = (colorIndex: 0, brightness: 0.0)
+        for k in 0..<max(colorCount, 1) {
+            let cometHead = head + Double(k) / Double(max(colorCount, 1))
+            // Distance *behind* the comet head, wrapped into 0..<1 so the
+            // comparison works across the seam at the top of the ring.
+            var behind = (cometHead - position).truncatingRemainder(dividingBy: 1)
+            if behind < 0 { behind += 1 }
+            guard behind < tail else { continue }
+            let brightness = 1 - (behind / tail)
+            if brightness > best.brightness {
+                best = (colorIndex: k, brightness: brightness)
+            }
+        }
+        // Unlit diodes stay faintly visible, the same way `chasing` draws a
+        // dim full-circle track behind its arc — otherwise the ring's shape
+        // disappears wherever no comet currently is.
+        return best.brightness > 0.06 ? best : (best.colorIndex, 0.06)
+    }
+
+    /// `BlinkPattern` as a 0...1 multiplier on a diode's brightness.
+    private func blinkMultiplier(index: Int, elapsed: Double) -> Double {
+        let cycle = elapsed * config.blinkRate
+        switch config.blinkPattern {
+        case .steady:
+            return 1
+        case .alternate:
+            let swing = (sin(cycle * 2 * Double.pi) + 1) / 2
+            return index.isMultiple(of: 2) ? swing : 1 - swing
+        case .pulse:
+            return 0.25 + 0.75 * (sin(cycle * 2 * Double.pi) + 1) / 2
+        case .strobe:
+            return cycle.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.05
+        }
+    }
+
     private func dualChaseRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let (p, s) = colors(elapsed: elapsed)
         return glow(

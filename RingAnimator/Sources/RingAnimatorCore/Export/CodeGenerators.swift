@@ -101,6 +101,48 @@ GeometryReader { geo in
     .frame(width: geo.size.width, height: geo.size.height)
 }
 """
+        case .multiChase:
+            // The exports carry the two colors every generator already has
+            // (`p`/`s`); the app itself gives every configured color its own
+            // comet. Two is the common case, and keeps the generated file
+            // self-contained rather than emitting a color array the host app
+            // would have to supply.
+            animationBody = """
+let head = phase / (2 * Double.pi)
+let tail = max(trailFraction, 0.02)
+GeometryReader { geo in
+    let radius = min(geo.size.width, geo.size.height) / 2 - lineWidth / 2
+    ZStack {
+        ForEach(0..<diodeCount, id: \\.self) { i in
+            let position = Double(i) / Double(diodeCount)
+            var bestIndex = 0
+            var bestBrightness = 0.0
+            for k in 0..<2 {
+                let cometHead = head + Double(k) / 2
+                var behind = (cometHead - position).truncatingRemainder(dividingBy: 1)
+                if behind < 0 { behind += 1 }
+                if behind < tail {
+                    let brightness = 1 - (behind / tail)
+                    if brightness > bestBrightness {
+                        bestBrightness = brightness
+                        bestIndex = k
+                    }
+                }
+            }
+            let angle = position * 2 * Double.pi - .pi / 2
+            Circle()
+                .fill(bestIndex == 0 ? p : s)
+                .frame(width: lineWidth, height: lineWidth)
+                .opacity(max(bestBrightness, 0.06))
+                .position(
+                    x: geo.size.width / 2 + cos(angle) * radius,
+                    y: geo.size.height / 2 + sin(angle) * radius
+                )
+        }
+    }
+    .frame(width: geo.size.width, height: geo.size.height)
+}
+"""
         case .pulse:
             animationBody = """
 let value = (sin(phase) + 1) / 2
@@ -542,6 +584,37 @@ for (i in 0 until diodeCount) {
         radius = dotRadius,
         center = Offset(x, y),
         blendMode = blendMode
+    )
+}
+"""
+        case .multiChase:
+            animationBody = """
+val head = phase / (2 * Math.PI)
+val tail = maxOf(trailFraction, 0.02)
+val dotRadius = lineWidthPx / 2f
+val ringRadius = (size.minDimension / 2f) - dotRadius
+for (i in 0 until diodeCount) {
+    val position = i.toDouble() / diodeCount
+    var bestIndex = 0
+    var bestBrightness = 0.0
+    for (k in 0 until 2) {
+        val cometHead = head + k / 2.0
+        var behind = (cometHead - position) % 1.0
+        if (behind < 0) behind += 1.0
+        if (behind < tail) {
+            val brightness = 1.0 - (behind / tail)
+            if (brightness > bestBrightness) { bestBrightness = brightness; bestIndex = k }
+        }
+    }
+    val angle = position * 2 * Math.PI - Math.PI / 2
+    val dotColor = if (bestIndex == 0) p else s
+    drawCircle(
+        color = dotColor.copy(alpha = maxOf(bestBrightness, 0.06).toFloat()),
+        radius = dotRadius,
+        center = Offset(
+            (size.width / 2f) + (cos(angle) * ringRadius).toFloat(),
+            (size.height / 2f) + (sin(angle) * ringRadius).toFloat()
+        )
     )
 }
 """
@@ -1012,6 +1085,29 @@ for (let i = 0; i < diodeCount; i++) {
     ctx.arc(x, y, lineWidth / 2, 0, Math.PI * 2);
     ctx.fillStyle = withAlpha(dotColor, dotAlpha);
     ctx.fill();
+}
+"""
+        case .multiChase:
+            drawBody = """
+const head = phase / (2 * Math.PI);
+const tail = Math.max(config.trailFraction, 0.02);
+for (let i = 0; i < diodeCount; i++) {
+  const position = i / diodeCount;
+  let bestIndex = 0, bestBrightness = 0;
+  for (let k = 0; k < 2; k++) {
+    const cometHead = head + k / 2;
+    let behind = (cometHead - position) % 1;
+    if (behind < 0) behind += 1;
+    if (behind < tail) {
+      const brightness = 1 - (behind / tail);
+      if (brightness > bestBrightness) { bestBrightness = brightness; bestIndex = k; }
+    }
+  }
+  const angle = position * 2 * Math.PI - Math.PI / 2;
+  ctx.beginPath();
+  ctx.arc(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, lineWidth / 2, 0, 2 * Math.PI);
+  ctx.fillStyle = withAlpha(bestIndex === 0 ? primary(t) : secondary(t), Math.max(bestBrightness, 0.06));
+  ctx.fill();
 }
 """
         case .pulse:

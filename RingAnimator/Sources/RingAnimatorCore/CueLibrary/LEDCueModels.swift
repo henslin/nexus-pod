@@ -150,9 +150,15 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     public var trailFraction: Double
     /// See `RingConfig.chasingFillStyle`.
     public var chasingFillStyle: ChasingFillStyle
-    /// Dot/segment count for "Alternating"/"Equalizer"/"Sparkle" — see
-    /// `RingConfig.diodeCount`.
+    /// Dot/segment count for "Alternating"/"Equalizer"/"Sparkle"/"Multi
+    /// Chase" — see `RingConfig.diodeCount`.
     public var diodeCount: Double
+    /// Blink modulation for "Multi Chase" — see `BlinkPattern`. Optional
+    /// for the same decoding reason as `RingPreset.blinkPattern`: saved
+    /// cue JSON written before this existed has no such key, and
+    /// synthesized `Decodable` would throw rather than default it.
+    public var blinkPattern: BlinkPattern?
+    public var blinkRate: Double?
 
     // MARK: - Motion effects (same knobs as Nexus)
     // Defaulted so every existing cue in the library keeps behaving exactly
@@ -221,6 +227,8 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         trailFraction: Double = 0.22,
         chasingFillStyle: ChasingFillStyle = .trailingTail,
         diodeCount: Double = 30,
+        blinkPattern: BlinkPattern? = nil,
+        blinkRate: Double? = nil,
         easingStyle: EasingStyle = .linear,
         springBounce: Double = 0.35,
         scalePulseEnabled: Bool = false,
@@ -272,6 +280,8 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         self.trailFraction = trailFraction
         self.chasingFillStyle = chasingFillStyle
         self.diodeCount = diodeCount
+        self.blinkPattern = blinkPattern
+        self.blinkRate = blinkRate
         self.easingStyle = easingStyle
         self.springBounce = springBounce
         self.scalePulseEnabled = scalePulseEnabled
