@@ -254,6 +254,14 @@ public struct LEDCuePreviewView: View {
             return Double(max(parameters.flashCount, 1)) * single * 2 + 0.8
         case .ripple:
             return (1.1 / speed) + 0.2
+        case .spin, .rainbow:
+            // Exactly one revolution / one trip around the color wheel per
+            // loop — no trailing pause. A primitive's loop period has to
+            // stay `1 / speed` for the timeline's rotation math to mean
+            // what it says (see `LEDPatternStyle.spin`).
+            return 1 / speed
+        case .pulseAccelerate:
+            return Self.pulseAccelerateDuration
         case .transitionToSolid:
             return 0.5 + parameters.holdSeconds + 0.5
         case .spinThenSolidFade:
@@ -313,6 +321,12 @@ public struct LEDCuePreviewView: View {
             quickFlashView(t: t)
         case .ripple:
             rippleView(t: t, cycle: cycle)
+        case .spin:
+            spinView(t: t)
+        case .pulseAccelerate:
+            pulseAccelerateRing(t: t)
+        case .rainbow:
+            rainbowRing(t: t)
         case .transitionToSolid:
             transitionToSolidView(t: t)
         case .spinThenSolidFade:
@@ -402,66 +416,112 @@ public struct LEDCuePreviewView: View {
         return ring(opacity: max(opacity, 0.05), color: primary(t))
     }
 
-    private func spinThenFadeView(t: Double) -> some View {
-        let spinDuration = 1.1 / speed
-        let holdEnd = spinDuration + parameters.holdSeconds
+    // MARK: - Primitives
+    //
+    // One behavior each, defined as a pure function of `t` that keeps
+    // running for as long as it's asked to. The composites below are these
+    // same functions with a solid hold and a fade appended — written that
+    // way round so a fix to how a spin looks lands in both places at once,
+    // which the previous copy-per-composite arrangement couldn't promise.
 
-        if t < spinDuration {
-            let head = t / spinDuration
-            let easedHead = MotionEasing.apply(head, style: parameters.easingStyle, bounce: parameters.springBounce)
-            return AnyView(
-                ZStack {
-                    Circle().stroke(primary(t).opacity(0.12), lineWidth: lineWidth)
-                    Circle()
-                        .trim(from: 0, to: 0.28)
-                        .stroke(primary(t), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                        .rotationEffect(.radians(easedHead * 2 * .pi * 3))
-                }
-                .shadow(color: primary(t).opacity(0.6), radius: parameters.glowEnabled ? parameters.glowRadius : 0)
-            )
-        } else if t < holdEnd {
-            return AnyView(ring(opacity: 1, color: primary(t)))
-        } else {
-            let fadeProgress = parameters.fadeOutSeconds > 0 ? (t - holdEnd) / parameters.fadeOutSeconds : 1
-            return AnyView(ring(opacity: max(1 - fadeProgress, 0.05), color: primary(t)))
+    /// How long the accelerating pulse takes to run its rate ramp before
+    /// starting over. Shared with `cycleDuration` so the loop point and the
+    /// ramp can't disagree.
+    fileprivate static let pulseAccelerateDuration: Double = 2.2
+
+    /// A bright arc travelling around the ring at exactly `speed`
+    /// revolutions per second — see `LEDPatternStyle.spin` for why that
+    /// rate is fixed rather than tuned.
+    ///
+    /// The old `spinThenSolidFade` spun three times over `1.1 / speed`
+    /// seconds (≈2.7× the nominal rate). That was fine while it was one
+    /// baked-in flourish nobody measured, but wrong for a primitive the
+    /// timeline counts rotations of.
+    private func spinView(t: Double) -> some View {
+        let revolutions = t * speed
+        let eased = MotionEasing.apply(
+            revolutions.truncatingRemainder(dividingBy: 1),
+            style: parameters.easingStyle,
+            bounce: parameters.springBounce
+        )
+        let angle = (revolutions.rounded(.down) + eased) * 2 * .pi
+        return ZStack {
+            Circle().stroke(primary(t).opacity(0.12), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: 0.28)
+                .stroke(primary(t), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.radians(angle))
         }
+        .shadow(color: primary(t).opacity(0.6), radius: parameters.glowEnabled ? parameters.glowRadius : 0)
+    }
+
+    /// Breathing pulse that speeds up across each `pulseAccelerateDuration`
+    /// ramp, then starts the ramp again.
+    private func pulseAccelerateRing(t: Double) -> some View {
+        let local = t.truncatingRemainder(dividingBy: Self.pulseAccelerateDuration)
+        let progress = local / Self.pulseAccelerateDuration
+        let rate = 1.5 + progress * 8
+        let value = (sin(local * rate * 2 * .pi) + 1) / 2
+        return ring(
+            opacity: 0.4 + 0.6 * value,
+            color: primary(t),
+            width: lineWidth * CGFloat(0.7 + 0.5 * value)
+        )
+    }
+
+    /// Full trip around the color wheel per `1 / speed` seconds.
+    private func rainbowRing(t: Double) -> some View {
+        let hue = (t * speed).truncatingRemainder(dividingBy: 1)
+        return ring(opacity: 1, color: Color(hue: hue, saturation: 0.85, brightness: 1))
+    }
+
+    // MARK: - Composites
+    //
+    // Each is `primitive for a while → hold solid → fade out`. The phase
+    // durations stay exactly what the spec sheet's cues were transcribed
+    // against, so every existing cue renders the same as before.
+
+    /// Shared tail for the three primitive-then-settle composites: the
+    /// solid hold, then the fade. Returns `nil` while still in the leading
+    /// phase, so each caller only has to describe its own beginning.
+    private func settleTail(t: Double, phaseEnd: Double, color: Color) -> AnyView? {
+        guard t >= phaseEnd else { return nil }
+        let holdEnd = phaseEnd + parameters.holdSeconds
+        if t < holdEnd {
+            return AnyView(ring(opacity: 1, color: color))
+        }
+        let fadeProgress = parameters.fadeOutSeconds > 0 ? (t - holdEnd) / parameters.fadeOutSeconds : 1
+        return AnyView(ring(opacity: max(1 - fadeProgress, 0.05), color: color))
+    }
+
+    private func spinThenFadeView(t: Double) -> some View {
+        // The original spun 3 times over its `1.1 / speed` window,
+        // regardless of speed. `spinView` turns at `speed` rev/sec, so
+        // over that window it would otherwise cover only 1.1 revolutions —
+        // scaling its clock by `3 / 1.1` restores exactly three, at every
+        // speed, while still going through the one spin implementation.
+        //
+        // Note the factor has no `speed` in it: `spinDuration` already
+        // carries the speed dependence, and including it again made the
+        // composite turn 3.75x at 0.8 speed and 1.5x at 2.0.
+        let spinDuration = 1.1 / speed
+        if let tail = settleTail(t: t, phaseEnd: spinDuration, color: primary(t)) { return tail }
+        return AnyView(spinView(t: t * (3 / 1.1)))
     }
 
     private func pulseAccelerateView(t: Double) -> some View {
-        let pulseDuration = 2.2
-        let holdEnd = pulseDuration + parameters.holdSeconds
-
-        if t < pulseDuration {
-            // Pulse rate accelerates as t approaches pulseDuration (countdown feel).
-            let progress = t / pulseDuration
-            let rate = 1.5 + progress * 8
-            let value = (sin(t * rate * 2 * .pi) + 1) / 2
-            return AnyView(
-                ring(opacity: 0.4 + 0.6 * value, color: primary(t), width: lineWidth * CGFloat(0.7 + 0.5 * value))
-            )
-        } else if t < holdEnd {
-            return AnyView(ring(opacity: 1, color: primary(t)))
-        } else {
-            let fadeProgress = parameters.fadeOutSeconds > 0 ? (t - holdEnd) / parameters.fadeOutSeconds : 1
-            return AnyView(ring(opacity: max(1 - fadeProgress, 0.05), color: primary(t)))
-        }
+        if let tail = settleTail(t: t, phaseEnd: Self.pulseAccelerateDuration, color: primary(t)) { return tail }
+        return AnyView(pulseAccelerateRing(t: t))
     }
 
     private func rainbowFadeView(t: Double) -> some View {
-        let spinDuration = 1.5 / speed
-        let holdEnd = spinDuration + parameters.holdSeconds
-
-        if t < spinDuration {
-            let hue = (t / spinDuration)
-            return AnyView(
-                ring(opacity: 1, color: Color(hue: hue, saturation: 0.85, brightness: 1))
-            )
-        } else if t < holdEnd {
-            return AnyView(ring(opacity: 1, color: .white))
-        } else {
-            let fadeProgress = parameters.fadeOutSeconds > 0 ? (t - holdEnd) / parameters.fadeOutSeconds : 1
-            return AnyView(ring(opacity: max(1 - fadeProgress, 0.05), color: .white))
-        }
+        let sweepDuration = 1.5 / speed
+        if let tail = settleTail(t: t, phaseEnd: sweepDuration, color: .white) { return tail }
+        // Same reasoning as `spinThenFadeView`, and the same shape: the
+        // window is `1.5 / speed` and `rainbowRing` travels one hue trip
+        // per `1 / speed`, so slowing its clock by 1.5 lands exactly one
+        // full trip across the window at any speed.
+        return AnyView(rainbowRing(t: t / 1.5))
     }
 
     private func voiceAssistantView(t: Double) -> some View {

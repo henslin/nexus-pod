@@ -21,6 +21,41 @@ public enum LEDPatternStyle: String, Codable, CaseIterable, Identifiable, Hashab
     case flash               // slow on/off blink, repeating or looped
     case quickFlash          // fast on/off blink (urgent/error feel)
     case ripple               // outward pulse/ripple from a point or center
+
+    // MARK: - Primitives
+    //
+    // One behavior each, looping for as long as the step lasts — nothing
+    // built in about settling or fading. These are the pieces the
+    // composites below were always made of; they exist separately now that
+    // `RingTimeline` can sequence steps, so "spin, then go solid, then
+    // fade" is three steps you arrange rather than one case someone had to
+    // hardcode. Prefer these when building something new.
+
+    /// A single bright arc travelling around the ring, once per
+    /// `1 / speed` seconds.
+    ///
+    /// That rate is load-bearing, not incidental: `SegmentLength.rotations`
+    /// converts a step's length using `rotations = seconds × speed`, so a
+    /// spin primitive turning at any other rate would make "spin exactly
+    /// three times" quietly untrue. Don't retune this to taste — retune
+    /// `speed`.
+    case spin
+    /// A breathing pulse whose rate accelerates, giving a countdown feel.
+    /// Restarts its ramp every `2.2` seconds.
+    case pulseAccelerate
+    /// A hue sweep through the full color wheel, once per `1 / speed`
+    /// seconds. Ignores the configured colors by definition.
+    case rainbow
+
+    // MARK: - Composites (spec-sheet behaviors)
+    //
+    // Multi-phase behaviors transcribed from the Ziris cue sheet, each one
+    // a primitive above followed by a solid hold and a fade. Kept because
+    // the cue library's rows reference them as ground truth and saved cue
+    // JSON decodes by these exact names — but they're no longer where new
+    // work should start. Their renderers now delegate to the primitives
+    // rather than reimplementing them, so the two can't drift.
+
     case transitionToSolid    // brief animation that settles into a solid color
     case spinThenSolidFade    // a spinner/chase that resolves into a solid fade-out
     case pulseAccelerateThenSolidFade // breathing pulse that speeds up, then fades to solid
@@ -32,6 +67,24 @@ public enum LEDPatternStyle: String, Codable, CaseIterable, Identifiable, Hashab
 
     public var id: String { rawValue }
 
+    /// True for the multi-phase spec-sheet behaviors — a primitive
+    /// followed by a solid hold and a fade, all baked into one case.
+    ///
+    /// Used to group them apart in the Pattern Style picker so the
+    /// primitives read as the default way to build something and these
+    /// read as what they are: canned sequences kept for the cue library.
+    /// Anything one of these does can be built as timeline steps, with the
+    /// hold and fade as their own steps instead of hidden parameters.
+    public var isComposite: Bool {
+        switch self {
+        case .transitionToSolid, .spinThenSolidFade,
+             .pulseAccelerateThenSolidFade, .rainbowThenWhiteFade:
+            return true
+        default:
+            return false
+        }
+    }
+
     public var displayName: String {
         switch self {
         case .continuousAnimation: return "Continuous Animation (Nexus)"
@@ -40,6 +93,9 @@ public enum LEDPatternStyle: String, Codable, CaseIterable, Identifiable, Hashab
         case .flash: return "Flash"
         case .quickFlash: return "Quick Flash"
         case .ripple: return "Ripple"
+        case .spin: return "Spin"
+        case .pulseAccelerate: return "Pulse (Accelerating)"
+        case .rainbow: return "Rainbow"
         case .transitionToSolid: return "Transition to Solid"
         case .spinThenSolidFade: return "Spin, then Solid Fade"
         case .pulseAccelerateThenSolidFade: return "Pulse (Accelerating), then Fade"

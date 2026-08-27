@@ -564,11 +564,53 @@ public extension CodeGenerators {
             _driver(ring, "rotation_euler", "ringpod_phase(frame)", index=2)
             _drive_emission(ring, f"ringpod_envelope(frame, 1.5 / max({speed}, 0.05), {hold}, {fade}) * {glow_strength}")
 
-        else:  # voiceAssistantColor
+        elif style == "spin":
+            # Primitive: turns continuously at `speed` revolutions per
+            # second with steady emission. No envelope — a timeline step
+            # decides how long it runs and whether it fades, rather than
+            # the style baking in a hold and fade of its own.
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength,
+                               bevel_start=0.0, bevel_end=0.28)
+            _driver(ring, "rotation_euler", "ringpod_phase(frame)", index=2)
+            _drive_emission(ring, f"{glow_strength}")
+
+        elif style == "pulseAccelerate":
+            # Primitive: the accelerating breath on its own, restarting its
+            # 2.2s rate ramp instead of settling into a hold.
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            t_expr = "((frame / (bpy.context.scene.render.fps or 24)) % 2.2)"
+            _drive_emission(
+                ring,
+                f"(0.4 + 0.6 * (math.sin({t_expr} * (1.5 + ({t_expr} / 2.2) * 8) "
+                f"* 2 * math.pi) + 1) / 2) * {glow_strength}"
+            )
+
+        elif style == "rainbow":
+            # Same caveat as rainbowThenWhiteFade below: sweeping hue needs
+            # per-frame drivers on the material's individual R/G/B emission
+            # channels, which this script deliberately skips. The rotation
+            # and timing are exact; the color stays the primary.
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            _driver(ring, "rotation_euler", "ringpod_phase(frame)", index=2)
+            _drive_emission(ring, f"{glow_strength}")
+
+        elif style == "voiceAssistantColor":
             a = _ring_curve("Nexus_VoiceA", RADIUS, TUBE, PRIMARY, glow_strength, bevel_start=0.0, bevel_end=0.5)
             b = _ring_curve("Nexus_VoiceB", RADIUS, TUBE, SECONDARY, glow_strength, bevel_start=0.5, bevel_end=1.0)
             for obj in (a, b):
                 _driver(obj, "rotation_euler", "ringpod_phase(frame)", index=2)
+
+        else:
+            # Explicit fallback. This chain used to end at
+            # `else:  # voiceAssistantColor`, which meant any style added
+            # later rendered as the two-arc voice assistant without
+            # anything saying so. A plain solid ring is the honest
+            # stand-in, and the print below names the style so it's
+            # obvious in Blender's console which one had no branch.
+            ring = _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            _drive_emission(ring, f"{glow_strength}")
+            print(f"Nexus: style '{style}' has no dedicated Blender build — "
+                  "rendered as a solid ring.")
 
         if p["glow_enabled"]:
             try:

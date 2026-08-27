@@ -19,6 +19,14 @@ import PhotosUI
 struct AnimationSection: View {
     @ObservedObject var config: RingConfig
 
+    /// Everything this picker offers, in declaration order — grouped into
+    /// basic vs multi-phase by `body` below.
+    private var selectableStyles: [LEDPatternStyle] {
+        LEDPatternStyle.allCases.filter {
+            ![.continuousAnimation, .earConOnly, .notApplicable, .voiceAssistantColor, .custom].contains($0)
+        }
+    }
+
     var body: some View {
         Picker("Pattern Style", selection: $config.patternStyle) {
             Text("Continuous").tag(LEDPatternStyle?.none)
@@ -32,14 +40,25 @@ struct AnimationSection: View {
             // Library's own "Style" picker (`CueExplorerView`), where they
             // describe a specific spec-sheet row rather than override the
             // live preview.
-            ForEach(LEDPatternStyle.allCases.filter {
-                ![.continuousAnimation, .earConOnly, .notApplicable, .voiceAssistantColor, .custom].contains($0)
-            }) { style in
-                Text(style.displayName).tag(LEDPatternStyle?.some(style))
+            // Split so the single-behavior styles read as the default way
+            // to build something and the canned multi-phase ones read as
+            // what they are. Anything in the second group can be built out
+            // of the first plus timeline steps — a composite's hold and
+            // fade are hidden parameters, where a step's are visible and
+            // editable.
+            Section("Basic") {
+                ForEach(selectableStyles.filter { !$0.isComposite }) { style in
+                    Text(style.displayName).tag(LEDPatternStyle?.some(style))
+                }
+            }
+            Section("Multi-phase (Cue Library)") {
+                ForEach(selectableStyles.filter(\.isComposite)) { style in
+                    Text(style.displayName).tag(LEDPatternStyle?.some(style))
+                }
             }
         }
         .pickerStyle(.menu)
-        Text("One of the Cue Library's canned Ziris spec-sheet behaviors (Flash, Ripple, Spin then Solid Fade, ...) instead of a continuous loop — overrides Animation Type below when set. See the Cue Library for the full set.")
+        Text("A single spec-sheet behavior (Spin, Pulse, Flash, Ripple, ...) instead of a continuous loop — overrides Animation Type below when set. The multi-phase entries bake in their own hold and fade; to control those yourself, pick a basic style and sequence it on the timeline.")
             .font(.caption)
             .foregroundStyle(.secondary)
 

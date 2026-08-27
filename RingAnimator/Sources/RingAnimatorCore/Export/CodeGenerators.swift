@@ -1858,6 +1858,37 @@ ZStack {
     ring(opacity: 0.15, color: primary(t), width: lineWidth * 0.4)
 }
 """
+        // Primitives — one behavior, looping for the whole cycle. Their
+        // cycle is `1 / speed` so a generated spin turns exactly once per
+        // loop, matching the app (see `LEDPatternStyle.spin`).
+        case .spin:
+            cycleFormula = "1 / speed"
+            contentBody = """
+let revolutions = t * speed
+let eased = applyEasing(revolutions.truncatingRemainder(dividingBy: 1))
+let angle = (revolutions.rounded(.down) + eased) * 2 * .pi
+ZStack {
+    Circle().stroke(primary(t).opacity(0.12), lineWidth: lineWidth)
+    Circle()
+        .trim(from: 0, to: 0.28)
+        .stroke(primary(t), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+        .rotationEffect(.radians(angle))
+}
+"""
+        case .pulseAccelerate:
+            cycleFormula = "2.2"
+            contentBody = """
+let local = t.truncatingRemainder(dividingBy: 2.2)
+let rate = 1.5 + (local / 2.2) * 8
+let value = (sin(local * rate * 2 * .pi) + 1) / 2
+ring(opacity: 0.4 + 0.6 * value, color: primary(t), width: lineWidth * CGFloat(0.7 + 0.5 * value))
+"""
+        case .rainbow:
+            cycleFormula = "1 / speed"
+            contentBody = """
+let hue = (t * speed).truncatingRemainder(dividingBy: 1)
+ring(opacity: 1, color: Color(hue: hue, saturation: 0.85, brightness: 1))
+"""
         case .transitionToSolid:
             cycleFormula = "0.5 + holdSeconds + 0.5"
             contentBody = """
@@ -2251,6 +2282,49 @@ drawCircle(
     center = center,
     style = Stroke(width = lineWidthPx * 0.4f),
     blendMode = blendMode
+)
+"""
+        case .spin:
+            cycleFormula = "1 / speed"
+            contentBody = """
+val revolutions = t * speed
+val eased = applyEasing(revolutions % 1.0)
+val angle = ((floor(revolutions) + eased) * 360.0).toFloat()
+drawCircle(
+    color = primary(t).copy(alpha = 0.12f),
+    radius = radiusPx,
+    style = Stroke(width = lineWidthPx)
+)
+rotate(degrees = angle) {
+    drawArc(
+        color = primary(t),
+        startAngle = -90f,
+        sweepAngle = 100.8f,
+        useCenter = false,
+        style = Stroke(width = lineWidthPx, cap = StrokeCap.Round)
+    )
+}
+"""
+        case .pulseAccelerate:
+            cycleFormula = "2.2"
+            contentBody = """
+val local = t % 2.2
+val rate = 1.5 + (local / 2.2) * 8
+val value = ((sin(local * rate * 2 * PI) + 1) / 2).toFloat()
+drawCircle(
+    color = primary(t).copy(alpha = 0.4f + 0.6f * value),
+    radius = radiusPx,
+    style = Stroke(width = lineWidthPx * (0.7f + 0.5f * value), cap = StrokeCap.Round)
+)
+"""
+        case .rainbow:
+            cycleFormula = "1 / speed"
+            contentBody = """
+val hue = ((t * speed) % 1.0).toFloat()
+drawCircle(
+    color = Color.hsv(hue * 360f, 0.85f, 1f),
+    radius = radiusPx,
+    style = Stroke(width = lineWidthPx, cap = StrokeCap.Round)
 )
 """
         case .transitionToSolid:
@@ -2691,6 +2765,48 @@ ctx.beginPath();
 ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
 ctx.strokeStyle = withAlpha(p, 0.15);
 ctx.lineWidth = lineWidth * 0.4;
+ctx.stroke();
+"""
+        case .spin:
+            cycleFormula = "1 / config.speed"
+            drawBody = """
+const revolutions = t * config.speed;
+const eased = applyEasing(revolutions % 1);
+const angle = (Math.floor(revolutions) + eased) * 2 * Math.PI;
+ctx.beginPath();
+ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+ctx.strokeStyle = withAlpha(primary(t), 0.12);
+ctx.lineWidth = lineWidth;
+ctx.stroke();
+ctx.beginPath();
+ctx.arc(cx, cy, radius, angle - Math.PI / 2, angle - Math.PI / 2 + 0.28 * 2 * Math.PI);
+ctx.strokeStyle = primary(t);
+ctx.lineWidth = lineWidth;
+ctx.lineCap = 'round';
+ctx.stroke();
+"""
+        case .pulseAccelerate:
+            cycleFormula = "2.2"
+            drawBody = """
+const local = t % 2.2;
+const rate = 1.5 + (local / 2.2) * 8;
+const value = (Math.sin(local * rate * 2 * Math.PI) + 1) / 2;
+ctx.beginPath();
+ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+ctx.strokeStyle = withAlpha(primary(t), 0.4 + 0.6 * value);
+ctx.lineWidth = lineWidth * (0.7 + 0.5 * value);
+ctx.lineCap = 'round';
+ctx.stroke();
+"""
+        case .rainbow:
+            cycleFormula = "1 / config.speed"
+            drawBody = """
+const hue = ((t * config.speed) % 1) * 360;
+ctx.beginPath();
+ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+ctx.strokeStyle = `hsl(${hue}, 85%, 60%)`;
+ctx.lineWidth = lineWidth;
+ctx.lineCap = 'round';
 ctx.stroke();
 """
         case .transitionToSolid:
