@@ -115,25 +115,12 @@ GeometryReader { geo in
     ZStack {
         ForEach(0..<diodeCount, id: \\.self) { i in
             let position = Double(i) / Double(diodeCount)
-            var bestIndex = 0
-            var bestBrightness = 0.0
-            for k in 0..<2 {
-                let cometHead = head + Double(k) / 2
-                var behind = (cometHead - position).truncatingRemainder(dividingBy: 1)
-                if behind < 0 { behind += 1 }
-                if behind < tail {
-                    let brightness = 1 - (behind / tail)
-                    if brightness > bestBrightness {
-                        bestBrightness = brightness
-                        bestIndex = k
-                    }
-                }
-            }
+            let lit = brightestComet(at: position, head: head, tail: tail)
             let angle = position * 2 * Double.pi - .pi / 2
             Circle()
-                .fill(bestIndex == 0 ? p : s)
+                .fill(lit.index == 0 ? p : s)
                 .frame(width: lineWidth, height: lineWidth)
-                .opacity(max(bestBrightness, 0.06))
+                .opacity(max(lit.brightness, 0.06))
                 .position(
                     x: geo.size.width / 2 + cos(angle) * radius,
                     y: geo.size.height / 2 + sin(angle) * radius
@@ -492,6 +479,31 @@ struct ThinkingRingView: View {
     private func pseudoRandom2(_ a: Int, _ b: Int) -> Double {
         let x = sin(Double(a) * 12.9898 + Double(b) * 78.233) * 43758.5453
         return x - x.rounded(.down)
+    }
+
+    /// Which of Multi Chase's two comets is brightest at a point on the
+    /// ring, and how bright.
+    ///
+    /// A function rather than inline in the view body because a
+    /// `@ViewBuilder` closure accepts `let` bindings and view expressions
+    /// only — `var` and `for` inside one make the builder try to treat
+    /// them as views.
+    private func brightestComet(at position: Double, head: Double, tail: Double) -> (index: Int, brightness: Double) {
+        var bestIndex = 0
+        var bestBrightness = 0.0
+        for k in 0..<2 {
+            let cometHead = head + Double(k) / 2
+            var behind = (cometHead - position).truncatingRemainder(dividingBy: 1)
+            if behind < 0 { behind += 1 }
+            if behind < tail {
+                let brightness = 1 - (behind / tail)
+                if brightness > bestBrightness {
+                    bestBrightness = brightness
+                    bestIndex = k
+                }
+            }
+        }
+        return (bestIndex, bestBrightness)
     }
 
     // Deliberately exaggerated RGB split, inspired by Siri's colorful
@@ -1796,15 +1808,18 @@ ctx.stroke();
                 // `birthAngle`/`birthRadius`: where the particle is born —
                 // exactly on the emitter's edge for .points/.outline, or
                 // anywhere inside it for .surface/.volume.
-                let birthAngle: Double
-                let birthRadius: CGFloat
-                if edgeLike {
-                    birthAngle = (seed / Double(count)) * 2 * Double.pi
-                    birthRadius = emitterRadius
-                } else {
-                    birthAngle = jitter * 2 * Double.pi
-                    birthRadius = CGFloat(hash(seed, 3)) * emitterRadius
-                }
+                // Ternaries rather than a deferred-initialization if/else:
+                // this sits inside a `ForEach`'s `@ViewBuilder` closure,
+                // where a bare `if` is parsed as a conditional *view* and
+                // assigning in its branches makes the builder try to
+                // conform `()` to `View`. The generated file did not
+                // compile because of it.
+                let birthAngle = edgeLike
+                    ? (seed / Double(count)) * 2 * Double.pi
+                    : jitter * 2 * Double.pi
+                let birthRadius: CGFloat = edgeLike
+                    ? emitterRadius
+                    : CGFloat(hash(seed, 3)) * emitterRadius
 
                 // `travelAngle`: emissionLongitude (CAEmitterCell's actual
                 // "base direction" property) plus emissionRange's random
