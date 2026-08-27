@@ -80,9 +80,14 @@ struct PhoneMockupView: View {
     /// Non-nil while a timeline is driving the pod — passed straight down
     /// to `TabBarPreview`, see its own `playback` property.
     var playback: TimelinePlayback?
+    /// The sequence, if there is one — only used to offer it as an export
+    /// source in the Export Animation sheet. Empty by default, which is
+    /// what makes that option simply not appear.
+    var timeline: RingTimeline = RingTimeline()
 
-    init(config: RingConfig, isDarkMode: Binding<Bool>, playback: TimelinePlayback? = nil) {
+    init(config: RingConfig, isDarkMode: Binding<Bool>, playback: TimelinePlayback? = nil, timeline: RingTimeline = RingTimeline()) {
         self.config = config
+        self.timeline = timeline
         self.voiceConversation = config.voiceConversation
         self._isDarkMode = isDarkMode
         self.playback = playback
@@ -131,6 +136,7 @@ struct PhoneMockupView: View {
         .sheet(isPresented: $isExportingAnimation) {
             AnimationExportView(
                 config: config,
+                timeline: timeline,
                 colorScheme: isDarkMode ? .dark : .light,
                 onDismiss: { isExportingAnimation = false }
             )

@@ -10,6 +10,10 @@ import RingAnimatorCore
 /// progress bar, and `NSSavePanel` wiring around it.
 struct AnimationExportView: View {
     @ObservedObject var config: RingConfig
+    /// The sequence, if one exists. An empty timeline hides the source
+    /// picker entirely, so this sheet is unchanged for anyone not using
+    /// the feature.
+    var timeline: RingTimeline = RingTimeline()
     let colorScheme: ColorScheme
     /// Dismisses the sheet — passed in rather than using `@Environment(\.dismiss)`
     /// so the Cancel button can be disabled (not hidden) while exporting,
@@ -22,9 +26,44 @@ struct AnimationExportView: View {
     @State private var isExporting = false
     @State private var progress: Double = 0
     @State private var errorMessage: String?
+    @State private var source: ExportSource
 
+    /// Defaults to the timeline when there is one. If you've built a
+    /// sequence and hit Export, the sequence is what you meant — falling
+    /// back to the single live ring would quietly export something else.
+    init(config: RingConfig, timeline: RingTimeline = RingTimeline(), colorScheme: ColorScheme, onDismiss: @escaping () -> Void) {
+        self.config = config
+        self.timeline = timeline
+        self.colorScheme = colorScheme
+        self.onDismiss = onDismiss
+        _source = State(initialValue: timeline.isEmpty ? .live : .timeline)
+    }
+
+    private enum ExportSource: String, CaseIterable, Identifiable {
+        case live = "Live Ring"
+        case timeline = "Timeline"
+        var id: String { rawValue }
+    }
+
+    private var isTimelineExport: Bool {
+        source == .timeline && !timeline.isEmpty
+    }
+
+    /// One pass. For the timeline that's the whole sequence; for the live
+    /// ring it's one cycle of whatever it's doing.
     private var loopDuration: TimeInterval {
-        AnimationExporter.naturalLoopDuration(for: config)
+        isTimelineExport ? timeline.duration : AnimationExporter.naturalLoopDuration(for: config)
+    }
+
+    /// True if anything being exported has particles on — they can't be
+    /// rendered deterministically and get forced off, which is worth
+    /// saying before someone exports and wonders where they went. Checks
+    /// every step, not just the live config, since a sequence can have
+    /// particles on in one step and off in the rest.
+    private var particlesWillBeDropped: Bool {
+        isTimelineExport
+            ? timeline.segments.contains { $0.snapshot.particlesEnabled }
+            : config.particlesEnabled
     }
 
     private var totalDuration: TimeInterval {
@@ -36,9 +75,21 @@ struct AnimationExportView: View {
             Text("Export Animation")
                 .font(.headline)
 
-            Text("Renders the current live preview to a file — \(String(format: "%.1f", loopDuration))s per loop at \(Int(AnimationExporter.fps))fps.")
+            Text(isTimelineExport
+                 ? "Renders the \(timeline.segments.count)-step sequence to a file — \(String(format: "%.1f", loopDuration))s per pass at \(Int(AnimationExporter.fps))fps."
+                 : "Renders the current live preview to a file — \(String(format: "%.1f", loopDuration))s per loop at \(Int(AnimationExporter.fps))fps.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            if !timeline.isEmpty {
+                Picker("Source", selection: $source) {
+                    ForEach(ExportSource.allCases) { option in
+                        Text(option.rawValue).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
 
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Animated GIF", isOn: $exportGIF)
@@ -55,7 +106,7 @@ struct AnimationExportView: View {
                 }
             }
 
-            if config.particlesEnabled {
+            if particlesWillBeDropped {
                 Label("Particles can't be captured deterministically and will be off in the export.", systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -110,18 +161,27 @@ struct AnimationExportView: View {
         progress = 0
 
         Task { @MainActor in
-            let frames = await AnimationExporter.renderFrames(
-                config: config,
-                colorScheme: colorScheme,
-                loopCount: loopCount,
-                onProgress: { value in
+            let onProgress: @MainActor (Double) -> Void = { value in
                     // Frame rendering is roughly 80% of total export time
                     // (encoding, especially the GIF path, is comparatively
                     // fast) — scaling into that range keeps the bar from
                     // looking "done" long before the file actually is.
-                    progress = value * 0.8
-                }
-            )
+                progress = value * 0.8
+            }
+
+            let frames = isTimelineExport
+                ? await AnimationExporter.renderFrames(
+                    timeline: timeline,
+                    colorScheme: colorScheme,
+                    loopCount: loopCount,
+                    onProgress: onProgress
+                )
+                : await AnimationExporter.renderFrames(
+                    config: config,
+                    colorScheme: colorScheme,
+                    loopCount: loopCount,
+                    onProgress: onProgress
+                )
 
             guard !frames.isEmpty else {
                 errorMessage = "Nothing to export — check the animation is running."

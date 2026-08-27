@@ -89,7 +89,11 @@ public enum AnimationExporter {
     /// read as looping smoothly.
     public static func naturalLoopDuration(for config: RingConfig) -> TimeInterval {
         if config.sequencePlaybackEnabled {
-            let envelope = max(config.holdSeconds + config.fadeOutSeconds, 0.1)
+            // Must match `RingView.sequenceEnvelopeOpacity`'s own envelope
+            // length exactly — including `fadeInSeconds`, which was added
+            // to the envelope after this function was written. Understating
+            // it here silently truncates the exported clip mid-animation.
+            let envelope = max(config.fadeInSeconds + config.holdSeconds + config.fadeOutSeconds, 0.1)
             let loops = config.loops > 0 ? config.loops : 1
             return min(max(envelope * Double(loops), 1), 10)
         }
@@ -147,6 +151,91 @@ public enum AnimationExporter {
             // edges would look wrong either way. `isOpaque` here just
             // tells ImageRenderer it doesn't need to preserve an alpha
             // channel it wouldn't get a good result from regardless.
+            renderer.isOpaque = true
+            if let cgImage = renderer.cgImage {
+                frames.append(cgImage)
+            }
+
+            onProgress(Double(index + 1) / Double(frameCount))
+            await Task.yield()
+        }
+
+        return frames
+    }
+
+    /// Renders a whole `RingTimeline` — every step in order, with its own
+    /// look, its own phase-continuous rotation, and its own fade envelope.
+    ///
+    /// Works for the same reason the single-config path above does, just
+    /// one level up: `RingTimeline.resolve(at:)` is a pure function of
+    /// time, so asking it for `frameIndex / fps` reproduces an exact frame
+    /// with no live playhead involved. The per-step `phaseTime` it returns
+    /// (rather than the raw timeline clock) is what keeps rotation
+    /// continuous across a boundary in the exported file, exactly as it is
+    /// on screen — see `RingTimeline.Resolved.phaseTime`.
+    ///
+    /// Each step's config is built once up front rather than per frame:
+    /// `RingConfig.init` reads the Keychain and wires up Combine
+    /// pipelines, so constructing one every frame would dominate the
+    /// export's runtime for no benefit — within a step the config is a
+    /// constant, only `phaseTime` moves.
+    public static func renderFrames(
+        timeline: RingTimeline,
+        colorScheme: ColorScheme,
+        loopCount: Int,
+        onProgress: @MainActor (Double) -> Void = { _ in }
+    ) async -> [CGImage] {
+        guard !timeline.isEmpty, timeline.duration > 0 else { return [] }
+
+        // Force wrapping on regardless of the timeline's own setting:
+        // `loopCount` is what decides how many passes get rendered here,
+        // and a non-looping timeline would otherwise pin to its final
+        // frame for every pass after the first.
+        var source = timeline
+        source.loops = true
+
+        var configs: [UUID: RingConfig] = [:]
+        for segment in timeline.segments where configs[segment.id] == nil {
+            let config = RingConfig()
+            segment.snapshot.apply(to: config)
+            // The timeline owns fading (see `TimelineSegment.opacity`);
+            // leaving the step's own single-segment envelope on would
+            // multiply the two together, same as during live playback.
+            config.sequencePlaybackEnabled = false
+            configs[segment.id] = exportConfig(from: config)
+        }
+
+        let totalDuration = timeline.duration * Double(max(loopCount, 1))
+        let frameCount = max(Int((totalDuration * fps).rounded()), 1)
+        let outerDiameter = canvasDiameter
+        let ringDiameter = outerDiameter * (podDiameter / podFrameDiameter)
+        let background: Color = colorScheme == .dark ? .black : .white
+
+        var frames: [CGImage] = []
+        frames.reserveCapacity(frameCount)
+
+        for index in 0..<frameCount {
+            let elapsed = Double(index) / fps
+            guard
+                let resolved = source.resolve(at: elapsed),
+                let config = configs[resolved.segment.id]
+            else { continue }
+
+            let frameView = ZStack {
+                background
+                RingView(config: config, diameter: ringDiameter, overrideElapsed: resolved.phaseTime)
+                    .frame(width: outerDiameter, height: outerDiameter)
+                    // Composited against the opaque background above, so a
+                    // fade reads as "dissolving into the backdrop" rather
+                    // than producing partial alpha that GIF's 1-bit
+                    // transparency and most movie codecs can't carry.
+                    .opacity(resolved.opacity)
+            }
+            .frame(width: outerDiameter, height: outerDiameter)
+            .environment(\.colorScheme, colorScheme)
+
+            let renderer = ImageRenderer(content: frameView)
+            renderer.scale = renderScale
             renderer.isOpaque = true
             if let cgImage = renderer.cgImage {
                 frames.append(cgImage)

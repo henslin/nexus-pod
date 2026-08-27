@@ -378,7 +378,12 @@ private struct PreviewTab: View {
     private func canvas(playback: TimelinePlayback?) -> some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
-                PhoneMockupView(config: displayConfig, isDarkMode: $isDarkMode, playback: playback)
+                PhoneMockupView(
+                    config: displayConfig,
+                    isDarkMode: $isDarkMode,
+                    playback: playback,
+                    timeline: player.timeline
+                )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 largePreviewCard(playback: playback)
