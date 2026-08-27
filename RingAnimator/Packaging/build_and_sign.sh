@@ -38,22 +38,34 @@ SIGNING_IDENTITY="Developer ID Application: Chris Henslin (NR8MAUF922)"
 NOTARY_PROFILE="ringanimator-notary"
 # ────────────────────────────────────────────────────────────────────────
 
+# Two separate names on purpose:
+# - EXECUTABLE_NAME is the actual compiled binary — it's whatever
+#   Package.swift's executableTarget is called ("RingAnimator") and what
+#   Info.plist's CFBundleExecutable points at. Renaming the *app* doesn't
+#   rename the Swift target, so this has to stay "RingAnimator" or the
+#   copy below silently can't find the built binary.
+# - BUNDLE_NAME is just the .app folder/zip name Finder shows — this is
+#   the one to change if you want the shareable file itself called
+#   something else. Purely cosmetic; doesn't touch code signing,
+#   Info.plist, or the in-app display name (that's CFBundleDisplayName,
+#   set separately in Info.plist).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
-APP_NAME="RingAnimator"
+EXECUTABLE_NAME="RingAnimator"
+BUNDLE_NAME="Nexus Pod"
 BUILD_DIR="$PACKAGE_DIR/.build/release"
 STAGE_DIR="$PACKAGE_DIR/Packaging/stage"
-APP_BUNDLE="$STAGE_DIR/$APP_NAME.app"
+APP_BUNDLE="$STAGE_DIR/$BUNDLE_NAME.app"
 
 echo "→ Building Release..."
 cd "$PACKAGE_DIR"
 swift build -c release
 
-echo "→ Assembling $APP_NAME.app..."
+echo "→ Assembling $BUNDLE_NAME.app..."
 rm -rf "$STAGE_DIR"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 
-cp "$BUILD_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+cp "$BUILD_DIR/$EXECUTABLE_NAME" "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 cp "$SCRIPT_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$SCRIPT_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
@@ -75,6 +87,15 @@ if [ "$found_bundle" = false ]; then
     echo "     load, this is why. Check RingAnimatorCore's Resources/ setup."
 fi
 
+# This whole package lives in iCloud Drive, which tags synced files with
+# Finder metadata (com.apple.FinderInfo) and sometimes a resource fork —
+# codesign refuses to sign/verify a bundle carrying either ("resource
+# fork, Finder information, or similar detritus not allowed"). Stripping
+# all extended attributes recursively before signing avoids that; safe to
+# run even if nothing's attached.
+echo "→ Stripping extended attributes (iCloud detritus)..."
+xattr -cr "$APP_BUNDLE"
+
 echo "→ Code signing (hardened runtime)..."
 codesign --deep --force --options runtime \
     --sign "$SIGNING_IDENTITY" \
@@ -84,7 +105,7 @@ echo "→ Verifying signature..."
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 echo "→ Zipping for notarization submission..."
-NOTARY_ZIP="$STAGE_DIR/$APP_NAME-notarize.zip"
+NOTARY_ZIP="$STAGE_DIR/$BUNDLE_NAME-notarize.zip"
 ditto -c -k --keepParent "$APP_BUNDLE" "$NOTARY_ZIP"
 
 echo "→ Submitting to Apple notary service (this can take a few minutes)..."
@@ -96,11 +117,11 @@ echo "→ Stapling notarization ticket to the app..."
 xcrun stapler staple "$APP_BUNDLE"
 
 echo "→ Building final distributable zip..."
-FINAL_ZIP="$PACKAGE_DIR/$APP_NAME.zip"
+FINAL_ZIP="$PACKAGE_DIR/$BUNDLE_NAME.zip"
 rm -f "$FINAL_ZIP"
 ditto -c -k --keepParent "$APP_BUNDLE" "$FINAL_ZIP"
 
 echo ""
 echo "✅ Done: $FINAL_ZIP"
-echo "   That zip is what you share — unzip it, drag RingAnimator.app"
+echo "   That zip is what you share — unzip it, drag $BUNDLE_NAME.app"
 echo "   anywhere, double-click to open. No Gatekeeper prompt."
