@@ -158,6 +158,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     /// cue JSON written before this existed has no such key, and
     /// synthesized `Decodable` would throw rather than default it.
     public var diodeShape: DiodeShape?
+    public var diodeScale: Double?
     public var diodeModeEnabled: Bool?
     public var blinkPattern: BlinkPattern?
     public var blinkRate: Double?
@@ -230,6 +231,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         chasingFillStyle: ChasingFillStyle = .trailingTail,
         diodeCount: Double = 30,
         diodeShape: DiodeShape? = nil,
+        diodeScale: Double? = nil,
         diodeModeEnabled: Bool? = nil,
         blinkPattern: BlinkPattern? = nil,
         blinkRate: Double? = nil,
@@ -285,6 +287,7 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         self.chasingFillStyle = chasingFillStyle
         self.diodeCount = diodeCount
         self.diodeShape = diodeShape
+        self.diodeScale = diodeScale
         self.diodeModeEnabled = diodeModeEnabled
         self.blinkPattern = blinkPattern
         self.blinkRate = blinkRate

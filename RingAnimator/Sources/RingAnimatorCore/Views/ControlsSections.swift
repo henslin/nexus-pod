@@ -120,6 +120,12 @@ struct AnimationSection: View {
             Text(config.diodeShape.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            LabeledSlider(title: "Diode Size", value: $config.diodeScale, range: 0.4...3.0, format: "%.2fx")
+
+            Text("Relative to the ring's width, which crops them — above 1x the diode is wider than the band and gets trimmed by it, the way an LED reads through a slot. Ring width is \"Line Width\" under Shape.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
 
         if config.diodeModeEnabled || config.animationType == .alternating || config.animationType == .equalizer
@@ -190,7 +196,18 @@ struct ShapeSection: View {
     @ObservedObject var config: RingConfig
 
     var body: some View {
-        LabeledSlider(title: "Line Width", value: $config.lineWidth, range: 2...16, format: "%.0f pt")
+        // Relabelled in diode mode: the same value, but there it reads as
+        // the width of the band diodes sit in and are cropped to, which is
+        // not obviously the same thing as a stroke's line width.
+        LabeledSlider(
+            title: config.diodeModeEnabled ? "Ring Width" : "Line Width",
+            value: $config.lineWidth, range: 2...16, format: "%.0f pt"
+        )
+        if config.diodeModeEnabled {
+            Text("The band the diodes sit in — they're cropped to it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
         LabeledSlider(title: "Preview Size", value: $config.previewDiameter, range: 80...220, format: "%.0f pt")
     }
 }

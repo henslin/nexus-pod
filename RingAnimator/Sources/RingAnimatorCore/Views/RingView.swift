@@ -597,10 +597,11 @@ public struct RingView: View {
         let blink = (sin(phase) + 1) / 2
         let count = max(Int(config.diodeCount.rounded()), 2)
         let all = activeColors(elapsed: elapsed)
-        let diodeSize = lw(scale)
+        let band = bandWidth(scale: scale)
+        let size = diodeSize(scale: scale)
         return glow(
             GeometryReader { geo in
-                let radius = min(geo.size.width, geo.size.height) / 2 - diodeSize / 2
+                let radius = diodeRadius(in: geo.size, scale: scale)
                 ZStack {
                     ForEach(0..<count, id: \.self) { i in
                         let angle = (Double(i) / Double(count)) * 2 * Double.pi - .pi / 2
@@ -611,7 +612,7 @@ public struct RingView: View {
                         // still swapping the same two blink groups back
                         // and forth.
                         let isEven = i.isMultiple(of: 2)
-                        diode(color: all[i % all.count], size: diodeSize, angle: angle)
+                        diode(color: all[i % all.count], size: size, angle: angle)
                             .opacity(isEven ? blink : 1 - blink)
                             .position(
                                 x: geo.size.width / 2 + cos(angle) * radius,
@@ -620,6 +621,7 @@ public struct RingView: View {
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
+                .clipShape(RingBand(radius: radius, width: band))
             },
             color: all[0],
             boost: voiceLevel,
@@ -744,6 +746,49 @@ public struct RingView: View {
     /// gradient, so the two stay visually distinct as they cross.
     // MARK: - Diodes
 
+    /// The ring's band width at the current scale — what `lineWidth` means
+    /// once diodes are involved. Diodes are centered on this band and
+    /// cropped to it.
+    private func bandWidth(scale: CGFloat) -> CGFloat { lw(scale) }
+
+    /// How big each diode is drawn, before the band crops it. A
+    /// `diodeScale` above 1 deliberately overflows the band.
+    private func diodeSize(scale: CGFloat) -> CGFloat {
+        lw(scale) * CGFloat(max(config.diodeScale, 0.1))
+    }
+
+    /// Radius the diode centers sit on.
+    ///
+    /// Derived from the *band* width, not the diode size — so making
+    /// diodes larger makes them overflow and get cropped, rather than
+    /// silently pulling the whole ring inward to fit them. At the default
+    /// `diodeScale` of 1 the two are identical, which is why nothing
+    /// already saved moves.
+    private func diodeRadius(in size: CGSize, scale: CGFloat) -> CGFloat {
+        min(size.width, size.height) / 2 - bandWidth(scale: scale) / 2
+    }
+
+    /// The annulus a diode layer is clipped to: a circle of `radius`,
+    /// stroked to `width`.
+    ///
+    /// This is what makes an oversized diode read as hardware — an LED
+    /// seen through a slot or diffuser shows as a cropped band of a larger
+    /// emitter, not as the whole component floating on a circle.
+    private struct RingBand: Shape {
+        var radius: CGFloat
+        var width: CGFloat
+
+        func path(in rect: CGRect) -> Path {
+            let box = CGRect(
+                x: rect.midX - radius,
+                y: rect.midY - radius,
+                width: radius * 2,
+                height: radius * 2
+            )
+            return Path(ellipseIn: box).strokedPath(StrokeStyle(lineWidth: width))
+        }
+    }
+
     /// One diode, in whatever shape is configured.
     ///
     /// Square and bar shapes are rotated to sit tangent to the ring (the
@@ -783,11 +828,12 @@ public struct RingView: View {
     private func diodeFieldRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let all = activeColors(elapsed: elapsed)
         let count = max(Int(config.diodeCount.rounded()), 2)
-        let diodeSize = lw(scale)
+        let band = bandWidth(scale: scale)
+        let size = diodeSize(scale: scale)
 
         return glow(
             GeometryReader { geo in
-                let radius = min(geo.size.width, geo.size.height) / 2 - diodeSize / 2
+                let radius = diodeRadius(in: geo.size, scale: scale)
                 ZStack {
                     ForEach(0..<count, id: \.self) { i in
                         let position = Double(i) / Double(count)
@@ -801,7 +847,7 @@ public struct RingView: View {
                             voiceLevel: voiceLevel,
                             colors: all
                         )
-                        diode(color: lit.color, size: diodeSize, angle: angle)
+                        diode(color: lit.color, size: size, angle: angle)
                             .opacity(lit.brightness * blinkMultiplier(index: i, elapsed: elapsed))
                             .position(
                                 x: geo.size.width / 2 + cos(angle) * radius,
@@ -810,6 +856,7 @@ public struct RingView: View {
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
+                .clipShape(RingBand(radius: radius, width: band))
             },
             color: all[0],
             boost: voiceLevel,
@@ -961,7 +1008,8 @@ public struct RingView: View {
     private func multiChaseRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let all = activeColors(elapsed: elapsed)
         let count = max(Int(config.diodeCount.rounded()), 2)
-        let diodeSize = lw(scale)
+        let band = bandWidth(scale: scale)
+        let size = diodeSize(scale: scale)
         // Fraction of the ring each comet's tail covers. Guarded above
         // zero so a comet is never zero-length (which would light nothing
         // at all and look like the animation had stopped).
@@ -970,13 +1018,13 @@ public struct RingView: View {
 
         return glow(
             GeometryReader { geo in
-                let radius = min(geo.size.width, geo.size.height) / 2 - diodeSize / 2
+                let radius = diodeRadius(in: geo.size, scale: scale)
                 ZStack {
                     ForEach(0..<count, id: \.self) { i in
                         let position = Double(i) / Double(count)
                         let lit = brightestComet(at: position, head: head, tail: tail, colorCount: all.count)
                         let angle = position * 2 * Double.pi - .pi / 2
-                        diode(color: all[lit.colorIndex % all.count], size: diodeSize, angle: angle)
+                        diode(color: all[lit.colorIndex % all.count], size: size, angle: angle)
                             .opacity(lit.brightness * blinkMultiplier(index: i, elapsed: elapsed))
                             .position(
                                 x: geo.size.width / 2 + cos(angle) * radius,
@@ -985,6 +1033,7 @@ public struct RingView: View {
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
+                .clipShape(RingBand(radius: radius, width: band))
             },
             color: all[0],
             boost: voiceLevel,
@@ -1064,10 +1113,11 @@ public struct RingView: View {
     private func sparkleRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let count = max(Int(config.diodeCount.rounded()), 4)
         let all = activeColors(elapsed: elapsed)
-        let dotSize = lw(scale)
+        let band = bandWidth(scale: scale)
+        let dotSize = diodeSize(scale: scale)
         return glow(
             GeometryReader { geo in
-                let radius = min(geo.size.width, geo.size.height) / 2 - dotSize / 2
+                let radius = diodeRadius(in: geo.size, scale: scale)
                 ZStack {
                     Circle().stroke(all[0].opacity(0.1), lineWidth: lw(scale) * 0.4)
                     ForEach(0..<count, id: \.self) { i in
@@ -1087,6 +1137,7 @@ public struct RingView: View {
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
+                .clipShape(RingBand(radius: radius, width: band))
             },
             color: all[0],
             boost: voiceLevel,

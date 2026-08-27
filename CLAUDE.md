@@ -222,6 +222,31 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   `xcodebuild`/`xcrun simctl` — use that instead of asking for manual
   screenshots when debugging UI issues here.
 
+## Earmarked: "Snow Leopard" pass
+
+Named for the release that shipped no new features and just made the
+existing ones right. These are all known, deliberate gaps rather than
+bugs — the reason each was deferred is recorded where the code lives, and
+none of them should be picked up piecemeal while feature work continues.
+
+- **Code generator parity.** The four export backends (SwiftUI, Compose,
+  JS, Blender) don't reflect Diode Mode or `DiodeShape` at all, and
+  export Multi Chase as two colors where the app does N. `ExportView`
+  states these on screen so nobody is surprised — clearing the gap means
+  clearing those notices too. `RingView.diodeIntensity` is the shape the
+  generators would follow: each animation as a scalar field over ring
+  position.
+- **iOS hosting.** `TimelineStripView` and the whole timeline model live
+  in `RingAnimatorCore` specifically so iOS can host them, but
+  `RingAnimatoriOS` doesn't yet. Real work, not duplicated work.
+- **Timeline depth.** Interpolation between steps, per-property
+  keyframes, and parallel tracks were all deliberately left out of the
+  first cut. Interpolation is the one that changes the data model.
+- **Blender's string dispatch.** Both chains (style and animation) now
+  have explicit fallbacks that print the unhandled name, after two
+  separate incidents of new cases silently rendering as something else.
+  Worth converting to something the compiler can check.
+
 ## Open items (not yet done)
 
 - **TestFlight app name**: TestFlight was still showing an old app name to

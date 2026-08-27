@@ -77,6 +77,18 @@ public final class RingConfig: ObservableObject {
     /// diode-based animation, and to everything when `diodeModeEnabled`
     /// is on.
     @Published public var diodeShape: DiodeShape = .round
+    /// Diode size as a multiple of the ring's band width (`lineWidth`).
+    ///
+    /// 1.0 — the default — makes each diode exactly as tall as the band,
+    /// so it sits flush inside it and the crop below is a no-op. That's
+    /// what every preset written before this existed decodes to, so
+    /// nothing already saved changes appearance.
+    ///
+    /// Above 1.0 the diode is taller than the band and gets trimmed by it,
+    /// which is the point: real hardware shows an LED through a slot or
+    /// diffuser, so you see a cropped rectangle of a larger emitter rather
+    /// than the whole component.
+    @Published public var diodeScale: Double = 1.0
     /// Renders *any* animation as a fixed ring of diodes that stay put and
     /// simply light differently, the way addressable LED hardware
     /// actually works — rather than as continuous arcs and gradients that
