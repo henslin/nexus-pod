@@ -22,6 +22,49 @@ core library:
   screens/assets, exporters. Both platforms stay in sync by depending on
   this one target rather than duplicating code.
 
+### Timeline (sequencing)
+
+`RingTimeline`/`TimelineSegment`/`TimelinePlayer` (Core) compose an
+animation out of ordered steps — "fade in, spin three times, go solid,
+fade out" — instead of one config looping forever. This is the general
+form of what `LEDPatternStyle` already carried as fixed cases
+(`.spinThenSolidFade`, `.rainbowThenWhiteFade`, ...); those stay put.
+
+- **A step is a `RingPreset` plus timing.** Reuses the existing snapshot
+  type rather than a parallel one, so anything savable to Saved
+  Animations can become a step.
+- **Editing is Keynote's model**: the timeline is the document and the
+  Controls panel is an inspector into the *selected step*. Selecting
+  loads that step's snapshot into the live `RingConfig`; every knob turn
+  writes back. No commit action. `TimelinePlayer.bind(to:)` sets this up;
+  `isApplyingSnapshot` is what stops selection from capturing itself
+  back.
+- **Length is authored as seconds *or* rotations** (`SegmentLength`), the
+  two sides of `rotations = seconds × speed`. Only the authored side is
+  stored so they can't drift when speed changes.
+- **Phase continuity is the load-bearing math.** `RingView` derives angle
+  as `elapsed × speed`, so playing each step from a local zero would
+  restart rotation at every boundary and visibly snap.
+  `RingTimeline.resolve(at:)` accumulates rotations across steps and
+  converts that into each step's own time base (`Resolved.phaseTime`),
+  which holds even when adjacent steps spin at different rates — and is
+  what makes "spin exactly three times, then go solid" land on a whole
+  rotation. Don't "simplify" phaseTime to the raw playhead.
+- **Everything is a pure function of time**, matching `RingView`'s
+  `overrideElapsed` contract. That's what lets `AnimationExporter` render
+  a timeline frame-by-frame with no live clock. Views take playback as a
+  `TimelinePlayback` *value* rather than observing the player.
+- **Playback renders through `TimelinePlayer.playbackConfig`**, a second
+  config, so playing can't write over the step being edited. Steps play
+  with `sequencePlaybackEnabled` forced off — the timeline owns fading,
+  and leaving the per-step envelope on double-fades.
+- **UI**: `TimelineStripView` (Core) under the canvas in the Mac app's
+  Preview tab. Persists to `timeline.json` in Application Support. Not
+  yet hosted on iOS, but the model and strip both live in Core for it.
+
+Not built (deliberately): interpolation between steps, per-property
+keyframes, parallel tracks.
+
 Both apps display as **"Nexus Pod"** (rebranded from "RingAnimator"/"Ring
 Pod" — display name only, internal identifiers/executable/module names are
 still `RingAnimator` throughout, intentionally, see Packaging section).
@@ -98,6 +141,21 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   If regenerating, match this look; don't reintroduce squircle/glass
   chrome — that was explicitly removed per product direction ("keep it
   simple with just the ring").
+- **Debug `swift build` fails in place; release doesn't.** The debug
+  build codesigns `RingAnimator_RingAnimatorCore.bundle` inside
+  `.build/`, which is in iCloud, and fails with the same "detritus"
+  error as above. Unlike the packaging case, `xattr -cr` does *not* fix
+  it — the file provider re-stamps the bundle as fast as it's written.
+  Build with a scratch path outside iCloud instead:
+  `swift build --scratch-path /tmp/nexus-build`. `swift build -c release`
+  works in place, so `build_and_sign.sh` is unaffected (verified).
+- **`swift run` shows no window.** A bare SwiftPM binary doesn't reliably
+  get a window placed even with the linker-embedded Info.plist and the
+  AppDelegate activation fix. To actually *look* at the app, assemble a
+  `.app` the way `build_and_sign.sh` does and `open` it — copy the
+  release binary + `Packaging/Info.plist` + the `.bundle` from
+  `.build/out/Products/Release/` (note `.build/release` is a symlink,
+  so `find` skips it without `-L`), `xattr -cr`, then `codesign -s -`.
 - **Simulator not usable via Cowork/computer-use**: this was a real
   limitation working on this project outside Claude Code — the iOS
   Simulator wasn't reachable by desktop automation, so UI bugs had to be
