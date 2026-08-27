@@ -98,7 +98,31 @@ struct AnimationSection: View {
                 value: $config.trailFraction, range: 0.05...1.0, format: "%.2f"
             )
         }
-        if config.animationType == .alternating || config.animationType == .equalizer
+        // Diode mode turns every animation into a fixed ring of pixels,
+        // so the diode controls below apply to all of them once it's on —
+        // not just to the types that were already diode-based.
+        Toggle("Diode Mode", isOn: $config.diodeModeEnabled)
+        Text(config.diodeModeEnabled
+             ? "Diodes stay in place and only change brightness and color, the way addressable LED hardware works."
+             : "Render any animation as a fixed ring of diodes instead of moving arcs and gradients.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        if config.diodeModeEnabled || config.animationType == .alternating
+            || config.animationType == .sparkle || config.animationType == .multiChase {
+            Picker("Diode Shape", selection: $config.diodeShape) {
+                ForEach(DiodeShape.allCases) { shape in
+                    Text(shape.rawValue).tag(shape)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text(config.diodeShape.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        if config.diodeModeEnabled || config.animationType == .alternating || config.animationType == .equalizer
             || config.animationType == .sparkle || config.animationType == .multiChase {
             LabeledSlider(
                 title: config.animationType == .equalizer ? "Segment Count" : config.animationType == .sparkle ? "Sparkle Count" : "Diode Count",
@@ -112,6 +136,36 @@ struct AnimationSection: View {
             // appearing for `.chasing` as it did before.
             LabeledSlider(title: "Comet Length", value: $config.trailFraction, range: 0.05...1.0, format: "%.2f")
 
+            blinkControls
+
+            Text("One comet per color in the Color section above — add a third or fourth color and each gets its own.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        // Outside the Multi Chase block: in diode mode the blink modulates
+        // whatever animation is running, not just the chase.
+        if config.diodeModeEnabled && config.animationType != .multiChase {
+            blinkControls
+        }
+
+        Picker("Easing", selection: $config.easingStyle) {
+            ForEach(EasingStyle.allCases) { style in
+                Text(style.rawValue).tag(style)
+            }
+        }
+        Text(config.easingStyle.summary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        if config.easingStyle == .spring {
+            LabeledSlider(title: "Spring Bounce", value: $config.springBounce, range: 0...1, format: "%.2f")
+        }
+    }
+
+
+    @ViewBuilder
+    private var blinkControls: some View {
+        Group {
             Picker("Blink", selection: $config.blinkPattern) {
                 ForEach(BlinkPattern.allCases) { pattern in
                     Text(pattern.rawValue).tag(pattern)
@@ -126,22 +180,6 @@ struct AnimationSection: View {
             if config.blinkPattern != .steady {
                 LabeledSlider(title: "Blink Rate", value: $config.blinkRate, range: 0.2...12, format: "%.1f/s")
             }
-
-            Text("One comet per color in the Color section above — add a third or fourth color and each gets its own.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-
-        Picker("Easing", selection: $config.easingStyle) {
-            ForEach(EasingStyle.allCases) { style in
-                Text(style.rawValue).tag(style)
-            }
-        }
-        Text(config.easingStyle.summary)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        if config.easingStyle == .spring {
-            LabeledSlider(title: "Spring Bounce", value: $config.springBounce, range: 0...1, format: "%.2f")
         }
     }
 }

@@ -359,6 +359,20 @@ public struct RingView: View {
 
     @ViewBuilder
     private func content(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
+        if config.diodeModeEnabled {
+            // Every type goes through the same fixed ring of diodes — see
+            // `diodeFieldRing`. The types that were already diode-based
+            // (Alternating, Sparkle, Multi Chase) keep their exact look,
+            // because their mappings in `diodeIntensity` are the same math
+            // their dedicated renderers use.
+            diodeFieldRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
+        } else {
+            continuousContent(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
+        }
+    }
+
+    @ViewBuilder
+    private func continuousContent(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         switch config.animationType {
         case .wave:
             waveRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
@@ -597,9 +611,7 @@ public struct RingView: View {
                         // still swapping the same two blink groups back
                         // and forth.
                         let isEven = i.isMultiple(of: 2)
-                        Circle()
-                            .fill(all[i % all.count])
-                            .frame(width: diodeSize, height: diodeSize)
+                        diode(color: all[i % all.count], size: diodeSize, angle: angle)
                             .opacity(isEven ? blink : 1 - blink)
                             .position(
                                 x: geo.size.width / 2 + cos(angle) * radius,
@@ -730,6 +742,207 @@ public struct RingView: View {
     /// Two constant-length arcs (`trailFraction` each) chase in opposite
     /// directions — solid primary/secondary colors rather than the shared
     /// gradient, so the two stay visually distinct as they cross.
+    // MARK: - Diodes
+
+    /// One diode, in whatever shape is configured.
+    ///
+    /// Square and bar shapes are rotated to sit tangent to the ring (the
+    /// `+ .pi / 2` turns the radial angle into a tangential one), so they
+    /// read as components mounted on a circular board rather than as a
+    /// scatter of rotated dots. Round needs no rotation, being symmetric.
+    @ViewBuilder
+    private func diode(color: Color, size: CGFloat, angle: Double) -> some View {
+        switch config.diodeShape {
+        case .round:
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+        case .square:
+            Rectangle()
+                .fill(color)
+                .frame(width: size, height: size)
+                .rotationEffect(.radians(angle + .pi / 2))
+        case .bar:
+            RoundedRectangle(cornerRadius: size * 0.28)
+                .fill(color)
+                .frame(width: size * DiodeShape.bar.aspect, height: size)
+                .rotationEffect(.radians(angle + .pi / 2))
+        }
+    }
+
+    /// Renders any animation as a fixed ring of diodes that never move —
+    /// only their color and brightness change.
+    ///
+    /// This is what addressable LED hardware actually does: the pixels are
+    /// soldered in place, and an "animation" is a brightness pattern
+    /// swept across them. Every continuous renderer in this file draws the
+    /// opposite way — arcs that rotate, gradients that sweep, rings that
+    /// scale — so this can't reuse them. Instead `diodeIntensity` restates
+    /// each animation as a scalar field over ring position, which is the
+    /// form hardware needs anyway.
+    private func diodeFieldRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
+        let all = activeColors(elapsed: elapsed)
+        let count = max(Int(config.diodeCount.rounded()), 2)
+        let diodeSize = lw(scale)
+
+        return glow(
+            GeometryReader { geo in
+                let radius = min(geo.size.width, geo.size.height) / 2 - diodeSize / 2
+                ZStack {
+                    ForEach(0..<count, id: \.self) { i in
+                        let position = Double(i) / Double(count)
+                        let angle = position * 2 * Double.pi - .pi / 2
+                        let lit = diodeIntensity(
+                            index: i,
+                            position: position,
+                            count: count,
+                            phase: phase,
+                            elapsed: elapsed,
+                            voiceLevel: voiceLevel,
+                            colors: all
+                        )
+                        diode(color: lit.color, size: diodeSize, angle: angle)
+                            .opacity(lit.brightness * blinkMultiplier(index: i, elapsed: elapsed))
+                            .position(
+                                x: geo.size.width / 2 + cos(angle) * radius,
+                                y: geo.size.height / 2 + sin(angle) * radius
+                            )
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+            },
+            color: all[0],
+            boost: voiceLevel,
+            scale: scale
+        )
+    }
+
+    /// Each animation type restated as "how bright is the diode at this
+    /// position, and what color".
+    ///
+    /// Some translate exactly: Alternating, Sparkle, Multi Chase and
+    /// Equalizer are already per-position, so these are the same
+    /// expressions their own renderers use. Others are interpretations,
+    /// and deliberately so — Ripple and Wobble are *radial* effects
+    /// (circles scaling outward, a radius undulating) and a fixed ring of
+    /// pixels has no radius to vary, so they become a travelling front and
+    /// a standing wave respectively. That's the closest honest reading of
+    /// each on hardware, not a bug to be fixed later.
+    private func diodeIntensity(
+        index: Int,
+        position: Double,
+        count: Int,
+        phase: Double,
+        elapsed: Double,
+        voiceLevel: Double,
+        colors all: [Color]
+    ) -> (color: Color, brightness: Double) {
+        let head = phase / (2 * Double.pi)
+        let ownColor = all[index % all.count]
+        let floorBrightness = 0.06
+
+        switch config.animationType {
+        case .wave:
+            // A single crest travelling around fixed, individually-colored
+            // pixels — the hardware reading of a sweeping gradient.
+            let offset = (position - head).truncatingRemainder(dividingBy: 1)
+            let crest = (cos(offset * 2 * Double.pi) + 1) / 2
+            return (ownColor, max(crest, floorBrightness))
+
+        case .chasing:
+            let lit = brightestComet(at: position, head: head, tail: max(config.trailFraction, 0.02), colorCount: 1)
+            return (all[0], max(lit.brightness, floorBrightness))
+
+        case .dualChase:
+            let tail = max(config.trailFraction, 0.02)
+            let forward = brightestComet(at: position, head: head, tail: tail, colorCount: 1)
+            let backward = brightestComet(at: position, head: -head, tail: tail, colorCount: 1)
+            let secondary = all.count > 1 ? all[1] : all[0]
+            return forward.brightness >= backward.brightness
+                ? (all[0], max(forward.brightness, floorBrightness))
+                : (secondary, max(backward.brightness, floorBrightness))
+
+        case .multiChase:
+            let lit = brightestComet(at: position, head: head, tail: max(config.trailFraction, 0.02), colorCount: all.count)
+            return (all[lit.colorIndex % all.count], lit.brightness)
+
+        case .alternating:
+            let blink = (sin(phase) + 1) / 2
+            return (ownColor, index.isMultiple(of: 2) ? blink : 1 - blink)
+
+        case .pulse:
+            let breath = (sin(phase) + 1) / 2
+            return (ownColor, min(0.25 + 0.75 * breath + voiceLevel * 0.3, 1))
+
+        case .ripple:
+            // A front travelling outward from the top in both directions
+            // at once, which is what an expanding ring looks like once
+            // there's only one dimension left to expand along.
+            let fromTop = min(position, 1 - position) * 2
+            let front = (elapsed * config.speed).truncatingRemainder(dividingBy: 1)
+            let distance = abs(fromTop - front)
+            return (ownColor, max(1 - distance * 6, floorBrightness))
+
+        case .wobble:
+            // The undulating radius becomes an undulating brightness — a
+            // standing wave of three lobes, drifting with the phase.
+            let lobes = 3.0
+            let value = (sin(position * lobes * 2 * Double.pi + phase) + 1) / 2
+            return (ownColor, 0.35 + 0.65 * value)
+
+        case .equalizer:
+            // Same seeded independent pulse `equalizerRing` gives each
+            // segment, one per diode here.
+            let seed = pseudoRandom(index)
+            let localPhase = elapsed * config.speed * 2 * Double.pi * (0.6 + seed * 0.8) + seed * 2 * Double.pi
+            let value = min((sin(localPhase) + 1) / 2 + voiceLevel * 0.4, 1)
+            return (ownColor, 0.15 + value * 0.85)
+
+        case .sparkle:
+            // Same expression as `sparkleRing`.
+            let seed = pseudoRandom(index)
+            let cycles = elapsed * config.speed * (0.5 + seed) + seed * 4
+            let f = cycles - cycles.rounded(.down)
+            let brightness = max(0, 1 - f * 4)
+            return (ownColor, min(0.15 + brightness * 0.85 + voiceLevel * 0.2, 1))
+
+        case .aurora:
+            // Three soft bands drifting at their own rates; a diode takes
+            // whichever band covers it most strongly.
+            var best = (color: all[0], brightness: floorBrightness)
+            for band in 0..<3 {
+                let seed = pseudoRandom(band)
+                let bandSpeed = config.speed * (0.12 + seed * 0.22)
+                let bandPhase = (elapsed * bandSpeed + seed).truncatingRemainder(dividingBy: 1)
+                let bandLength = 0.22 + seed * 0.16
+                var within = (position - bandPhase).truncatingRemainder(dividingBy: 1)
+                if within < 0 { within += 1 }
+                guard within < bandLength else { continue }
+                // Soft falloff toward each edge rather than a hard cut, to
+                // match the blurred stroke the continuous version draws.
+                let edge = sin((within / bandLength) * Double.pi)
+                let pulse = 0.5 + 0.5 * sin(elapsed * (0.3 + seed * 0.4) + seed * 6)
+                let brightness = min(edge * (0.35 + 0.5 * pulse) + voiceLevel * 0.2, 1)
+                if brightness > best.brightness {
+                    best = (all[band % all.count], brightness)
+                }
+            }
+            return best
+
+        case .liquidFill:
+            // Diodes below the surface are lit, the one at the surface
+            // brighter — a level gauge, which is what this already is.
+            let riseCycles = elapsed * config.speed * 0.35
+            let levelBase = (sin(riseCycles * 2 * Double.pi) + 1) / 2
+            let slosh = sin(elapsed * config.speed * 2 * Double.pi * 1.8) * 0.04
+            let level = min(max(levelBase + slosh, 0.02), 0.98)
+            guard position <= level else { return (all[0], floorBrightness) }
+            let isSurface = position > level - (1.0 / Double(count))
+            let surfaceColor = all.count > 1 ? all[1] : all[0]
+            return isSurface ? (surfaceColor, 1) : (all[0], 0.85)
+        }
+    }
+
     /// Discrete diodes with one comet per configured color.
     ///
     /// The colors come from the Color section as-is — every configured
@@ -763,9 +976,7 @@ public struct RingView: View {
                         let position = Double(i) / Double(count)
                         let lit = brightestComet(at: position, head: head, tail: tail, colorCount: all.count)
                         let angle = position * 2 * Double.pi - .pi / 2
-                        Circle()
-                            .fill(all[lit.colorIndex % all.count])
-                            .frame(width: diodeSize, height: diodeSize)
+                        diode(color: all[lit.colorIndex % all.count], size: diodeSize, angle: angle)
                             .opacity(lit.brightness * blinkMultiplier(index: i, elapsed: elapsed))
                             .position(
                                 x: geo.size.width / 2 + cos(angle) * radius,
@@ -866,9 +1077,7 @@ public struct RingView: View {
                         let f = cycles - cycles.rounded(.down)
                         // Bright for the first quarter of this point's own cycle, dim the rest.
                         let brightness = max(0, 1 - f * 4)
-                        Circle()
-                            .fill(all[i % all.count])
-                            .frame(width: dotSize, height: dotSize)
+                        diode(color: all[i % all.count], size: dotSize, angle: angle)
                             .opacity(0.15 + brightness * 0.85 + voiceLevel * 0.2)
                             .scaleEffect(0.6 + brightness * 0.6)
                             .position(

@@ -41,6 +41,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// plain defaulted property, so a saved-presets.json written before
     /// these existed would throw `keyNotFound`. `nil` means the defaults —
     /// `.steady` and 2.0.
+    public var diodeShape: DiodeShape?
+    public var diodeModeEnabled: Bool?
     public var blinkPattern: BlinkPattern?
     public var blinkRate: Double?
 
@@ -123,6 +125,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         trailFraction = config.trailFraction
         chasingFillStyle = config.chasingFillStyle
         diodeCount = config.diodeCount
+        diodeShape = config.diodeShape
+        diodeModeEnabled = config.diodeModeEnabled
         blinkPattern = config.blinkPattern
         blinkRate = config.blinkRate
 
@@ -192,6 +196,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.trailFraction = trailFraction
         config.chasingFillStyle = chasingFillStyle
         config.diodeCount = diodeCount
+        config.diodeShape = diodeShape ?? .round
+        config.diodeModeEnabled = diodeModeEnabled ?? false
         config.blinkPattern = blinkPattern ?? .steady
         config.blinkRate = blinkRate ?? 2.0
 

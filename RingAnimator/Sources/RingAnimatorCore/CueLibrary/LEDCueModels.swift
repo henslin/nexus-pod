@@ -157,6 +157,8 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     /// for the same decoding reason as `RingPreset.blinkPattern`: saved
     /// cue JSON written before this existed has no such key, and
     /// synthesized `Decodable` would throw rather than default it.
+    public var diodeShape: DiodeShape?
+    public var diodeModeEnabled: Bool?
     public var blinkPattern: BlinkPattern?
     public var blinkRate: Double?
 
@@ -227,6 +229,8 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         trailFraction: Double = 0.22,
         chasingFillStyle: ChasingFillStyle = .trailingTail,
         diodeCount: Double = 30,
+        diodeShape: DiodeShape? = nil,
+        diodeModeEnabled: Bool? = nil,
         blinkPattern: BlinkPattern? = nil,
         blinkRate: Double? = nil,
         easingStyle: EasingStyle = .linear,
@@ -280,6 +284,8 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         self.trailFraction = trailFraction
         self.chasingFillStyle = chasingFillStyle
         self.diodeCount = diodeCount
+        self.diodeShape = diodeShape
+        self.diodeModeEnabled = diodeModeEnabled
         self.blinkPattern = blinkPattern
         self.blinkRate = blinkRate
         self.easingStyle = easingStyle

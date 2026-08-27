@@ -43,6 +43,25 @@ struct ExportView: View {
             .padding(.horizontal)
             .padding(.top, 10)
 
+            // Said out loud rather than left to be discovered: the
+            // generators draw each animation the continuous way, so a
+            // config using Diode Mode or a non-round diode shape exports
+            // as something that doesn't match the preview. Better to state
+            // the gap than to hand someone code that quietly differs from
+            // what they designed.
+            if config.diodeModeEnabled || config.diodeShape != .round {
+                Label(
+                    config.diodeModeEnabled
+                        ? "Diode Mode isn't in the exported code yet — this exports the continuous form of \(config.animationType.rawValue)."
+                        : "Diode shape isn't in the exported code yet — exported diodes are round.",
+                    systemImage: "info.circle"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+
             switch language {
             case .swift:
                 codePane(title: "SwiftUI · iOS", code: swiftCode, filename: "ThinkingRingView.swift")

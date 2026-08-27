@@ -73,6 +73,18 @@ public final class RingConfig: ObservableObject {
     /// Blink modulation layered under `RingAnimationType.multiChase` — see
     /// `BlinkPattern`. `.steady` (no modulation) is the default so adding
     /// this changed nothing about how anything already looked.
+    /// What each diode is drawn as — see `DiodeShape`. Applies to every
+    /// diode-based animation, and to everything when `diodeModeEnabled`
+    /// is on.
+    @Published public var diodeShape: DiodeShape = .round
+    /// Renders *any* animation as a fixed ring of diodes that stay put and
+    /// simply light differently, the way addressable LED hardware
+    /// actually works — rather than as continuous arcs and gradients that
+    /// move.
+    ///
+    /// Off by default: it's a different medium, not a better one, and
+    /// every saved preset predates it.
+    @Published public var diodeModeEnabled: Bool = false
     @Published public var blinkPattern: BlinkPattern = .steady
     /// How fast the blink runs relative to the chase, in cycles per
     /// second. Kept separate from `speed` so the blink and the travel can

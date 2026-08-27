@@ -41,6 +41,45 @@ public enum ChasingFillStyle: String, CaseIterable, Identifiable, Codable, Senda
     public var id: String { rawValue }
 }
 
+/// The physical shape drawn for each diode.
+///
+/// Named after the LED packages these imitate rather than the geometry:
+/// real addressable rings are built from round through-hole LEDs or from
+/// square/rectangular surface-mount packages, and which one a ring uses is
+/// the single biggest thing separating "a glowing arc" from "a strip of
+/// hardware" visually.
+///
+/// Square and bar diodes are rotated to sit tangent to the ring, the way a
+/// component soldered to a circular board would be — axis-aligned squares
+/// read as a scatter of dots rather than a ring of parts.
+public enum DiodeShape: String, CaseIterable, Identifiable, Codable, Sendable, Hashable {
+    /// Round — through-hole LED. The original look, and the default.
+    case round = "Round"
+    /// Square surface-mount package.
+    case square = "Square"
+    /// Rectangular package, elongated along the ring's arc.
+    case bar = "Bar"
+
+    public var id: String { rawValue }
+
+    /// Width as a multiple of the diode's height, so `.bar` can stretch
+    /// along the arc while the others stay square to it.
+    public var aspect: CGFloat {
+        switch self {
+        case .round, .square: return 1
+        case .bar: return 1.9
+        }
+    }
+
+    public var summary: String {
+        switch self {
+        case .round: return "Round through-hole LEDs."
+        case .square: return "Square surface-mount packages, tangent to the ring."
+        case .bar: return "Rectangular packages stretched along the ring's arc."
+        }
+    }
+}
+
 /// How diodes blink underneath a chase, layered on top of whatever the
 /// chase itself is doing.
 ///
