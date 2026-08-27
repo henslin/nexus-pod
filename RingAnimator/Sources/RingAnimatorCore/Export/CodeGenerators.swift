@@ -2079,13 +2079,11 @@ ring(opacity: on ? 1 : 0.05, color: primary(t))
             contentBody = """
 let single = 0.14
 let flashWindow = Double(max(flashCount, 1)) * single * 2
-let on: Bool
-if t < flashWindow {
-    let cyclePhase = t.truncatingRemainder(dividingBy: single * 2)
-    on = cyclePhase < single
-} else {
-    on = false
-}
+// Ternary, not a deferred-initialization if/else: this body is spliced
+// into a @ViewBuilder, where `if` reads as a conditional *view* and
+// assigning inside its branches makes the builder try to conform `()` to
+// `View`.
+let on = t < flashWindow && t.truncatingRemainder(dividingBy: single * 2) < single
 ring(opacity: on ? 1 : 0.05, color: primary(t))
 """
         case .ripple:
@@ -2141,14 +2139,9 @@ ring(opacity: 1, color: Color(hue: hue, saturation: 0.85, brightness: 1))
             contentBody = """
 let rampIn = 0.5
 let holdEnd = rampIn + holdSeconds
-let opacity: Double
-if t < rampIn {
-    opacity = t / rampIn
-} else if t < holdEnd {
-    opacity = 1
-} else {
-    opacity = 0.05
-}
+// Ternary chain rather than a deferred-initialization if/else — see the
+// note in `.quickFlash` above.
+let opacity = t < rampIn ? t / rampIn : (t < holdEnd ? 1 : 0.05)
 ring(opacity: max(opacity, 0.05), color: primary(t))
 """
         case .spinThenSolidFade:

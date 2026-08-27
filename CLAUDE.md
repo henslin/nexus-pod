@@ -242,6 +242,12 @@ none of them should be picked up piecemeal while feature work continues.
   clearing those notices too. `RingView.diodeIntensity` is the shape the
   generators would follow: each animation as a scalar field over ring
   position.
+- **Kotlin and JavaScript exports are unverified.** `swift run
+  ExportCheck` typechecks all 30 SwiftUI exports (see below) and found
+  four that didn't compile. The Compose and web generators emit the same
+  shapes from the same templates and have never been compiled at all —
+  assume the same class of bug is sitting in them. Needs `kotlinc` and
+  `node`, neither of which was available when the check was written.
 - **iOS hosting.** `TimelineStripView` and the whole timeline model live
   in `RingAnimatorCore` specifically so iOS can host them, but
   `RingAnimatoriOS` doesn't yet. Real work, not duplicated work.
@@ -252,6 +258,29 @@ none of them should be picked up piecemeal while feature work continues.
   have explicit fallbacks that print the unhandled name, after two
   separate incidents of new cases silently rendering as something else.
   Worth converting to something the compiler can check.
+
+## Verifying the code generators
+
+The generators emit **strings**. The package builds no matter what those
+strings say, so a generated file that doesn't compile is invisible until
+someone pastes it into Xcode. Four such bugs shipped before anyone
+checked.
+
+```
+swift run ExportCheck
+```
+
+Generates every SwiftUI export (13 animation types × particles on, plus
+all 17 cue styles) and runs `swiftc -typecheck` over each. Exits non-zero
+on failure. Run it before a release, and after touching any generator.
+
+All four bugs it caught were the same trap, worth knowing before writing
+generator code: **a `@ViewBuilder` closure accepts `let` bindings and
+view expressions only.** `var`, `for`, and deferred-initialization
+`let x: T` + `if/else` all make the builder try to conform `()` to
+`View`. Use ternaries, or move the logic into a helper function the
+template emits — `brightestComet` in the SwiftUI template is there for
+exactly that reason.
 
 ## Open items (not yet done)
 

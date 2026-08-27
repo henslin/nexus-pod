@@ -61,6 +61,14 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        // Generates every SwiftUI export and typechecks it — see the
+        // header comment in Sources/ExportCheck/main.swift. Not part of
+        // the app; `swift run ExportCheck` before a release.
+        .executableTarget(
+            name: "ExportCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/ExportCheck"
+        ),
         // macOS design tool: sidebar controls + tab bar mockup + code export.
         .executableTarget(
             name: "RingAnimator",
