@@ -65,6 +65,18 @@ public struct TimelineStripView: View {
     /// so there's no pending-move state to commit or roll back.
     @State private var draggingID: UUID?
 
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// True on a phone. The strip was designed for the Mac's
+    /// canvas-bottom slot and its rows are simply wider than 402pt: on an
+    /// iPhone the timecode was clipped mid-digit, "Add Step" collapsed to
+    /// a bare "+", and the whole inspector row ran off both edges. Rather
+    /// than shrink everything, the two rows that overflow rearrange.
+    private var isCompact: Bool { horizontalSizeClass == .compact }
+    #else
+    private var isCompact: Bool { false }
+    #endif
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
@@ -72,9 +84,30 @@ public struct TimelineStripView: View {
                 scrubRuler
                 track
             }
+            // On a phone the timecode moves out of the transport row,
+            // which is where it ran out of width, and sits under the
+            // track instead.
+            if isCompact {
+                Text(timecode)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
             Divider()
-            inspectorRow
-                .frame(height: Self.inspectorHeight, alignment: .leading)
+            // The inspector is a row of five controls and doesn't fit a
+            // phone at any sensible size, so it scrolls there. Left
+            // un-scrolled on the Mac, where it always fit and a scroll
+            // view would only add a stray gutter.
+            if isCompact {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    inspectorRow
+                        .frame(height: Self.inspectorHeight, alignment: .leading)
+                        .padding(.trailing, 4)
+                }
+                .frame(height: Self.inspectorHeight)
+            } else {
+                inspectorRow
+                    .frame(height: Self.inspectorHeight, alignment: .leading)
+            }
         }
         .padding(12)
         .background(.regularMaterial)
@@ -107,9 +140,11 @@ public struct TimelineStripView: View {
             .toggleStyle(.button)
             .help("Loop the whole sequence")
 
-            Text(timecode)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+            if !isCompact {
+                Text(timecode)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
 
             Spacer()
 

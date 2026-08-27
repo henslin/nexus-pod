@@ -19,13 +19,22 @@ public struct RingSettingsMenu: View {
     @ObservedObject private var stt: SpeechToTextService
     @Binding var isDarkMode: Bool
     @Binding var showAppUI: Bool
+    /// The sequence, if this host has one. `nil` hides the Timeline row
+    /// entirely, so the menu is unchanged anywhere that doesn't sequence.
+    @ObservedObject var player: TimelinePlayer
 
-    public init(config: RingConfig, isDarkMode: Binding<Bool>, showAppUI: Binding<Bool>) {
+    public init(
+        config: RingConfig,
+        isDarkMode: Binding<Bool>,
+        showAppUI: Binding<Bool>,
+        player: TimelinePlayer
+    ) {
         self.config = config
         self.voice = config.elevenLabs
         self.stt = config.voiceConversation.stt
         self._isDarkMode = isDarkMode
         self._showAppUI = showAppUI
+        self.player = player
     }
 
     public var body: some View {
@@ -52,6 +61,29 @@ public struct RingSettingsMenu: View {
                 } label: {
                     Label("Preview", systemImage: "eye")
                 }
+            }
+
+            Section {
+                NavigationLink {
+                    TimelineScreen(player: player, config: config)
+                } label: {
+                    Label {
+                        HStack {
+                            Text("Timeline")
+                            Spacer()
+                            Text(player.timeline.isEmpty
+                                 ? "No steps"
+                                 : "\(player.timeline.segments.count) steps · \(String(format: "%.1fs", player.timeline.duration)))")
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "timeline.selection")
+                    }
+                }
+            } footer: {
+                Text("Sequence the ring — fade in, spin, hold, fade out — instead of one setting looping forever. Editing a step here edits it in the settings above.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             // Same order Mac's `ControlsView` cards use — "the ring's own
@@ -215,5 +247,35 @@ private extension View {
         #else
         self
         #endif
+    }
+}
+
+
+/// iOS host for `TimelineStripView`.
+///
+/// The strip was built for the Mac's wide canvas-bottom slot, so on a
+/// phone it gets its own pushed screen rather than being wedged under
+/// something. It's the same view, not a reimplementation — the point of
+/// keeping it in `RingAnimatorCore` was that this could be a container
+/// rather than a second copy to keep in sync.
+///
+/// The clock lives in `TimelinePlayer` (see `currentTime(at:)`) rather
+/// than here, because the ring pod on the main screen behind this sheet
+/// needs the same playhead at the same moment.
+struct TimelineScreen: View {
+    @ObservedObject var player: TimelinePlayer
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        TimelineView(.animation(paused: !player.isPlaying)) { context in
+            TimelineStripView(
+                player: player,
+                config: config,
+                playhead: player.currentTime(at: context.date),
+                onScrub: { player.scrub(to: $0) }
+            )
+        }
+        .navigationTitle("Timeline")
+        .inlineNavigationTitleIfAvailable()
     }
 }

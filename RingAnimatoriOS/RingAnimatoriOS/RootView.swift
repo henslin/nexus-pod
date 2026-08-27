@@ -39,6 +39,12 @@ struct RootView: View {
     @State private var showingSettings = false
     @State private var selectedTab: DemoTab = .dashboard
 
+    /// The sequence, reached from the Ring Settings sheet — see
+    /// `TimelineScreen`. Bound to `config` in `.onAppear` below, which is
+    /// what makes editing a step's look happen through the same settings
+    /// screens as everything else rather than a separate editor.
+    @StateObject private var player = TimelinePlayer()
+
     /// Preview-only state — how you're *looking* at the ring right now,
     /// not part of the ring's own configuration, so it stays local here
     /// rather than living on `RingConfig`. Lives in `RingSettingsMenu`'s
@@ -77,6 +83,15 @@ struct RootView: View {
         _voiceConversation = ObservedObject(wrappedValue: config.voiceConversation)
     }
 
+    /// What the pod renders: the player's read-only playback config while
+    /// a sequence is running, the live config otherwise. Identical
+    /// reasoning to `PreviewTab.displayConfig` on the Mac — while paused
+    /// the live config already *is* the selected step, so there's no third
+    /// state to keep in sync.
+    private var displayConfig: RingConfig {
+        player.isPlaying ? player.playbackConfig : config
+    }
+
     var body: some View {
         GeometryReader { geo in
             let rowWidth = geo.size.width - 32
@@ -102,12 +117,20 @@ struct RootView: View {
                             .transition(.growFromRing(rowWidth: rowWidth))
                     }
 
-                    TabBarPreview(
-                        config: config,
-                        selectedTab: $selectedTab,
-                        width: rowWidth,
-                        onRingTap: { showingSettings = true }
-                    )
+                    // One clock for the pod. `paused:` stops it dead when
+                    // nothing is playing, so a parked timeline costs
+                    // nothing — and with no timeline at all `playback(at:)`
+                    // returns nil and the pod behaves exactly as it always
+                    // has.
+                    TimelineView(.animation(paused: !player.isPlaying)) { context in
+                        TabBarPreview(
+                            config: displayConfig,
+                            selectedTab: $selectedTab,
+                            width: rowWidth,
+                            onRingTap: { showingSettings = true },
+                            playback: player.playback(at: context.date)
+                        )
+                    }
                 }
                 // Fixed constants, not a fraction of `geo.size.height` —
                 // the old version tried to guess the sheet's height as a
@@ -127,6 +150,11 @@ struct RootView: View {
                     // Sync without animating in case the loop is already
                     // active when this view first appears.
                     pillPresented = voiceConversation.isVisible
+                    // Deferred to `.onAppear` for the same reason the Mac
+                    // app does it: `@StateObject`s aren't guaranteed
+                    // constructed until first appearance, and binding
+                    // needs both objects to exist.
+                    player.bind(to: config)
                 }
                 .onChange(of: voiceConversation.isVisible) { _, isVisible in
                     if isVisible {
@@ -193,7 +221,12 @@ struct RootView: View {
         #endif
         .sheet(isPresented: $showingSettings) {
             NavigationStack {
-                RingSettingsMenu(config: config, isDarkMode: $isDarkMode, showAppUI: $showAppUI)
+                RingSettingsMenu(
+                    config: config,
+                    isDarkMode: $isDarkMode,
+                    showAppUI: $showAppUI,
+                    player: player
+                )
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Done") { showingSettings = false }

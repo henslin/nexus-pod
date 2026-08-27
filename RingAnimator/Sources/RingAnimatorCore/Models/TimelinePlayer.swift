@@ -34,10 +34,62 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     /// which is the state the app starts in.
     @Published public private(set) var selectedSegmentID: UUID?
 
-    @Published public var isPlaying: Bool = false
-    /// Seconds into the timeline. Driven by the preview's own clock while
-    /// playing, and by dragging the scrubber while not.
-    @Published public var playhead: Double = 0
+    @Published public var isPlaying: Bool = false {
+        didSet {
+            guard isPlaying != oldValue else { return }
+            if isPlaying {
+                playAnchor = (date: Date(), offset: pausedPlayhead)
+            } else if let anchor = playAnchor {
+                // Freeze where it got to, so play resumes rather than
+                // restarting.
+                pausedPlayhead = anchor.offset + Date().timeIntervalSince(anchor.date)
+                playAnchor = nil
+            }
+        }
+    }
+
+    /// Where the playhead sits while stopped, and the wall-clock instant
+    /// playback started from it.
+    ///
+    /// Deliberately *not* `@Published`: the playhead moves every frame,
+    /// and republishing it sixty times a second would redraw every view
+    /// observing this object. Views ask `currentTime(at:)` with their own
+    /// `TimelineView` date instead, which keeps playback a pure function
+    /// of time — the same contract `TimelinePlayback` and
+    /// `RingTimeline.resolve(at:)` already keep.
+    ///
+    /// Lives here rather than in a view because iOS has two places that
+    /// need the same playhead at once: the ring pod on the main screen and
+    /// the strip inside the settings sheet. The Mac app predates this and
+    /// keeps its own anchor in `PreviewTab`; both work, and unifying them
+    /// is tidying for its own sake rather than a fix.
+    public private(set) var pausedPlayhead: Double = 0
+    private var playAnchor: (date: Date, offset: Double)?
+
+    /// Seconds into the timeline at a given wall-clock instant.
+    public func currentTime(at date: Date) -> Double {
+        guard let playAnchor else { return pausedPlayhead }
+        return playAnchor.offset + date.timeIntervalSince(playAnchor.date)
+    }
+
+    /// Jump the playhead. Keeps running if it already was — scrubbing
+    /// mid-playback should move and carry on, the way a video scrubber
+    /// does.
+    public func scrub(to time: Double) {
+        let clamped = max(time, 0)
+        pausedPlayhead = clamped
+        if isPlaying {
+            playAnchor = (date: Date(), offset: clamped)
+        }
+    }
+
+    /// Resolved frame for a given instant, or nil when nothing should
+    /// override the ring's own clock.
+    public func playback(at date: Date) -> TimelinePlayback? {
+        guard isPlaying, let resolved = timeline.resolve(at: currentTime(at: date)) else { return nil }
+        prepareForPlayback(resolved)
+        return TimelinePlayback(resolved)
+    }
 
     /// The config the preview renders *while playing*, kept separate from
     /// the one Controls edits.
