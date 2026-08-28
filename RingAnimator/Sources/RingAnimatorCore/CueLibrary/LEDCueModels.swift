@@ -159,6 +159,13 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
     /// synthesized `Decodable` would throw rather than default it.
     public var diodeShape: DiodeShape?
     public var diodeColorMode: DiodeColorMode?
+    public var rippleDropCount: Double?
+    public var rippleDecay: Double?
+    public var rippleLife: Double?
+    public var rippleSeed: Double?
+    public var loopSeconds: Double?
+    public var diodeFloor: Double?
+    public var firmwareTickMs: Double?
     public var diodeScale: Double?
     public var diodeGap: Double?
     public var bloomCount: Double?
@@ -237,6 +244,13 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         diodeCount: Double = 30,
         diodeShape: DiodeShape? = nil,
         diodeColorMode: DiodeColorMode? = nil,
+        rippleDropCount: Double? = nil,
+        rippleDecay: Double? = nil,
+        rippleLife: Double? = nil,
+        rippleSeed: Double? = nil,
+        loopSeconds: Double? = nil,
+        diodeFloor: Double? = nil,
+        firmwareTickMs: Double? = nil,
         diodeScale: Double? = nil,
         diodeGap: Double? = nil,
         bloomCount: Double? = nil,
@@ -298,6 +312,13 @@ public struct LEDCueParameters: Codable, Equatable, Sendable {
         self.diodeCount = diodeCount
         self.diodeShape = diodeShape
         self.diodeColorMode = diodeColorMode
+        self.rippleDropCount = rippleDropCount
+        self.rippleDecay = rippleDecay
+        self.rippleLife = rippleLife
+        self.rippleSeed = rippleSeed
+        self.loopSeconds = loopSeconds
+        self.diodeFloor = diodeFloor
+        self.firmwareTickMs = firmwareTickMs
         self.diodeScale = diodeScale
         self.diodeGap = diodeGap
         self.bloomCount = bloomCount

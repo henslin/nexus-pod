@@ -86,6 +86,13 @@ public struct LEDCuePreviewView: View {
         // saved cue JSON), so each falls back to `RingConfig`'s own default.
         animationConfig.diodeShape = parameters.diodeShape ?? .round
         animationConfig.diodeColorMode = parameters.diodeColorMode ?? .perDiode
+        animationConfig.rippleDropCount = parameters.rippleDropCount ?? 3
+        animationConfig.rippleDecay = parameters.rippleDecay ?? 0.65
+        animationConfig.rippleLife = parameters.rippleLife ?? 5.5
+        animationConfig.rippleSeed = parameters.rippleSeed ?? 42
+        animationConfig.loopSeconds = parameters.loopSeconds ?? 12
+        animationConfig.diodeFloor = parameters.diodeFloor ?? 0
+        animationConfig.firmwareTickMs = parameters.firmwareTickMs ?? 0
         animationConfig.diodeModeEnabled = parameters.diodeModeEnabled ?? false
         animationConfig.diodeScale = parameters.diodeScale ?? 1.0
         animationConfig.diodeGap = parameters.diodeGap ?? 0.12

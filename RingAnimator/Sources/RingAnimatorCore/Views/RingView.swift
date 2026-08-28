@@ -408,6 +408,20 @@ public struct RingView: View {
     /// Applies the configured timing curve to each rotation cycle while
     /// keeping the overall phase ever-increasing (so rotation stays
     /// perfectly continuous — see `MotionEasing` for why this never snaps).
+    /// Rendered time snapped to the firmware tick — see
+    /// `RingConfig.firmwareTickMs`. Passthrough when the tick is 0.
+    private func quantized(_ elapsed: Double) -> Double {
+        let tick = config.firmwareTickMs / 1000
+        guard tick > 0 else { return elapsed }
+        return (elapsed / tick).rounded(.down) * tick
+    }
+
+    /// `easedPhase` as a plain value, so the diode path can re-derive phase
+    /// from quantized time instead of receiving the continuous one.
+    private func easedPhaseValue(elapsed: Double) -> Double {
+        easedPhase(elapsed: elapsed)
+    }
+
     private func easedPhase(elapsed: Double) -> Double {
         let cycles = elapsed * config.speed
         let n = cycles.rounded(.down)
@@ -1065,6 +1079,17 @@ public struct RingView: View {
     private func diodeFieldRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let all = activeColors(elapsed: elapsed)
         let count = max(Int(config.diodeCount.rounded()), 2)
+        // Quantize once, here, so every diode in a frame agrees on the
+        // time — and so `phase` (already derived from the unquantized
+        // clock) is re-derived from the same tick rather than drifting
+        // against it.
+        let tickedElapsed = quantized(elapsed)
+        let tickedPhase = config.firmwareTickMs > 0
+            ? easedPhaseValue(elapsed: tickedElapsed)
+            : phase
+        // Only Ripple reads this, and computing it is a sweep — so skip it
+        // entirely for every other type rather than paying for it always.
+        let rippleNorm = config.animationType == .ripple ? rippleNormalization() : 1
         return glow(
             diodeLayer(count: count, scale: scale) { i in
                 let position = Double(i) / Double(count)
@@ -1072,22 +1097,114 @@ public struct RingView: View {
                     index: i,
                     position: position,
                     count: count,
-                    phase: phase,
-                    elapsed: elapsed,
+                    phase: tickedPhase,
+                    elapsed: tickedElapsed,
                     voiceLevel: voiceLevel,
-                    colors: all
+                    colors: all,
+                    rippleNorm: rippleNorm
                 )
+                // Floor lifts and compresses rather than clipping, so the
+                // low end keeps its shape — see `RingConfig.diodeFloor`.
+                let floor = min(max(config.diodeFloor, 0), 1)
+                let level = floor + (1 - floor) * lit.brightness
                 return DiodeState(
                     color: config.diodeColorMode == .byLevel
-                        ? levelColor(lit.brightness, colors: all)
+                        ? levelColor(level, colors: all)
                         : lit.color,
-                    opacity: lit.brightness * blinkMultiplier(index: i, elapsed: elapsed)
+                    opacity: level * blinkMultiplier(index: i, elapsed: tickedElapsed)
                 )
             },
             color: all[0],
             boost: voiceLevel,
             scale: scale
         )
+    }
+
+    /// One drop: when it landed, and where on the ring.
+    private struct Drop {
+        var landedAt: Double
+        var center: Double
+    }
+
+    /// Seeded drop placement across one loop.
+    ///
+    /// Hashed rather than drawn from an RNG, for the same reason every
+    /// other "random" here is: the exporter has to reproduce identical
+    /// frames. Paging through `rippleSeed` reshuffles the arrangement,
+    /// which is how these are authored.
+    private func drops() -> [Drop] {
+        let count = max(Int(config.rippleDropCount.rounded()), 1)
+        let loop = max(config.loopSeconds, 0.1)
+        let seed = Int(config.rippleSeed.rounded())
+        return (0..<count).map { i in
+            Drop(
+                landedAt: pseudoRandom(seed, i) * loop,
+                center: pseudoRandom(seed, i + 5000)
+            )
+        }
+    }
+
+    /// Accumulated ripple brightness at a point on the ring.
+    ///
+    /// Each live drop contributes a Gaussian front expanding outward from
+    /// its center in *both* directions, decaying as it goes. Contributions
+    /// **sum** rather than taking the brightest: two fronts crossing should
+    /// reinforce, which is what makes overlapping ripples read as water
+    /// rather than as two shapes passing through each other.
+    ///
+    /// Every drop is also evaluated one loop earlier and one later. Without
+    /// that, a drop landing near the end of the loop would be cut off
+    /// mid-expansion when the pattern repeats, and the seam would be
+    /// visible as a stutter — this is the whole reason `loopSeconds`
+    /// exists as a parameter rather than being implicit.
+    private func rippleLevel(at position: Double, elapsed: Double) -> Double {
+        let loop = max(config.loopSeconds, 0.1)
+        let life = max(config.rippleLife, 0.05)
+        let width = max(config.trailFraction, 0.01)
+        let t = elapsed.truncatingRemainder(dividingBy: loop)
+        var total = 0.0
+
+        for drop in drops() {
+            for offset in [0.0, -loop, loop] {
+                let age = t - (drop.landedAt + offset)
+                guard age >= 0, age <= life else { continue }
+                // Front position, as a fraction of the ring travelled from
+                // the drop. `speed` is laps/second and a symmetric front
+                // covers half the ring, so it reaches the far side in
+                // 0.5 / speed seconds.
+                let front = age * config.speed
+                var apart = abs(position - drop.center).truncatingRemainder(dividingBy: 1)
+                if apart > 0.5 { apart = 1 - apart }
+                let offsetFromFront = (apart - front) / width
+                let pulse = exp(-0.5 * offsetFromFront * offsetFromFront)
+                total += pulse * exp(-config.rippleDecay * age)
+            }
+        }
+        return total
+    }
+
+    /// Peak of `rippleLevel` over one loop, used to normalize.
+    ///
+    /// Without it, brightness scales with however many drops happen to
+    /// overlap — three drops crossing would blow past full while a lone one
+    /// never reaches it.
+    ///
+    /// Sampled rather than solved, and deliberately **once per frame**, not
+    /// once per diode: the first version called this from inside
+    /// `diodeIntensity`, which made it a 1,152-sample sweep per diode per
+    /// frame — sixty times a second across up to sixty diodes. Hoisting it
+    /// into `diodeFieldRing` and passing the result down makes it one sweep
+    /// a frame, and only when Ripple is the active type.
+    private func rippleNormalization() -> Double {
+        let loop = max(config.loopSeconds, 0.1)
+        var peak = 0.0001
+        for step in 0..<32 {
+            let t = loop * Double(step) / 32
+            for p in 0..<16 {
+                peak = max(peak, rippleLevel(at: Double(p) / 16, elapsed: t))
+            }
+        }
+        return peak
     }
 
     /// Each animation type restated as "how bright is the diode at this
@@ -1108,7 +1225,8 @@ public struct RingView: View {
         phase: Double,
         elapsed: Double,
         voiceLevel: Double,
-        colors all: [Color]
+        colors all: [Color],
+        rippleNorm: Double
     ) -> (color: Color, brightness: Double) {
         let head = phase / (2 * Double.pi)
         let ownColor = all[index % all.count]
@@ -1148,13 +1266,12 @@ public struct RingView: View {
             return (ownColor, min(0.25 + 0.75 * breath + voiceLevel * 0.3, 1))
 
         case .ripple:
-            // A front travelling outward from the top in both directions
-            // at once, which is what an expanding ring looks like once
-            // there's only one dimension left to expand along.
-            let fromTop = min(position, 1 - position) * 2
-            let front = (elapsed * config.speed).truncatingRemainder(dividingBy: 1)
-            let distance = abs(fromTop - front)
-            return (ownColor, max(1 - distance * 6, floorBrightness))
+            // Drops landing at seeded positions and expanding symmetrically,
+            // overlapping and accumulating — see `rippleLevel`. With
+            // `rippleDropCount` at 1 this is still a single front, just one
+            // that can land somewhere other than the top.
+            let level = min(rippleLevel(at: position, elapsed: elapsed) / rippleNorm, 1)
+            return (ownColor, max(level, floorBrightness))
 
         case .wobble:
             // The undulating radius becomes an undulating brightness — a

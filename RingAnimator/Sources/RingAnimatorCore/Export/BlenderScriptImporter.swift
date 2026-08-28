@@ -74,11 +74,19 @@ public enum BlenderScriptImporter {
             config.animationType = type
             applied.append("Style reads as \(type.rawValue) → Animation Type")
             if type == .ripple {
+                // Kept honest as the app caught up: this used to say Ripple
+                // had no multi-drop equivalent at all. It does now — drops,
+                // decay, lifetime, seed, loop and seam-wrapping all
+                // transfer — so what's left is the scene-side shading a
+                // renderer does and a ring driver doesn't.
                 caveat = """
-                    Ripple here expands from a single point at the top of the \
-                    ring. The script drops multiple ripples at random positions \
-                    that overlap, which this app has no equivalent for — the \
-                    motion will read similarly but won't match frame for frame.
+                    Drops, decay, lifetime, seed and loop length all transfer, \
+                    and overlapping fronts add together the same way. What \
+                    doesn't: the script's luminance compensation and scene \
+                    emission boosts, which shape brightness per frame in \
+                    Blender's renderer, and its hue-ramp crossover — the ramp \
+                    here is linear across your palette rather than weighted \
+                    toward the hot core.
                     """
             }
         }
@@ -87,8 +95,12 @@ public enum BlenderScriptImporter {
         // --- the level the ring never drops below.
         for key in ["FLOOR", "FLOOR_LEVEL", "BASE_GLOW", "MIN_LEVEL"] {
             if case .number(let n) = constants[key] ?? .number(.nan), n.isFinite {
+                // Both: `diodeFloor` is the global one these scripts mean,
+                // `bloomBase` is Bloom's own, so the value is right either
+                // way the file is interpreted.
+                config.diodeFloor = min(max(n, 0), 1)
                 config.bloomBase = min(max(n, 0), 1)
-                applied.append(String(format: "Floor %.2f → Base Brightness", n))
+                applied.append(String(format: "Floor %.2f → Floor / Base Brightness", n))
                 break
             }
         }
@@ -120,13 +132,31 @@ public enum BlenderScriptImporter {
             }
         }
 
-        // --- Drop / patch count.
+        // --- Drop count. Feeds both models: Ripple's drops (which is what
+        // --- these scripts mean) and Bloom's patches, so the number is
+        // --- right whichever type the file turns out to be.
         for key in ["N_DROPS", "DROPS", "N_PATCHES", "NUM_DROPS"] {
             if case .number(let n) = constants[key] ?? .number(.nan), n.isFinite, n >= 1 {
+                config.rippleDropCount = min(max(n, 1), 12)
                 config.bloomCount = min(max(n, 2), 14)
-                applied.append("\(Int(n)) drops → Patches")
+                applied.append("\(Int(n)) drops → Drops / Patches")
                 break
             }
+        }
+
+        // --- Ripple shaping. These were reported as dropped until the app
+        // --- grew somewhere to put them.
+        if case .number(let decay) = constants["DECAY_RATE"] ?? .number(.nan), decay.isFinite, decay >= 0 {
+            config.rippleDecay = min(decay, 2)
+            applied.append(String(format: "Decay %.2f/s → Decay", decay))
+        }
+        if case .number(let life) = constants["RIPPLE_LIFE"] ?? .number(.nan), life.isFinite, life > 0 {
+            config.rippleLife = min(max(life, 0.5), 12)
+            applied.append(String(format: "Drop life %.1fs → Drop Life", life))
+        }
+        if case .number(let seed) = constants["SEED"] ?? .number(.nan), seed.isFinite {
+            config.rippleSeed = min(max(seed.rounded(), 0), 999)
+            applied.append("Seed \(Int(seed)) → Seed")
         }
 
         // --- Palette. sRGB 0-255 triples, in file order: primary, secondary,
@@ -169,9 +199,6 @@ public enum BlenderScriptImporter {
         // --- Things worth naming as understood-but-unrepresentable, so the
         // --- report explains a mismatch instead of leaving it a mystery.
         for (key, label) in [
-            ("DECAY_RATE", "amplitude decay over time"),
-            ("RIPPLE_LIFE", "per-drop lifetime"),
-            ("SEED", "RNG seed for drop placement"),
             ("WHITE_START", "hue-ramp crossover point"),
             ("EMISSION_BOOST", "scene emission boost"),
             ("GREEN_BOOST", "scene green boost")
@@ -185,7 +212,25 @@ public enum BlenderScriptImporter {
         if case .number(let frames) = constants["LOOP_FRAMES"] ?? .number(.nan),
            case .number(let fps) = constants["FPS"] ?? .number(.nan),
            frames.isFinite, fps > 0 {
-            dropped.append(String(format: "%.0f frames @ %.0f fps — a %.1fs loop; build that as timeline steps", frames, fps, frames / fps))
+            let seconds = frames / fps
+            config.loopSeconds = min(max(seconds, 1), 30)
+            applied.append(String(format: "%.0f frames @ %.0f fps → %.1fs Loop Length", frames, fps, seconds))
+        }
+
+        // --- Firmware tick. Scripts that quantize to a hardware tick say so
+        // --- in a constant or in the header; either is worth honoring,
+        // --- because rendering smoother than the device can update is
+        // --- exactly the kind of flattery this is meant to avoid.
+        for key in ["TICK_MS", "FIRMWARE_TICK_MS", "TICK"] {
+            if case .number(let n) = constants[key] ?? .number(.nan), n.isFinite, n > 0 {
+                config.firmwareTickMs = min(n, 200)
+                applied.append(String(format: "%.0f ms tick → Firmware Tick", n))
+                break
+            }
+        }
+        if config.firmwareTickMs == 0, let tick = tickFromProse(text) {
+            config.firmwareTickMs = tick
+            applied.append(String(format: "%.0f ms tick, read from the header → Firmware Tick", tick))
         }
 
         return Outcome(applied: applied, dropped: dropped, caveat: caveat)
@@ -250,6 +295,30 @@ public enum BlenderScriptImporter {
                 blue: min(max(b / scale, 0), 1)
             )
         }
+    }
+
+    /// A firmware tick stated in prose rather than a constant, e.g.
+    /// "50 ms tick" or "quantized to 100 ms".
+    ///
+    /// Worth the scrape because these scripts routinely bake the tick into
+    /// a comment and only expose the *keying* interval as a constant — the
+    /// tick itself is the hardware fact, and it's the one that matters for
+    /// an honest preview.
+    private static func tickFromProse(_ text: String) -> Double? {
+        let lowered = text.lowercased()
+        guard lowered.contains("tick") else { return nil }
+        let pattern = #"(\d{1,3})\s*ms"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(lowered.startIndex..., in: lowered)
+        var best: Double?
+        regex.enumerateMatches(in: lowered, range: range) { match, _, _ in
+            guard let match, let r = Range(match.range(at: 1), in: lowered),
+                  let value = Double(lowered[r]), value > 0, value <= 200 else { return }
+            // Smallest plausible figure: the tick is the base rate, and
+            // keying intervals quoted alongside it are multiples of it.
+            best = min(best ?? value, value)
+        }
+        return best
     }
 
     /// The animation type the script says it is.

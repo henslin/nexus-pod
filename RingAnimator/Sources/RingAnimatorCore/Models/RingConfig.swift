@@ -81,6 +81,55 @@ public final class RingConfig: ObservableObject {
     /// Diode Mode, where the ring is a set of fixed pixels and "color by
     /// level" is a meaningful alternative to "color by position".
     @Published public var diodeColorMode: DiodeColorMode = .perDiode
+
+    // MARK: - Ripple drops
+    //
+    // Modeled on how a real LED-ring script writes a ripple: not one wave
+    // from a fixed point, but N drops landing at seeded positions and
+    // expanding symmetrically, overlapping and accumulating. These apply to
+    // `.ripple` in Diode Mode, where the ring is a set of addressable
+    // pixels and "several ripples at once" is expressible; the continuous
+    // renderer still draws its scaling circles, which have no drop
+    // positions to speak of.
+
+    /// How many drops land per loop. 1 reproduces the old single-origin
+    /// behavior.
+    @Published public var rippleDropCount: Double = 3
+    /// Amplitude decay per second as a drop's front spreads outward.
+    @Published public var rippleDecay: Double = 0.65
+    /// How long a drop stays alive before it stops contributing.
+    @Published public var rippleLife: Double = 5.5
+    /// Seed for drop placement and landing times.
+    ///
+    /// Exposed rather than hidden because these scripts treat it as a real
+    /// knob — the arrangement is part of the design, and being able to page
+    /// through seeds until one reads well is how you author this.
+    @Published public var rippleSeed: Double = 42
+    /// The window drops are placed within, and the period the whole pattern
+    /// repeats over.
+    ///
+    /// Load-bearing for seamlessness: each drop is also evaluated one loop
+    /// earlier and later, so a drop landing near the end bleeds into the
+    /// start instead of the pattern visibly restarting.
+    @Published public var loopSeconds: Double = 12
+
+    // MARK: - Hardware fidelity
+
+    /// Minimum brightness every diode holds, 0...1 — applied in Diode Mode
+    /// to whatever the animation computes, as `floor + (1 - floor) * level`.
+    ///
+    /// That exact formula rather than a plain `max`: lifting the floor
+    /// should compress the range into what's left above it, not clip
+    /// everything below it to one value and flatten the low end.
+    @Published public var diodeFloor: Double = 0
+
+    /// Firmware tick in milliseconds. 0 renders continuously.
+    ///
+    /// Real ring drivers update on a fixed tick, so an animation that looks
+    /// smooth here can stutter on the device. Quantizing rendered time to
+    /// the tick makes the preview show what the hardware can actually
+    /// produce, rather than flattering the design at 60fps.
+    @Published public var firmwareTickMs: Double = 0
     /// Diode size as a multiple of the ring's band width (`lineWidth`).
     ///
     /// 1.0 — the default — makes each diode exactly as tall as the band,

@@ -318,6 +318,35 @@ none of them should be picked up piecemeal while feature work continues.
   clean build log. Verify movie export end to end and the zoom gesture by
   hand before touching either.
 
+## Hardware-fidelity parameters
+
+A hand-written Blender ring script (`ripple.py`) turned out to be a
+better spec for this app than anything written for it, because it had to
+survive contact with a real driver. These came from it:
+
+- **Ripple drops.** `.ripple` in Diode Mode is N drops landing at seeded
+  positions and expanding symmetrically, not one front from a fixed
+  point. Overlapping fronts **add** and are then normalized against the
+  loop's peak — take the max instead and crossing ripples read as two
+  shapes passing through each other rather than water.
+- **`loopSeconds` is load-bearing, not decoration.** Each drop is
+  evaluated one loop earlier and later, so a drop landing near the end
+  carries into the next pass. Remove that and the seam becomes visible as
+  a stutter.
+- **`diodeFloor`** lifts *and compresses* — `floor + (1 - floor) * level`,
+  not `max(floor, level)`. A plain max clips the low end flat.
+- **`firmwareTickMs`** snaps rendered time to a driver's update rate.
+  Rendering at 60fps flatters designs that stutter on device; this is the
+  preview telling the truth.
+- **`DiodeColorMode.byLevel`** takes color from brightness rather than
+  index, because ring drivers hold a couple of color registers and a
+  global fade — "white at the hot core" is a strength effect, not a third
+  color.
+
+`rippleNormalization()` is a per-frame sweep. It must stay hoisted in
+`diodeFieldRing` — calling it from inside `diodeIntensity` makes it run
+per diode per frame, which is where it started and why it's commented.
+
 ## Two Blender importers, doing different jobs
 
 - `CodeGenerators.applyBlenderCode` reads **this app's own export** by its

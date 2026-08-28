@@ -122,6 +122,18 @@ struct AnimationSection: View {
                 .foregroundStyle(.secondary)
 
             if config.diodeModeEnabled {
+                LabeledSlider(title: "Floor", value: $config.diodeFloor, range: 0...1, format: "%.2f")
+                Text("Minimum brightness every diode holds. Lifts and compresses the range rather than clipping the low end.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LabeledSlider(title: "Firmware Tick", value: $config.firmwareTickMs, range: 0...200, format: "%.0f ms")
+                Text(config.firmwareTickMs > 0
+                     ? "Rendering is snapped to this tick, so the preview shows what hardware updating at that rate can actually produce."
+                     : "0 renders continuously. Set a tick to preview at a real driver's update rate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Picker("Diode Color", selection: $config.diodeColorMode) {
                     ForEach(DiodeColorMode.allCases) { mode in
                         Text(mode.rawValue).tag(mode)
@@ -155,6 +167,20 @@ struct AnimationSection: View {
                 title: config.animationType == .equalizer ? "Segment Count" : config.animationType == .sparkle ? "Sparkle Count" : "Diode Count",
                 value: $config.diodeCount, range: 8...60, format: "%.0f"
             )
+        }
+
+        if config.animationType == .ripple && config.diodeModeEnabled {
+            GroupCaption("Drops")
+            LabeledSlider(title: "Drops", value: $config.rippleDropCount, range: 1...12, format: "%.0f")
+            LabeledSlider(title: "Front Width", value: $config.trailFraction, range: 0.02...0.5, format: "%.2f")
+            LabeledSlider(title: "Decay", value: $config.rippleDecay, range: 0...2, format: "%.2f/s")
+            LabeledSlider(title: "Drop Life", value: $config.rippleLife, range: 0.5...12, format: "%.1fs")
+            LabeledSlider(title: "Loop Length", value: $config.loopSeconds, range: 1...30, format: "%.0fs")
+            Stepper("Seed: \(Int(config.rippleSeed))", value: $config.rippleSeed, in: 0...999)
+
+            Text("Drops land at seeded positions and expand both ways, overlapping and adding together. Loop Length is also the window they're placed in — each drop is evaluated a loop either side too, so one landing near the end carries into the next pass instead of cutting off.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
 
         if config.animationType == .bloom {

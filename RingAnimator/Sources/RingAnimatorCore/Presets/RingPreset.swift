@@ -43,6 +43,13 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// `.steady` and 2.0.
     public var diodeShape: DiodeShape?
     public var diodeColorMode: DiodeColorMode?
+    public var rippleDropCount: Double?
+    public var rippleDecay: Double?
+    public var rippleLife: Double?
+    public var rippleSeed: Double?
+    public var loopSeconds: Double?
+    public var diodeFloor: Double?
+    public var firmwareTickMs: Double?
     public var diodeScale: Double?
     public var diodeGap: Double?
     public var bloomCount: Double?
@@ -133,6 +140,13 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         diodeCount = config.diodeCount
         diodeShape = config.diodeShape
         diodeColorMode = config.diodeColorMode
+        rippleDropCount = config.rippleDropCount
+        rippleDecay = config.rippleDecay
+        rippleLife = config.rippleLife
+        rippleSeed = config.rippleSeed
+        loopSeconds = config.loopSeconds
+        diodeFloor = config.diodeFloor
+        firmwareTickMs = config.firmwareTickMs
         diodeScale = config.diodeScale
         diodeGap = config.diodeGap
         bloomCount = config.bloomCount
@@ -210,6 +224,13 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.diodeCount = diodeCount
         config.diodeShape = diodeShape ?? .round
         config.diodeColorMode = diodeColorMode ?? .perDiode
+        config.rippleDropCount = rippleDropCount ?? 3
+        config.rippleDecay = rippleDecay ?? 0.65
+        config.rippleLife = rippleLife ?? 5.5
+        config.rippleSeed = rippleSeed ?? 42
+        config.loopSeconds = loopSeconds ?? 12
+        config.diodeFloor = diodeFloor ?? 0
+        config.firmwareTickMs = firmwareTickMs ?? 0
         config.diodeScale = diodeScale ?? 1.0
         config.diodeGap = diodeGap ?? 0.12
         config.bloomCount = bloomCount ?? 6
