@@ -230,12 +230,21 @@ documented in the script's own header comments. Run from
 
 ### Cutting a release
 
+Both scripts locate themselves, so run them by full path from anywhere:
+
 ```
-cd RingAnimator
-./preflight.sh                                   # four checks, ~1 min
+cd "/Users/chris/Library/Mobile Documents/com~apple~CloudDocs/Claude/Nexus Ring App/RingAnimator"
+./preflight.sh                      # four checks, ~1 min
 # bump Packaging/Info.plist — the script doesn't
-Packaging/build_and_sign.sh
+./Packaging/build_and_sign.sh       # signs, notarizes, staples, zips
+./Packaging/package_patterns.sh     # the pattern sources, to ship alongside
 ```
+
+**Quote the path, and `cd` into `RingAnimator` first.** The repo root has no
+`Packaging/`, so `Packaging/build_and_sign.sh` from one level up fails with
+`No such file or directory` — which reads like a missing script rather than a
+wrong directory. An unquoted path gives the same message, because it splits
+at the space in "Mobile Documents".
 
 `preflight.sh` runs the firmware-fidelity check, the export typecheck, the
 pattern-library manifest and an iOS build, each with the scratch path it
@@ -248,6 +257,11 @@ The manifest check is the one people will skip. It is the only thing that
 catches a pattern edited upstream and synced down, which leaves the
 committed recordings silently describing an animation the device no longer
 plays.
+
+`package_patterns.sh` zips the pattern sources with a README and the
+manifest, and refuses to build if the library doesn't match the app's
+committed recordings — shipping sources that disagree with the embedded
+streams would look like proof while being wrong.
 
 To rehearse the packaging without submitting anything to Apple, run
 `build_and_sign.sh` with everything from `→ Submitting to Apple notary
