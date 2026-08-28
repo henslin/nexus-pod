@@ -81,6 +81,27 @@ public struct GlassSectionCard<Content: View>: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                // Switches, not checkboxes.
+                //
+                // `toggleStyle` propagates through the environment, so
+                // this one line covers every `Toggle` in every section
+                // rather than fourteen call sites in
+                // `ControlsSections.swift` — which is also why those call
+                // sites stay style-free and keep working unchanged inside
+                // iOS's `Form`.
+                //
+                // They were checkboxes because macOS's *default* toggle
+                // style outside a `Form` is a checkbox, and `ControlsView`
+                // deliberately left `Form` behind for these glass cards
+                // (see its doc comment). Losing switch-styled toggles was
+                // an unnoticed side effect of that move — the card header's
+                // own master toggle sets `.switch` explicitly, which is why
+                // a section could show a switch in its header and
+                // checkboxes directly beneath it.
+                .toggleStyle(.switch)
+                #if os(macOS)
+                .controlSize(.small)
+                #endif
                 .padding(.horizontal, 14)
                 .padding(.bottom, 14)
                 .transition(.opacity.combined(with: .move(edge: .top)))
