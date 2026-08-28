@@ -110,7 +110,12 @@ public struct TimelineStripView: View {
             }
         }
         .padding(12)
-        .background(.regularMaterial)
+        // Real Liquid Glass where the OS has it, `.regularMaterial`
+        // below — the strip is standalone chrome sitting on the canvas,
+        // which by this codebase's convention is exactly the case that
+        // needs the explicit treatment (buttons inside a List/Form/toolbar
+        // get System-applied glass for free; see `ringGlassButtonStyle`).
+        .glassBackground(in: Rectangle())
     }
 
     // MARK: - Transport
@@ -125,6 +130,7 @@ public struct TimelineStripView: View {
             }
             .disabled(player.timeline.isEmpty)
             .help(player.isPlaying ? "Pause" : "Play the sequence")
+            .ringGlassButtonStyle()
 
             Button {
                 onScrub(0)
@@ -133,11 +139,13 @@ public struct TimelineStripView: View {
             }
             .disabled(player.timeline.isEmpty)
             .help("Back to start")
+            .ringGlassButtonStyle()
 
             Toggle(isOn: $player.timeline.loops) {
                 Image(systemName: "repeat")
             }
             .toggleStyle(.button)
+            .ringGlassButtonStyle()
             .help("Loop the whole sequence")
 
             if !isCompact {
@@ -154,6 +162,7 @@ public struct TimelineStripView: View {
                 Label("Add Step", systemImage: "plus")
             }
             .help("Add the current ring settings as a new step")
+            .ringGlassButtonStyle()
 
             if let selected = player.selectedSegmentID {
                 Button {
@@ -162,6 +171,7 @@ public struct TimelineStripView: View {
                     Image(systemName: "plus.square.on.square")
                 }
                 .help("Duplicate the selected step")
+                .ringGlassButtonStyle()
 
                 Button(role: .destructive) {
                     player.deleteSegment(selected)
@@ -169,6 +179,7 @@ public struct TimelineStripView: View {
                     Image(systemName: "trash")
                 }
                 .help("Delete the selected step")
+                .ringGlassButtonStyle()
             }
         }
     }
