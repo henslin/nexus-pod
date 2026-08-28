@@ -94,14 +94,20 @@ public struct GlassSectionCard<Content: View>: View {
                     // spanning the full width while Type and Easing hugged
                     // their content, and switches sitting flush against
                     // their labels instead of in a column.
-                    if alignsAsForm {
-                        Form {
-                            content()
-                        }
-                        .formStyle(.columns)
-                    } else {
-                        content()
-                    }
+                    // Plain stack, not `Form { }.formStyle(.columns)`.
+                    //
+                    // The columns form was tried here for its label/control
+                    // alignment and reverted: it sizes columns from content
+                    // *ideal* width, which inside a fixed-width Controls
+                    // pane produced a layout wider than the card. Long
+                    // captions clipped mid-word; capping them just moved the
+                    // overflow onto the sliders' value labels instead.
+                    //
+                    // Alignment is worth revisiting, but not by letting the
+                    // form decide the pane's width. Anything that tries
+                    // again needs to constrain the row layout to the card,
+                    // not the other way round.
+                    content()
                     if let footer {
                         Text(footer)
                             .font(.caption)

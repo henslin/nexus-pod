@@ -61,6 +61,7 @@ struct AnimationSection: View {
         Text("A single spec-sheet behavior (Spin, Pulse, Flash, Ripple, ...) instead of a continuous loop — overrides Animation Type below when set. The multi-phase entries bake in their own hold and fade; to control those yourself, pick a basic style and sequence it on the timeline.")
             .font(.caption)
             .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
 
         if config.patternStyle == .flash || config.patternStyle == .quickFlash {
             Stepper("Flash Count: \(config.flashCount)", value: $config.flashCount, in: 1...10)
@@ -74,9 +75,15 @@ struct AnimationSection: View {
         .pickerStyle(.menu)
         .disabled(config.patternStyle != nil)
 
+        // `fixedSize(horizontal: false, vertical: true)` on every caption
+        // below: take the width you're given and grow downward, rather than
+        // claiming a single-line ideal width. Harmless in a plain stack,
+        // and it keeps prose honest if these ever sit in a narrower
+        // container again.
         Text(config.animationType.summary)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
 
         LabeledSlider(title: "Speed", value: $config.speed, range: 0.1...3.0, format: "%.1fx")
 
@@ -90,6 +97,7 @@ struct AnimationSection: View {
                 Text("Grows to the peak length, then shrinks back to a point — same clockwise sweep the whole time, one pulse per lap. 1.00 draws a full circle before undrawing it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         if config.animationType == .chasing || config.animationType == .dualChase {
@@ -107,6 +115,7 @@ struct AnimationSection: View {
              : "Render any animation as a fixed ring of diodes instead of moving arcs and gradients.")
             .font(.caption)
             .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
 
         if config.diodeModeEnabled || config.animationType == .alternating
             || config.animationType == .sparkle || config.animationType == .multiChase {
@@ -120,12 +129,14 @@ struct AnimationSection: View {
             Text(config.diodeShape.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if config.diodeModeEnabled {
                 LabeledSlider(title: "Floor", value: $config.diodeFloor, range: 0...1, format: "%.2f")
                 Text("Minimum brightness every diode holds. Lifts and compresses the range rather than clipping the low end.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 LabeledSlider(title: "Firmware Tick", value: $config.firmwareTickMs, range: 0...200, format: "%.0f ms")
                 Text(config.firmwareTickMs > 0
@@ -133,6 +144,7 @@ struct AnimationSection: View {
                      : "0 renders continuously. Set a tick to preview at a real driver's update rate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Picker("Diode Color", selection: $config.diodeColorMode) {
                     ForEach(DiodeColorMode.allCases) { mode in
@@ -144,6 +156,7 @@ struct AnimationSection: View {
                 Text(config.diodeColorMode.summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if config.diodeShape.dividesTheRing {
@@ -152,12 +165,14 @@ struct AnimationSection: View {
                 Text("Space between wedges, as a fraction of each one's width. 0 makes them meet edge to edge as one continuous ring.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 LabeledSlider(title: "Diode Size", value: $config.diodeScale, range: 0.4...3.0, format: "%.2fx")
 
                 Text("Relative to the ring's width, which crops them — above 1x the diode is taller than the band and gets trimmed by it, the way an LED reads through a slot.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
 
@@ -181,6 +196,7 @@ struct AnimationSection: View {
             Text("Drops land at seeded positions and expand both ways, overlapping and adding together. Loop Length is also the window they're placed in — each drop is evaluated a loop either side too, so one landing near the end carries into the next pass instead of cutting off.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         if config.animationType == .bloom {
@@ -197,6 +213,7 @@ struct AnimationSection: View {
             Text("Each patch varies from Average Size by its own amount, so one may cover an eighth of the ring and the next a sixteenth. Base Brightness is how lit the ring stays where nothing is swelling — patches add on top of it, so there are no dark stretches. Softness diffuses their edges into a glow.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         if config.animationType == .multiChase {
@@ -210,6 +227,7 @@ struct AnimationSection: View {
             Text("One comet per color in the Color section above — add a third or fourth color and each gets its own.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         // Outside the Multi Chase block: in diode mode the blink modulates
@@ -226,6 +244,7 @@ struct AnimationSection: View {
         Text(config.easingStyle.summary)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         if config.easingStyle == .spring {
             LabeledSlider(title: "Spring Bounce", value: $config.springBounce, range: 0...1, format: "%.2f")
         }
@@ -245,6 +264,7 @@ struct AnimationSection: View {
             Text(config.blinkPattern.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if config.blinkPattern != .steady {
                 LabeledSlider(title: "Blink Rate", value: $config.blinkRate, range: 0.2...12, format: "%.1f/s")
@@ -270,6 +290,7 @@ struct ShapeSection: View {
             Text("The band the diodes sit in — they're cropped to it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         LabeledSlider(title: "Preview Size", value: $config.previewDiameter, range: 80...220, format: "%.0f pt")
     }
@@ -293,6 +314,7 @@ struct MotionEffectsSection: View {
             Text("Every configured color trails evenly spaced around the color wheel while active — 180° apart with just Primary/Secondary, closer together with more colors added.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -312,12 +334,14 @@ struct VoiceSection: View {
             Text("Boosts glow and scale live — from the ElevenLabs assistant below if connected, otherwise the microphone (asked for on first use).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Toggle("Demo Mode (No Agent Needed)", isOn: $config.voiceDemoModeEnabled)
             if config.voiceDemoModeEnabled {
                 Text("Shows the listening pill above the tab bar and live-transcribes your mic — no ElevenLabs connection required. Temporary, for demoing the pipeline.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let error = stt.lastError {
@@ -346,6 +370,7 @@ struct VoiceSection: View {
                 Text("“\(voice.lastAgentResponse)”")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(3)
             }
         }
@@ -380,6 +405,7 @@ struct VoiceSection: View {
             Text("Not Connected")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         case .connecting:
             HStack(spacing: 4) {
                 ProgressView()
@@ -389,6 +415,7 @@ struct VoiceSection: View {
                 Text("Connecting…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         case .connected:
             Label("Connected", systemImage: "checkmark.circle.fill")
@@ -420,6 +447,7 @@ struct GlowBlendSection: View {
             Text("One knob for overall \"pop\" — boosts saturation/contrast and widens the glow together, rather than needing to retune colors and glow separately.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         Toggle("Glow", isOn: $config.glowEnabled)
@@ -436,6 +464,7 @@ struct GlowBlendSection: View {
             Text("Best over a dark or colorful background — try the tab bar preview.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         Toggle("Chromatic Aberration", isOn: $config.chromaticAberrationEnabled)
@@ -444,6 +473,7 @@ struct GlowBlendSection: View {
             Text("Deliberately exaggerated RGB split, inspired by Siri's colorful \"wavelengths\" — not a subtle lens artifact.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -690,6 +720,7 @@ struct ColorSection: View {
             Text("Overridden live while color cycling is on — these are the fallback colors.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
