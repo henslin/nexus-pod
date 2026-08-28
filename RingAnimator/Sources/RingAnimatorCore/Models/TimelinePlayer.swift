@@ -266,6 +266,24 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         return segment
     }
 
+    /// Replaces the whole timeline with one an importer built, and
+    /// selects its first step.
+    ///
+    /// Saves immediately rather than through the debounce: this replaces a
+    /// document wholesale, and the debounce exists for the opposite case —
+    /// a slider being dragged, where the intermediate values aren't worth
+    /// a write each. Losing this one to a quit two seconds later would
+    /// lose the entire import.
+    ///
+    /// Selecting the first step is what makes the Controls panel show the
+    /// imported pattern rather than whatever was being edited before, and
+    /// `select` already loads that step's snapshot into the bound config.
+    public func installImported(_ imported: RingTimeline) {
+        timeline = imported
+        select(imported.segments.first?.id)
+        saveNow()
+    }
+
     public func deleteSegment(_ id: UUID) {
         guard let index = timeline.segments.firstIndex(where: { $0.id == id }) else { return }
         timeline.segments.remove(at: index)

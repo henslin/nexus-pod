@@ -19,6 +19,9 @@ import RingAnimatorCore
 struct SavedPresetsView: View {
     @ObservedObject var store: RingPresetStore
     @ObservedObject var config: RingConfig
+    /// The Nexus timeline, owned by `ContentView`. Needed here because a
+    /// multi-phase pattern imports as steps, not as a single config.
+    @ObservedObject var timelinePlayer: TimelinePlayer
 
     @State private var selectedPresetID: RingPreset.ID?
 
@@ -214,7 +217,14 @@ struct SavedPresetsView: View {
             ))
             return
         }
-        blenderReport = BlenderReport(url.lastPathComponent, BlenderScriptImporter.apply(text, to: config))
+        let outcome = BlenderScriptImporter.apply(text, to: config)
+        // See `UseCaseDetailView.importBlenderScript` — a multi-phase
+        // pattern becomes timeline steps rather than collapsing into one
+        // config.
+        if let timeline = outcome.timeline {
+            timelinePlayer.installImported(timeline)
+        }
+        blenderReport = BlenderReport(url.lastPathComponent, outcome)
     }
 
     private func exportLibrary() {

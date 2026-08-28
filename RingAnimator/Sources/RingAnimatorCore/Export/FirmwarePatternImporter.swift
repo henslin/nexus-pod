@@ -107,9 +107,14 @@ public enum FirmwarePatternImporter {
             type: .dualChase, style: nil,
             speed: 1000.0 / (312.0 * 16.0),
             note: "two mirrored heads sweeping in opposite directions"),
+        // 2200 ms per lap is the *requested* rate; the engine snaps each
+        // step to the 50 ms firmware tick, and 2200/16 = 137.5 rounds up to
+        // 150 ms, so a lap really takes 2400 ms. Its own docstring calls
+        // this out. Using the requested figure put every one of these three
+        // patterns 0.5 s short of the duration its header declares.
         "_schedule_spin_solid_fade": Behavior(
             type: nil, style: .spinThenSolidFade,
-            speed: 1000.0 / 2200.0, trailFraction: 5.0 / 16.0,
+            speed: 1000.0 / 2400.0, trailFraction: 5.0 / 16.0,
             holdSeconds: 3.0, fadeOutSeconds: 1.5,
             note: "a comet twice around, then solid, then fade"),
         "_schedule_blink_cycle": Behavior(
@@ -141,10 +146,13 @@ public enum FirmwarePatternImporter {
             type: .dualChase, style: nil,
             speed: 0.3, loopSeconds: 10, tickMs: 100,
             note: "two phase-opposed strands crossing"),
+        // Same tick quantization as the spin engine: `(3000 // 16) // 50 * 50`
+        // is 150 ms per LED, so the requested 3000/3400 ms laps land at
+        // 2400 and 3200 ms.
         "_dual_comet_varied": Behavior(
             type: .dualChase, style: nil,
-            speed: 1000.0 / 3000.0, loopSeconds: 13, trailFraction: 2.0 / 16.0,
-            note: "two comets, 3000 ms and 3400 ms per lap"),
+            speed: 1000.0 / 2400.0, loopSeconds: 13, trailFraction: 2.0 / 16.0,
+            note: "two comets, 2400 ms and 3200 ms per lap"),
     ]
 
     /// Helpers that are *rendering primitives* rather than behaviors.
@@ -307,9 +315,11 @@ public enum FirmwarePatternImporter {
         var behavior: Behavior?
         var source = ""
 
+        var strongHelper: String?
         for name in behaviors.keys.sorted(by: { $0.count > $1.count }) where text.contains(name + "(") {
             behavior = behaviors[name]
             source = name
+            strongHelper = name
             break
         }
 
@@ -500,7 +510,9 @@ public enum FirmwarePatternImporter {
 
         // A bare number passed to the cascade is how many of the 16 LEDs
         // fill — that's the battery level the pattern is showing.
+        var litLEDs: Double?
         if text.contains("_schedule_battery_cascade("), let lit = firstPositionalNumber(in: text) {
+            litLEDs = lit
             config.trailFraction = min(max(lit / ringLEDCount, 0.02), 1)
             applied.append("\(Int(lit)) of 16 LEDs lit → \(Int(lit / ringLEDCount * 100))% fill")
         }
@@ -530,6 +542,20 @@ public enum FirmwarePatternImporter {
             dropped.append("RENDER_ONLY — a Blender-render-only flag with no meaning outside that scene")
         }
 
+        // --- Phases. A sequencing engine becomes timeline steps rather
+        // --- than collapsing into whichever phase happened to win.
+        var timeline: RingTimeline?
+        if let strongHelper,
+           let (built, phaseNames) = phaseTimeline(
+               helper: strongHelper,
+               palette: palette,
+               keywords: keywords,
+               litLEDs: litLEDs
+           ) {
+            timeline = built
+            applied.append("\(phaseNames.count) phases → timeline steps: \(phaseNames.joined(separator: ", "))")
+        }
+
         let caveat: String
         if applied.isEmpty {
             caveat = "This is a firmware pattern module, but nothing in it named a behavior this app renders. Nothing was changed."
@@ -538,7 +564,168 @@ public enum FirmwarePatternImporter {
                 + (description.isEmpty ? "" : "\n\nThe pattern describes itself as: \(description)")
         }
 
-        return BlenderScriptImporter.Outcome(applied: applied, dropped: dropped, caveat: caveat)
+        return BlenderScriptImporter.Outcome(
+            applied: applied,
+            dropped: dropped,
+            caveat: caveat,
+            timeline: timeline
+        )
+    }
+
+    // MARK: - Phases
+
+    /// The phase breakdowns, straight out of `pattern_common`'s own
+    /// documentation of each engine.
+    ///
+    /// Only the engines that genuinely sequence get one. A pattern that
+    /// loops a single behavior — a warble, a breath, a braid — is fully
+    /// described by its config, and wrapping it in a one-step timeline
+    /// would add a document to manage for no gain.
+    ///
+    /// The durations here are not estimates. Each family's phases sum to
+    /// the `DURATION_MS` its own callers declare, which is the check that
+    /// they're right: 4.4 + 3.0 + 1.5 = 9.4 s for arm_away, and a battery
+    /// cascade's `num_leds x 500 ms` plus 8 blink cycles of 600 ms gives
+    /// 6800 / 8800 / 10800 ms for the 25/50/75 files exactly.
+    private static func phaseTimeline(
+        helper: String,
+        palette: [Color],
+        keywords: [String: Double],
+        litLEDs: Double?
+    ) -> (RingTimeline, [String])? {
+        let primary = palette.first ?? Color.white
+        let secondary = palette.count > 1 ? palette[1] : primary
+
+        switch helper {
+        case "_schedule_spin_solid_fade":
+            // 1. A single comet clockwise, twice around at 2200 ms a lap.
+            //    Authored as `.rotations(2)` rather than 4.4 seconds so
+            //    "exactly two laps" survives anyone retuning the speed —
+            //    that's what `SegmentLength.rotations` is for.
+            // 2. Every LED snaps on together, held 3 s.
+            // 3. Everything fades to off, ~250 ms time constant.
+            let spin = step("Spin x2", length: .rotations(2)) { c in
+                c.patternStyle = .spin
+                // The tick-quantized 2400 ms lap, not the requested 2200 —
+                // and `.rotations(2)` derives the step's 4.8 s from it.
+                c.speed = 1000.0 / 2400.0
+                c.trailFraction = 5.0 / 16.0
+                c.primaryColor = primary
+            }
+            // 3.1 s, not 3.0: the engine snaps the ring solid 100 ms after
+            // the comet's last frame (`solid_at = spin_end + 100`). That
+            // gap belongs to neither phase cleanly, and it goes here rather
+            // than on the spin so the spin can stay `.rotations(2)` — the
+            // count is the thing worth preserving if anyone retunes the
+            // speed. Without it the three phases come to 9.3 s against a
+            // declared 9.4 s.
+            let solid = step("Solid", length: .seconds(3.1)) { c in
+                c.patternStyle = .solid
+                c.primaryColor = primary
+            }
+            let fade = step("Fade out", length: .seconds(1.5), fadeOut: 1.5) { c in
+                c.patternStyle = .solid
+                c.primaryColor = primary
+            }
+            return (RingTimeline(segments: [spin, solid, fade], loops: true),
+                    ["spin x2 (4.8 s)", "solid (3.1 s)", "fade out (1.5 s)"])
+
+        case "_schedule_connected_flow":
+            // A 0.0-12.0  soft white breathing, 3 x 4 s
+            // B 12.0-16.0 wake-bloom trio in the accent
+            // C 16.0-17.4 solid accent, held
+            //
+            // The accent is the pattern's own color; the breath is
+            // BREATH_WHITE_RGB, a deliberately sub-255 neutral white, and
+            // hardcoding it here matches the engine rather than reusing
+            // the accent for a phase that isn't in the accent.
+            let breathWhite = rgb(170, 170, 165)
+            let breathe = step("Breathe", length: .seconds(12)) { c in
+                c.animationType = .pulse
+                c.speed = 1000.0 / 4000.0
+                c.primaryColor = breathWhite
+                c.secondaryColor = breathWhite
+            }
+            let bloom = step("Bloom", length: .seconds(4)) { c in
+                c.animationType = .bloom
+                c.bloomCount = 3
+                c.primaryColor = primary
+                c.secondaryColor = secondary
+            }
+            let connected = step("Connected", length: .seconds(1.4)) { c in
+                c.patternStyle = .solid
+                c.primaryColor = primary
+            }
+            return (RingTimeline(segments: [breathe, bloom, connected], loops: true),
+                    ["breathe 3 x 4 s", "bloom (4 s)", "solid (1.4 s)"])
+
+        case "_schedule_solid_firmware":
+            // hold_ms lit, then off_ms dark. `off_ms = 0` means it simply
+            // stays on, which is one behavior and gets no timeline.
+            let hold = (keywords["hold_ms"] ?? 3000) / 1000
+            let off = (keywords["off_ms"] ?? 1000) / 1000
+            guard off > 0 else { return nil }
+            let lit = step("Solid", length: .seconds(hold), fadeOut: 0.5) { c in
+                c.patternStyle = .solid
+                c.primaryColor = primary
+            }
+            let dark = step("Off", length: .seconds(off)) { c in
+                c.patternStyle = .off
+            }
+            return (RingTimeline(segments: [lit, dark], loops: true),
+                    ["solid (\(trim(hold)) s)", "off (\(trim(off)) s)"])
+
+        case "_schedule_battery_cascade":
+            // `num_leds` frames at 500 ms fill the ring, then 8 blink
+            // cycles at 300/300 toggle the last LED while the rest hold.
+            guard let lit = litLEDs, lit >= 1 else { return nil }
+            let fillSeconds = lit * 0.5
+            let blinkSeconds = 8 * 0.6
+            let fill = step("Fill to \(Int(lit))", length: .seconds(fillSeconds)) { c in
+                c.animationType = .liquidFill
+                c.diodeColorMode = .byLevel
+                c.trailFraction = min(max(lit / ringLEDCount, 0.02), 1)
+                c.primaryColor = primary
+            }
+            let blink = step("Blink last LED", length: .seconds(blinkSeconds)) { c in
+                c.patternStyle = .flash
+                c.blinkRate = 1000.0 / 600.0
+                c.flashCount = 8
+                c.primaryColor = primary
+            }
+            return (RingTimeline(segments: [fill, blink], loops: true),
+                    ["fill to \(Int(lit)) LEDs (\(trim(fillSeconds)) s)",
+                     "8 blink cycles (\(trim(blinkSeconds)) s)"])
+
+        default:
+            return nil
+        }
+    }
+
+    /// One timeline step, built on a config that starts at defaults and
+    /// carries the ring's own physical facts.
+    ///
+    /// Every step gets Diode Mode and the 16-LED count because those
+    /// describe the hardware, not the phase — a step that forgot them
+    /// would render as a smooth arc mid-sequence and read as a glitch.
+    private static func step(
+        _ name: String,
+        length: SegmentLength,
+        fadeIn: Double = 0,
+        fadeOut: Double = 0,
+        configure: (RingConfig) -> Void
+    ) -> TimelineSegment {
+        let config = RingConfig()
+        config.diodeModeEnabled = true
+        config.diodeCount = ringLEDCount
+        configure(config)
+        return TimelineSegment(
+            name: name,
+            snapshot: RingPreset(name: name, config: config),
+            length: length,
+            fadeIn: fadeIn,
+            fadeOut: fadeOut
+        )
     }
 
     // MARK: - Parsing

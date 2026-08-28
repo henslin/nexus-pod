@@ -30,13 +30,31 @@ public enum BlenderScriptImporter {
         public var dropped: [String]
         /// Set when the mapping is an approximation rather than a match.
         public var caveat: String?
+        /// The pattern's phases, when it has more than one.
+        ///
+        /// Several of these firmware patterns are sequences, not loops:
+        /// `_schedule_spin_solid_fade` spins twice, holds solid, then fades,
+        /// and `_schedule_connected_flow` breathes for twelve seconds before
+        /// blooming and settling. Flattening those into a single config
+        /// throws away everything but one phase. Since the app can already
+        /// sequence steps, they import as steps.
+        ///
+        /// `nil` for a single-behavior pattern, which is most of them — the
+        /// config alone says everything there is to say.
+        public var timeline: RingTimeline?
 
         public var isEmpty: Bool { applied.isEmpty }
 
-        public init(applied: [String], dropped: [String], caveat: String?) {
+        public init(
+            applied: [String],
+            dropped: [String],
+            caveat: String?,
+            timeline: RingTimeline? = nil
+        ) {
             self.applied = applied
             self.dropped = dropped
             self.caveat = caveat
+            self.timeline = timeline
         }
     }
 

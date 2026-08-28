@@ -84,7 +84,7 @@ struct ContentView: View {
         } content: {
             switch section {
             case .ringDesigner:
-                SavedPresetsView(store: presetStore, config: config)
+                SavedPresetsView(store: presetStore, config: config, timelinePlayer: timelinePlayer)
                     .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
             case .cueLibrary:
                 CueListView(store: cueStore, selectedCueID: $selectedCueID, searchText: $cueSearchText)

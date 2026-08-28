@@ -443,6 +443,43 @@ it imports as whichever helper it defines first. The discriminator is
 definition versus use: the library *defines* `_schedule_*`, a pattern only
 calls them.
 
+### Multi-phase patterns import as timeline steps
+
+Several of these engines are sequences, not loops, and flattening one into
+a single config keeps only whichever phase won. `Outcome.timeline` carries
+the phases when there are any, and both import buttons install it via
+`TimelinePlayer.installImported`, which also selects step one so the
+Controls panel shows the imported pattern.
+
+Four families sequence, covering 13 files:
+
+| engine | steps |
+| --- | --- |
+| `_schedule_spin_solid_fade` | spin x2 (4.8 s), solid (3.1 s), fade out (1.5 s) |
+| `_schedule_connected_flow` | breathe 3 x 4 s, bloom (4 s), solid (1.4 s) |
+| `_schedule_solid_firmware` | solid (`hold_ms`), off (`off_ms`) |
+| `_schedule_battery_cascade` | fill (`num_leds` x 500 ms), 8 blink cycles (4.8 s) |
+
+Everything else loops one behavior and is fully described by its config; a
+one-step timeline would just be a document to manage.
+
+**The phase durations are a check, not an estimate.** Each family's steps
+sum to the `DURATION_MS` its own callers declare, and that is how two real
+errors surfaced:
+
+- **The 50 ms tick quantizes lap times.** `_schedule_spin_solid_fade`
+  computes `step_ms = round(2200/16/50)*50`, so 137.5 ms becomes 150 ms and
+  a lap really takes 2400 ms, not the requested 2200. `_dual_comet_varied`
+  does the same, turning 3000/3400 ms laps into 2400/3200. Using the
+  requested figures left every one of these patterns short.
+- **There's a 100 ms settle gap** between the comet's last frame and the
+  solid snap (`solid_at = spin_end + 100`). It sits on the solid step so
+  the spin can stay `.rotations(2)` — the lap count is what's worth
+  preserving if anyone retunes the speed.
+
+If you add a family here, check the sum against `DURATION_MS`. It caught
+both of the above.
+
 ### Import resets first
 
 `BlenderScriptImporter.apply` interprets into a fresh `RingConfig` and

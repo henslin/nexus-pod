@@ -235,7 +235,15 @@ public struct UseCaseDetailView: View {
             ))
             return
         }
-        blenderReport = UseCaseBlenderReport(url.lastPathComponent, BlenderScriptImporter.apply(text, to: editingConfig))
+        let outcome = BlenderScriptImporter.apply(text, to: editingConfig)
+        // A multi-phase pattern arrives as steps. Installing them replaces
+        // this use case's timeline and selects the first step, which loads
+        // it back into `editingConfig` — so the ring shows phase one rather
+        // than whatever the flattened config happened to hold.
+        if let timeline = outcome.timeline {
+            player.installImported(timeline)
+        }
+        blenderReport = UseCaseBlenderReport(url.lastPathComponent, outcome)
     }
     #endif
 
