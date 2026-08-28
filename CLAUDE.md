@@ -443,7 +443,58 @@ it imports as whichever helper it defines first. The discriminator is
 definition versus use: the library *defines* `_schedule_*`, a pattern only
 calls them.
 
-### Twenty-one patterns render frame-exactly
+### Sixty-six patterns replay the device's own command stream
+
+`FirmwarePatternStream` ships each pattern's literal command stream and
+replays it. Every scheduler is run once, offline, against a recorder that
+captures each `set_color0` / `set_color1` / `select_led` / `select_all_leds`
+call with its timestamp — the exact bytes the device receives. Replaying
+that is not a reproduction of the animation; it *is* the animation.
+
+This exists because the level-threshold engine below covers 21 patterns and
+the other 45 schedule LED commands directly: comets stepping head and tail,
+cascades filling frame by frame, Perlin fields sampled per tick, palette
+rewrites mid-animation. There is no closed form to port, and transcribing 45
+hand-written bodies would only ever *approach* what the recording already is.
+
+**Frame semantics.** Two palette registers, and per LED a selection bit plus
+a register choice: not selected → dark; selected with bits `0x00` → Color0;
+`0x07` → Color1. "Off" is usually Color0 being black rather than a deselect,
+so both paths have to be honored — treating `0x00` as off blanks half the
+library.
+
+**Resolve the frame once per frame, never per diode.** Replay is a walk over
+the event list; doing it sixteen times per frame is sixteen times the work
+for one answer. `RingView` resolves it before the diode loop, next to
+`rippleNormalization()`, which is there for the same reason.
+
+Regenerate with `Sources/FirmwareFieldCheck/record_streams.py` when the
+pattern library changes. `firmware-streams.json` (180 KB) is a committed
+resource, so neither the app nor its checks need a copy of the library.
+
+### The fidelity ladder
+
+An imported pattern can hold three levels at once, and they nest — clearing
+one reveals the next rather than dropping to nothing:
+
+1. **Recorded stream** — the device's literal output.
+2. **Exact field** — the firmware's own `level(i, t)` maths, ported and
+   verified sample for sample. Parametric, so speed and palette still mean
+   something.
+3. **Interpreted** — this app's nearest equivalent animation, fully editable.
+
+`FirmwareFidelitySection` shows which level is active and steps down one at
+a time. It sits directly above Animation because levels 1 and 2 override
+`animationType`, and an override should be read before the control it
+overrides. It's hidden entirely when no firmware pattern is loaded — a card
+reading "Interpreted" on every hand-authored design is noise.
+
+**Coverage: 66 of 69 exact.** The three that aren't are the ripple family
+(`ripple_green`, `ripple_blue_white`, `listening`), and only because
+`pattern_common._import_ripple_math()` needs a `ripple.py` that isn't in the
+folder. Drop one in and re-run the recorder and they join the rest.
+
+### Twenty-one patterns also have their maths ported
 
 `FirmwareLevelField` ports the firmware's own per-LED `level(i, t_s)`
 functions to Swift. Twenty-one of the patterns are built on one shared
@@ -461,7 +512,9 @@ states; the quantization is what gives these patterns their crisp edges, and
 smoothing it would be a prettier animation than the device can produce.
 
 **The port is bit-identical, and that is checked.**
-`swift run FirmwareFieldCheck` compares every field against ground truth
+`swift run FirmwareFieldCheck` checks both halves — 13440 field samples
+and 94256 LED-frames of recorded stream. It compares every field against
+ground truth
 captured from the real Python — `_schedule_level_threshold` is stubbed to
 grab each closure, which is then sampled over a 16 x 40 grid and written to
 `firmware-levels.json` at full precision. 13440 samples, worst delta 0.0.

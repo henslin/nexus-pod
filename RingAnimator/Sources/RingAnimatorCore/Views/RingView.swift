@@ -1090,6 +1090,13 @@ public struct RingView: View {
         // Only Ripple reads this, and computing it is a sweep — so skip it
         // entirely for every other type rather than paying for it always.
         let rippleNorm = config.animationType == .ripple ? rippleNormalization() : 1
+        // Resolved once per frame, never per diode: replaying the stream is
+        // a walk over its events, and doing that sixteen times a frame
+        // would be sixteen times the work for the same answer. Same
+        // reasoning as `rippleNorm` above.
+        let streamFrame = config.firmwarePatternStream
+            .flatMap { FirmwarePatternStream.stream(named: $0) }
+            .map { $0.frame(atSeconds: tickedElapsed, ledCount: count) }
         return glow(
             diodeLayer(count: count, scale: scale) { i in
                 let position = Double(i) / Double(count)
@@ -1101,7 +1108,8 @@ public struct RingView: View {
                     elapsed: tickedElapsed,
                     voiceLevel: voiceLevel,
                     colors: all,
-                    rippleNorm: rippleNorm
+                    rippleNorm: rippleNorm,
+                    streamFrame: streamFrame
                 )
                 // Floor lifts and compresses rather than clipping, so the
                 // low end keeps its shape — see `RingConfig.diodeFloor`.
@@ -1226,8 +1234,20 @@ public struct RingView: View {
         elapsed: Double,
         voiceLevel: Double,
         colors all: [Color],
-        rippleNorm: Double
+        rippleNorm: Double,
+        streamFrame: FirmwarePatternStream.Frame? = nil
     ) -> (color: Color, brightness: Double) {
+        // A recorded command stream outranks everything: it isn't a model
+        // of the device's output, it is the device's output. A dark LED is
+        // genuinely dark here — these patterns turn pixels off as well as
+        // recoloring them — so brightness goes to 0 rather than to a floor.
+        if let streamFrame, index < streamFrame.leds.count {
+            if let color = streamFrame.leds[index] {
+                return (color, 1)
+            }
+            return (streamFrame.color0, 0)
+        }
+
         // The firmware's own field, when the pattern came from one.
         //
         // Short-circuits `animationType` entirely: this *is* what the device

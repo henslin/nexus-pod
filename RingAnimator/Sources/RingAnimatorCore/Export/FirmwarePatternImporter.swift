@@ -325,6 +325,7 @@ public enum FirmwarePatternImporter {
 
         // Underscores flattened to spaces so a single space-form keyword
         // table matches both `circular_fill` and "circular fill".
+        let rawName = rawModuleName(in: text).lowercased()
         let spacedName = moduleName(in: text).lowercased()
         if behavior == nil {
             for (keyword, candidate) in keywordBehaviors where spacedName.contains(keyword) {
@@ -425,6 +426,25 @@ public enum FirmwarePatternImporter {
             config.loopSeconds = min(max(levelField.loopSeconds, 0.5), 60)
             applied.append("Exact firmware field: \(levelField.displayName) — the device's own level(i, t) maths, not an approximation")
             applied.append("threshold \(trim(levelField.threshold)), \(Int(levelField.tickMs)) ms tick, \(trim(levelField.loopSeconds)) s loop → from the engine")
+        }
+
+        // --- The recorded command stream, where one exists. This is the
+        // --- device's literal output rather than a model of it, so it
+        // --- outranks everything above. The behavior and any level field
+        // --- stay set underneath: clearing the stream in Controls reveals
+        // --- the exact parametric field, and clearing that reveals the
+        // --- nearest equivalent animation, so stepping down from
+        // --- "identical" to "editable" is one click at a time rather than
+        // --- a cliff.
+        if behavior != nil || levelField != nil,
+           let stream = FirmwarePatternStream.stream(named: rawName) {
+            config.firmwarePatternStream = rawName
+            config.diodeModeEnabled = true
+            config.diodeCount = ringLEDCount
+            config.diodeColorMode = .perDiode
+            config.diodeFloor = 0
+            config.loopSeconds = min(max(stream.loopSeconds, 0.5), 60)
+            applied.append("Recorded firmware stream: \(stream.events.count) commands over \(trim(stream.loopSeconds)) s — the device's literal output, replayed")
         }
 
         // --- Palette. Call-argument tuples first (most specific), then
@@ -588,7 +608,9 @@ public enum FirmwarePatternImporter {
         if applied.isEmpty {
             caveat = "This is a firmware pattern module, but nothing in it named a behavior this app renders. Nothing was changed."
         } else {
-            caveat = levelField != nil
+            caveat = config.firmwarePatternStream != nil
+                ? "Exact. This is the pattern's own command stream — every set_color and select_led the device receives, recorded from the pattern's scheduler and replayed here at the same timestamps. Nothing about it is interpreted."
+                : levelField != nil
                 ? "Frame-exact. This pattern's per-LED level(i, t) function is ported from pattern_common.py and verified against it sample for sample, including the 100 ms tick and the two-color threshold. What you see is what the device renders."
                 : "Timings, palette and ring size are the firmware's own, read from pattern_common.py. The per-LED maths isn't reproduced for this one — this app renders its nearest equivalent behavior, so expect a close match in color and cadence rather than a frame-exact one."
                 + (description.isEmpty ? "" : "\n\nThe pattern describes itself as: \(description)")
@@ -1029,6 +1051,14 @@ public enum FirmwarePatternImporter {
             }
         }
         return result
+    }
+
+    /// The module's name as written, underscores intact — how recorded
+    /// streams are keyed.
+    private static func rawModuleName(in text: String) -> String {
+        guard let range = text.range(of: "def schedule_") else { return "" }
+        let tail = text[range.upperBound...]
+        return String(tail.prefix { $0.isLetter || $0.isNumber || $0 == "_" })
     }
 
     /// The module's own name, taken from the `def schedule_<name>` it

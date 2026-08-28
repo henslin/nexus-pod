@@ -79,7 +79,10 @@ let package = Package(
             name: "FirmwareFieldCheck",
             dependencies: ["RingAnimatorCore"],
             path: "Sources/FirmwareFieldCheck",
-            exclude: ["firmware-levels.json", "dump_reference.py"]
+            exclude: [
+                "firmware-levels.json", "firmware-frames.json",
+                "dump_reference.py", "record_streams.py",
+            ]
         ),
         // macOS design tool: sidebar controls + tab bar mockup + code export.
         .executableTarget(

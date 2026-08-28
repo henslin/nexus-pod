@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import AppKit
 import RingAnimatorCore
 
 // Verifies that every `FirmwareLevelField` still reproduces the firmware's
@@ -111,9 +113,81 @@ for (module, reference) in references.sorted(by: { $0.key < $1.key }) {
 }
 
 print("\n\(samples) samples across \(references.count) patterns")
-if failures == 0 {
-    print("✅ every field reproduces the firmware exactly")
+
+// --- Part two: the recorded command streams.
+//
+// Every pattern's scheduler was run against a recorder that captured each
+// set_color / select_led call with its timestamp, then replayed to per-LED
+// state on a 100 ms grid. `FirmwarePatternStream` has to reproduce that
+// replay exactly — it ships the same events, so any difference is a bug in
+// how they are being applied, not in the data.
+
+struct RecordedFrame: Decodable {
+    let t: Double
+    let c0: [Int]
+    let c1: [Int]
+    let bits: [Int]
+    let sel: [Int]
+}
+struct RecordedPattern: Decodable {
+    let total_ms: Double
+    let tick_ms: Double
+    let frames: [RecordedFrame]
+}
+
+let framesFixture = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .appendingPathComponent("firmware-frames.json")
+
+guard let frameData = try? Data(contentsOf: framesFixture),
+      let recorded = try? JSONDecoder().decode([String: RecordedPattern].self, from: frameData) else {
+    print("❌ couldn't read \(framesFixture.path)")
+    exit(1)
+}
+
+func channels(_ color: Color) -> [Int] {
+    let resolved = NSColor(color).usingColorSpace(.sRGB) ?? .black
+    return [
+        Int((resolved.redComponent * 255).rounded()),
+        Int((resolved.greenComponent * 255).rounded()),
+        Int((resolved.blueComponent * 255).rounded()),
+    ]
+}
+
+var streamFailures = 0
+var ledFrames = 0
+
+for (name, reference) in recorded.sorted(by: { $0.key < $1.key }) {
+    guard let stream = FirmwarePatternStream.stream(named: name) else {
+        print("❌ \(name): missing from the shipped stream library")
+        streamFailures += 1
+        continue
+    }
+    var mismatches = 0
+    for frame in reference.frames {
+        // One pass only. The wrap point is a boundary the two sides define
+        // differently and it isn't part of the animation.
+        guard frame.t < reference.total_ms else { continue }
+        let mine = stream.frame(atSeconds: frame.t / 1000, ledCount: 16)
+        for led in 0..<16 {
+            let expected: [Int]? = frame.sel[led] == 0
+                ? nil
+                : (frame.bits[led] == 0 ? frame.c0 : frame.c1)
+            if expected != mine.leds[led].map(channels) { mismatches += 1 }
+        }
+        ledFrames += 16
+    }
+    if mismatches > 0 {
+        print("❌ \(name): \(mismatches) LED-frame mismatches")
+        streamFailures += 1
+    }
+}
+
+print("\(ledFrames) LED-frames across \(recorded.count) recorded streams")
+
+if failures == 0 && streamFailures == 0 {
+    print("\n✅ every field and every stream reproduces the firmware exactly")
     exit(0)
 }
-print("❌ \(failures) pattern(s) no longer match the firmware")
+print("\n❌ \(failures) field(s) and \(streamFailures) stream(s) no longer match the firmware")
 exit(1)

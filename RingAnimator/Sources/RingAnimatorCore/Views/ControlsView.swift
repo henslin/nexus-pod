@@ -73,6 +73,14 @@ public struct ControlsView: View {
                     ColorSection(config: config)
                 }
 
+                // Only when a firmware pattern is loaded — see the type's
+                // doc comment for why it isn't always present.
+                if config.firmwarePatternStream != nil || config.firmwareLevelField != nil {
+                    card("fidelity", "Firmware Fidelity", "checkmark.seal") {
+                        FirmwareFidelitySection(config: config)
+                    }
+                }
+
                 card("animation", "Animation", "play.circle") {
                     AnimationSection(config: config)
                 }

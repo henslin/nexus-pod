@@ -146,28 +146,6 @@ struct AnimationSection: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                // Only shown once a pattern has brought one in. It's not a
-                // knob you'd reach for while designing — it's a statement
-                // that this animation is the device's own maths rather than
-                // this app's, and the way to step back off it.
-                if let field = config.firmwareLevelField {
-                    Divider()
-                    HStack(alignment: .firstTextBaseline) {
-                        Label("Exact firmware field", systemImage: "checkmark.seal.fill")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.green)
-                        Spacer()
-                        Button("Clear") { config.firmwareLevelField = nil }
-                            .buttonStyle(.borderless)
-                            .font(.caption)
-                    }
-                    Text("\(field.displayName) — the firmware's own level(i, t) function, ported and verified sample for sample. Threshold \(field.threshold, specifier: "%.2f"), \(Int(field.tickMs)) ms tick. This overrides Type above; clearing it falls back to the nearest equivalent animation.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Divider()
-                }
-
                 Picker("Diode Color", selection: $config.diodeColorMode) {
                     ForEach(DiodeColorMode.allCases) { mode in
                         Text(mode.rawValue).tag(mode)
@@ -856,5 +834,106 @@ struct LabeledSlider: View {
                 .font(.caption.monospacedDigit())
                 .frame(width: 52, alignment: .trailing)
         }
+    }
+}
+
+/// How faithfully the ring is reproducing a real firmware pattern, and how
+/// to step back from that toward something editable.
+///
+/// Three levels, strongest first, and they nest: an imported pattern can
+/// hold all three at once, so clearing one reveals the next rather than
+/// dropping to nothing.
+///
+/// 1. **Recorded stream** — the device's literal command stream, replayed.
+///    Not a model of the output; the output.
+/// 2. **Exact field** — the firmware's own `level(i, t)` maths, ported and
+///    verified sample for sample. Parametric, so speed and palette still
+///    mean something.
+/// 3. **Interpreted** — this app's nearest equivalent animation, fully
+///    editable.
+///
+/// Shown only when a pattern brought one of these in. A card reading
+/// "Interpreted" on every hand-authored design would be noise, and this one
+/// is worth noticing when it appears.
+///
+/// Sits directly above Animation on purpose: levels 1 and 2 override
+/// `animationType`, so the override should be read before the control it
+/// overrides rather than after it.
+public struct FirmwareFidelitySection: View {
+    @ObservedObject var config: RingConfig
+
+    public init(config: RingConfig) {
+        self.config = config
+    }
+
+    private var stream: FirmwarePatternStream? {
+        config.firmwarePatternStream.flatMap { FirmwarePatternStream.stream(named: $0) }
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let stream {
+                level(
+                    "Recorded stream",
+                    detail: "\(stream.events.count) commands over \(format(stream.loopSeconds)) s, replayed at their original timestamps. This is the device's literal output — every set_color and select_led it receives. Nothing here is interpreted.",
+                    symbol: "waveform.badge.checkmark",
+                    tint: .green,
+                    stepDown: config.firmwareLevelField != nil
+                        ? "Step down to the exact maths"
+                        : "Step down to an editable animation"
+                ) {
+                    config.firmwarePatternStream = nil
+                }
+            } else if let field = config.firmwareLevelField {
+                level(
+                    "Exact field — \(field.displayName)",
+                    detail: "The firmware's own level(i, t) function, ported and verified against it sample for sample. Threshold \(format(field.threshold)), \(Int(field.tickMs)) ms tick. Colors and speed still apply; the motion is the device's.",
+                    symbol: "function",
+                    tint: .green,
+                    stepDown: "Step down to an editable animation"
+                ) {
+                    config.firmwareLevelField = nil
+                }
+            } else {
+                level(
+                    "Interpreted",
+                    detail: "This app's nearest equivalent to the imported pattern — close in color and cadence, not frame for frame. Every control below applies normally.",
+                    symbol: "slider.horizontal.3",
+                    tint: .secondary,
+                    stepDown: nil,
+                    action: nil
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func level(
+        _ title: String,
+        detail: String,
+        symbol: String,
+        tint: Color,
+        stepDown: String?,
+        action: (() -> Void)? = nil
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Label(title, systemImage: symbol)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(tint)
+            Spacer()
+        }
+        Text(detail)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        if let stepDown, let action {
+            Button(stepDown, action: action)
+                .buttonStyle(.borderless)
+                .font(.caption)
+        }
+    }
+
+    private func format(_ value: Double) -> String {
+        value == value.rounded() ? String(Int(value)) : String(format: "%.2f", value)
     }
 }

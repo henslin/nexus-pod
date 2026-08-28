@@ -92,6 +92,15 @@ public final class RingConfig: ObservableObject {
     /// authors itself.
     @Published public var firmwareLevelField: FirmwareLevelField? = nil
 
+    /// When set, the ring replays this recorded firmware command stream —
+    /// see `FirmwarePatternStream`. The name is a pattern module, e.g.
+    /// `"plasma_drift"`.
+    ///
+    /// Takes precedence over `firmwareLevelField` and `animationType`,
+    /// since it is the device's literal output rather than a model of it.
+    /// Clearing it falls back to whichever of those is set.
+    @Published public var firmwarePatternStream: String? = nil
+
     // MARK: - Ripple drops
     //
     // Modeled on how a real LED-ring script writes a ripple: not one wave
