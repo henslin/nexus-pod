@@ -496,6 +496,27 @@ One thing the count change surfaced that is worth carrying forward:
   except `FirmwareFieldCheck`. It's now kept as the expression. If you port
   another field, check whether its constants are literals or derived.
 
+### The app depends on `patterns/` but must not own it
+
+`patterns/` is an *extract* of a firmware repo, not a standalone library: it
+imports `led_ring_core` and `ktd2064_ring_model`, which aren't in the folder
+and live upstream next to `agw_ringled_patterns_harpy.c`. Vendoring a copy
+here would fork the source of truth for the device's behavior, which is a
+worse problem than depending on it. So changes to pattern behavior belong
+upstream, in the firmware repo — not in this one.
+
+What this repo owns is **provenance**. `firmware-streams.json` and both check
+fixtures are generated from one specific state of that library, and without a
+record of which, "are our recordings stale?" can only be answered by
+re-recording and diffing.
+
+    python3 library_manifest.py verify <patterns-dir>
+
+exits non-zero listing every changed, added and removed file. Run it before a
+release; run `write` after re-recording. The manifest is a sha256 per file
+plus a combined snapshot id, so a pattern edited upstream and synced down can
+never silently invalidate the committed recordings.
+
 ### The pattern library was a 16-LED library
 
 `patterns/` had 16 baked into it in three ways, all now derived from
