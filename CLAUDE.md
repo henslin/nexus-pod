@@ -368,18 +368,67 @@ survive contact with a real driver. These came from it:
 `diodeFieldRing` — calling it from inside `diodeIntensity` makes it run
 per diode per frame, which is where it started and why it's commented.
 
-## Two Blender importers, doing different jobs
+## Three Blender importers, doing different jobs
 
 - `CodeGenerators.applyBlenderCode` reads **this app's own export** by its
   `NEXUS_PARAMS` block. Exact round-trip; fails cleanly on anything else.
-- `BlenderScriptImporter` reads **someone else's script** — a hand-written
-  ring animation against their own scene, with no agreed format. It
-  scrapes module-level uppercase `NAME = value` constants (numbers and
-  3-tuples) and maps the ones it recognizes: LED count, floor, speed,
-  front width, drop count, palette, and the style named in the header.
+- `BlenderScriptImporter` reads **someone else's scene script** — a
+  hand-written ring animation against their own scene, with no agreed
+  format. It scrapes module-level uppercase `NAME = value` constants
+  (numbers and 3-tuples) and maps the ones it recognizes: LED count,
+  floor, speed, front width, drop count, palette, and the style named in
+  the header.
+- `FirmwarePatternImporter` reads a **firmware pattern module** out of the
+  `patterns/` library — the files that drive the physical ring.
 
-Both import paths try the exact one first and fall back to the
-interpreting one.
+Both UI entry points call `BlenderScriptImporter.apply`, which tries the
+exact reader first and routes firmware modules to the third. Adding the
+routing there rather than at the buttons is what keeps Nexus and Use Cases
+from drifting apart.
+
+### Why the third one exists
+
+A firmware pattern module is built inside-out relative to a scene script:
+it imports its constants and its maths from a shared `pattern_common`,
+keeps almost nothing at module level, and puts every tunable *inside*
+`schedule_*` as an ordinary lowercase local. The uppercase scraper finds
+nothing in one, so all 69 files reported "nothing to import" — which reads
+as a broken importer rather than a mismatched one.
+
+What those files do expose reliably is the **shared helper they delegate
+to** (`_schedule_wake_bloom`, `_schedule_braided_twist`, ...), their
+palette as inline `(r, g, b)` tuples or named constants, and their timing.
+Resolution runs strongest-first: named helper, then the module's own name,
+then `DESCRIPTION` prose, then a rendering primitive. That order is
+load-bearing twice over:
+
+- **Name before prose.** `spinning_rainbow_quad` describes itself in a way
+  that mentions ripples; read prose-first it imported as a Ripple.
+- **`_schedule_level_threshold` is a primitive, not a behavior.** It maps
+  a per-LED level onto the two palette registers. Seventeen files call it,
+  and they are a shimmer, a strobing lattice and a swinging hotspot — not
+  seventeen liquid fills. Same for `_in_any_arc`, which is a geometry test
+  that co-occurs with the real signal.
+
+Locals are whitelisted by name, never scraped wholesale: these bodies also
+contain `t_ms = 0` and `last_c0 = ...`, which look identical to tunables
+to a line-based reader.
+
+`pattern_common.py` is **not** in the folder, so the per-LED maths can't
+be read. Helper names map to this app's nearest behavior and named colors
+resolve to `LEDCueColors`, not to whatever `pattern_common` defines. Both
+substitutions are stated in the report rather than glossed.
+
+### Normalize line endings before parsing
+
+`BlenderScriptImporter.apply` strips `\r` before either reader runs. Both
+are line-based and both parse the tail of a line as a value, so a trailing
+carriage return makes `Double("14.0\r")` nil and stops
+`"(30, 220, 110)\r"` from ending in a paren — every knob silently reads as
+absent. Every file in `patterns/` is CRLF while the LF scene script this
+was originally built against isn't, so the whole class of bug hid behind
+the test case. Don't add a parser that splits on `\n` upstream of that
+normalization.
 
 `BlenderScriptImporter` is deliberately an **interpretation**, and it
 reports itself as one — the `Outcome` carries what it applied *and* what

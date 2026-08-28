@@ -194,8 +194,15 @@ struct SavedPresetsView: View {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.message = "Choose a Blender LED-ring script (.py)"
-        guard panel.runModal() == .OK, let url = panel.url,
-              let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let text = BlenderScriptImporter.readScript(at: url) else {
+            blenderReport = BlenderReport(url.lastPathComponent, BlenderScriptImporter.Outcome(
+                applied: [],
+                dropped: [],
+                caveat: "Couldn't read this file as text — it isn't UTF-8, Latin-1, Mac Roman or UTF-16. Nothing was changed."
+            ))
+            return
+        }
 
         // This app's own export round-trips exactly, so try that first and
         // only fall back to interpreting a foreign script.

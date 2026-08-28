@@ -217,8 +217,15 @@ public struct UseCaseDetailView: View {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.message = "Choose a Blender LED-ring script (.py)"
-        guard panel.runModal() == .OK, let url = panel.url,
-              let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let text = BlenderScriptImporter.readScript(at: url) else {
+            blenderReport = UseCaseBlenderReport(url.lastPathComponent, BlenderScriptImporter.Outcome(
+                applied: [],
+                dropped: [],
+                caveat: "Couldn't read this file as text — it isn't UTF-8, Latin-1, Mac Roman or UTF-16. Nothing was changed."
+            ))
+            return
+        }
 
         if case .success = CodeGenerators.applyBlenderCode(text, to: editingConfig) {
             blenderReport = UseCaseBlenderReport(url.lastPathComponent, BlenderScriptImporter.Outcome(

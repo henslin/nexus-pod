@@ -46,7 +46,51 @@ public enum BlenderScriptImporter {
         case triple(Double, Double, Double)
     }
 
-    public static func apply(_ text: String, to config: RingConfig) -> Outcome {
+    /// Reads a script file as text, trying the encodings these scripts
+    /// actually turn up in.
+    ///
+    /// Exists so a decoding failure can be *reported*. Both call sites
+    /// previously did `try? String(contentsOf:)` inside the same `guard`
+    /// that handled the user cancelling the open panel, so a file that
+    /// wouldn't decode took the same path as "no file chosen": the panel
+    /// closed and nothing happened, with no report and no error. Returning
+    /// nil here lets the caller say so instead.
+    public static func readScript(at url: URL) -> String? {
+        if let text = try? String(contentsOf: url, encoding: .utf8) { return text }
+        for encoding: String.Encoding in [.isoLatin1, .macOSRoman, .utf16] {
+            if let text = try? String(contentsOf: url, encoding: encoding) { return text }
+        }
+        return nil
+    }
+
+    public static func apply(_ rawText: String, to config: RingConfig) -> Outcome {
+        // Normalize line endings before anything reads a line.
+        //
+        // Both readers here are line-based, and both parse the *tail* of a
+        // line as a value — a number, or a `(r, g, b)` tuple. A trailing
+        // carriage return makes `Double("14.0\r")` nil and stops
+        // `"(30, 220, 110)\r"` from ending in a paren, so on a CRLF file
+        // every knob silently reads as absent and the import reports
+        // nothing found. Silent, total, and indistinguishable from an
+        // unsupported file — which is exactly how it presented.
+        //
+        // Not hypothetical: every file in the `patterns/` library is CRLF,
+        // while the LF script this importer was originally built against
+        // isn't, so the whole class of bug hid behind the test case.
+        let text = rawText.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        // A firmware pattern module is a different shape of file entirely —
+        // its tunables are lowercase locals inside `schedule_*` rather than
+        // uppercase module constants, so the scraper below finds nothing in
+        // one and reports an empty import. Hand those off to the reader
+        // that understands them. Both UI entry points call through here, so
+        // routing at this level is what makes the two paths one feature
+        // rather than two buttons.
+        if FirmwarePatternImporter.matches(text) {
+            return FirmwarePatternImporter.apply(text, to: config)
+        }
+
         let constants = parseConstants(text)
         var applied: [String] = []
         var dropped: [String] = []
