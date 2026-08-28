@@ -12,6 +12,15 @@ struct CueListView: View {
     @Binding var selectedCueID: String?
     @Binding var searchText: String
 
+    /// Which category sections are open.
+    ///
+    /// Starts with just the one holding the current selection, because the
+    /// library is 64 cues and every visible row now renders a live
+    /// animating preview — opening all of them at once is both a wall of
+    /// motion to read and a lot of `TimelineView`s driving at once.
+    /// Onboarding alone is 23.
+    @State private var expandedCategories: Set<String> = []
+
     var body: some View {
         List(selection: $selectedCueID) {
             ForEach(LEDCueLibrary.categories, id: \.self) { category in
@@ -19,7 +28,7 @@ struct CueListView: View {
                     .map { group in (subcategory: group.subcategory, cues: group.cues.filter { matches($0) }) }
                     .filter { !$0.cues.isEmpty }
                 if !groups.isEmpty {
-                    Section(category) {
+                    Section(category, isExpanded: expansion(for: category)) {
                         ForEach(groups, id: \.subcategory) { group in
                             if let subcategory = group.subcategory {
                                 // Same `GroupCaption` treatment the control
@@ -32,8 +41,12 @@ struct CueListView: View {
                                 GroupCaption(subcategory)
                             }
                             ForEach(group.cues) { cue in
-                                CueRow(cue: cue, isModified: store.isModified(cue))
-                                    .tag(cue.id)
+                                CueRow(
+                                    cue: cue,
+                                    parameters: store.parameters(for: cue),
+                                    isModified: store.isModified(cue)
+                                )
+                                .tag(cue.id)
                             }
                         }
                     }
@@ -42,6 +55,16 @@ struct CueListView: View {
         }
         .listStyle(.sidebar)
         .searchable(text: $searchText, prompt: "Search cues")
+        .onAppear {
+            // Open whichever category holds the current selection, so the
+            // list doesn't start as seven closed headers with nothing to
+            // look at.
+            if expandedCategories.isEmpty,
+               let selectedCueID,
+               let cue = LEDCueLibrary.cue(id: selectedCueID) {
+                expandedCategories.insert(cue.category)
+            }
+        }
         .toolbar {
             ToolbarItem {
                 Button {
@@ -63,6 +86,26 @@ struct CueListView: View {
         }
     }
 
+    /// Binding for one category's disclosure state.
+    ///
+    /// While a search is active every section reads as expanded regardless
+    /// of what's stored — a filtered-out section is already hidden, and a
+    /// section that matched but stayed collapsed would look like the
+    /// search found nothing. Toggling during a search still records the
+    /// intent, so closing the search returns the list to how it was left.
+    private func expansion(for category: String) -> Binding<Bool> {
+        Binding(
+            get: { !searchText.isEmpty || expandedCategories.contains(category) },
+            set: { isExpanded in
+                if isExpanded {
+                    expandedCategories.insert(category)
+                } else {
+                    expandedCategories.remove(category)
+                }
+            }
+        )
+    }
+
     private func matches(_ cue: LEDCue) -> Bool {
         searchText.isEmpty
             || cue.name.localizedCaseInsensitiveContains(searchText)
@@ -81,10 +124,24 @@ struct CueListView: View {
 
 private struct CueRow: View {
     let cue: LEDCue
+    /// The cue's *effective* parameters — `store.parameters(for:)`, so the
+    /// thumbnail shows your tweaks rather than the shipped defaults.
+    let parameters: LEDCueParameters
     let isModified: Bool
 
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
+            // Same 22-in-28 thumbnail Saved Animations and Use Cases rows
+            // use. `LEDCuePreviewView` rather than `RingView` because a cue
+            // is `LEDCueParameters`, not a `RingPreset` — it renders the
+            // spec-sheet styles directly and hands the continuous ones to
+            // `RingView` itself.
+            //
+            // `lineWidth` has to be given explicitly: it defaults to 12,
+            // which is most of a 22pt ring's radius and renders as a solid
+            // blob at this size.
+            LEDCuePreviewView(parameters: parameters, diameter: 22, lineWidth: 3)
+                .frame(width: 28, height: 28)
             Text(cue.name)
             Spacer()
             if isModified {
