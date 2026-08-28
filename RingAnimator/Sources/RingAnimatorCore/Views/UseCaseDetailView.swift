@@ -40,6 +40,17 @@ public struct UseCaseDetailView: View {
     @StateObject private var editingConfig: RingConfig
     @State private var expanded: [String: Bool]
 
+    /// This use case's own sequence, in its own store — see
+    /// `TimelinePlayer.useCaseFileName`. Created per view identity, which
+    /// the `.id(preset.id)` at the call site already guarantees is one per
+    /// use case.
+    @StateObject private var player: TimelinePlayer
+
+    /// Where the playhead sits while stopped. Playback itself is computed
+    /// from `TimelineView`'s own date, so nothing republishes per frame —
+    /// same arrangement as the Mac app's Preview tab.
+    @State private var pausedPlayhead: Double = 0
+
     /// Caller (`ContentView`) is expected to key this view with
     /// `.id(preset.id)` at the call site — a `@StateObject` only runs its
     /// initial-value closure once per view *identity*, so without that,
@@ -51,6 +62,7 @@ public struct UseCaseDetailView: View {
         let config = RingConfig()
         preset.apply(to: config)
         _editingConfig = StateObject(wrappedValue: config)
+        _player = StateObject(wrappedValue: TimelinePlayer(fileName: TimelinePlayer.useCaseFileName(preset.id)))
         // Same defaults as Nexus's own Controls panel (`ControlsView.init`).
         _expanded = State(initialValue: [
             "color": true,
@@ -117,14 +129,43 @@ public struct UseCaseDetailView: View {
     /// same shape as `CueDetailView.previewPane`, minus the spec-sheet
     /// reference text (use cases have no canned spec to compare against).
     private var previewPane: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                header
-                centeredPreview
+        // One clock for the pane, stopped dead when nothing is playing.
+        TimelineView(.animation(paused: !player.isPlaying)) { context in
+            let now = player.currentTime(at: context.date)
+            let playback = player.playback(at: context.date)
+
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        header
+                        centeredPreview(playback: playback)
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Divider()
+                TimelineStripView(
+                    player: player,
+                    config: editingConfig,
+                    playhead: now,
+                    onScrub: { player.scrub(to: $0) }
+                )
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .onAppear {
+            // Deferred for the same reason ContentView defers it:
+            // `@StateObject`s aren't guaranteed constructed until first
+            // appearance, and binding needs both objects to exist.
+            player.bind(to: editingConfig)
+        }
+    }
+
+    /// What the preview renders — the player's read-only playback config
+    /// while a sequence runs, the live editing config otherwise. Same split
+    /// as `PreviewTab.displayConfig`: while paused the editing config
+    /// already *is* the selected step.
+    private var displayConfig: RingConfig {
+        player.isPlaying ? player.playbackConfig : editingConfig
     }
 
     private var controlsPanel: some View {
@@ -139,10 +180,11 @@ public struct UseCaseDetailView: View {
             .font(.title2.bold())
     }
 
-    private var centeredPreview: some View {
+    private func centeredPreview(playback: TimelinePlayback?) -> some View {
         VStack(spacing: 12) {
             LargePreviewCard(diameter: 200) {
-                RingView(config: editingConfig, diameter: 200)
+                RingView(config: displayConfig, diameter: 200, overrideElapsed: playback?.elapsed)
+                    .opacity(playback?.opacity ?? 1)
             }
             VStack(spacing: 4) {
                 Text(editingConfig.animationType.rawValue).font(.headline)

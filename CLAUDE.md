@@ -59,8 +59,23 @@ form of what `LEDPatternStyle` already carried as fixed cases
   with `sequencePlaybackEnabled` forced off — the timeline owns fading,
   and leaving the per-step envelope on double-fades.
 - **UI**: `TimelineStripView` (Core) under the canvas in the Mac app's
-  Preview tab. Persists to `timeline.json` in Application Support. Not
-  yet hosted on iOS, but the model and strip both live in Core for it.
+  Preview tab, in `UseCaseDetailView`, and on iOS via `TimelineScreen`
+  from the Ring Settings sheet. One view, three hosts.
+- **Three separate timelines, three stores.** Nexus's is
+  `timeline.json`; each use case gets its own
+  `use-case-timeline-<uuid>.json` (see
+  `TimelinePlayer.useCaseFileName`), deleted with the use case in
+  `UseCaseListView` so it can't be orphaned.
+
+  A file per use case rather than a `timeline` property on `RingPreset`,
+  deliberately: `TimelineSegment.snapshot` *is* a `RingPreset`, so giving
+  `RingPreset` a timeline would let a step contain a timeline containing
+  steps. The type system would allow it and nothing would stop it.
+
+  The Cue Library has no timeline on purpose — a cue is one named
+  behavior from the spec sheet, and the multi-phase styles plus
+  sequencing in Nexus already cover composition. Adding per-cue
+  timelines would create two competing ways to express the same thing.
 
 Not built (deliberately): interpolation between steps, per-property
 keyframes, parallel tracks.

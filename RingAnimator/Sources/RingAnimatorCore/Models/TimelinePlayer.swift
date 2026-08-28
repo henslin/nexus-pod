@@ -127,6 +127,30 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     /// single slider drag produces into one write.
     private var pendingCapture: DispatchWorkItem?
 
+    /// Store file for a timeline belonging to one use case.
+    ///
+    /// A file per use case rather than one dictionary keyed by ID: it
+    /// keeps `RingPreset` a flat snapshot, which matters more than it
+    /// looks. `TimelineSegment.snapshot` *is* a `RingPreset`, so giving
+    /// `RingPreset` a timeline of its own would let a step contain a
+    /// timeline containing steps — recursion the type system would happily
+    /// allow and nothing would stop.
+    public static func useCaseFileName(_ id: UUID) -> String {
+        "use-case-timeline-\(id.uuidString).json"
+    }
+
+    /// Deletes a timeline store. Called when its use case is deleted, so
+    /// the file doesn't outlive what it belonged to.
+    public static func deleteStore(fileName: String) {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return
+        }
+        let url = base
+            .appendingPathComponent("RingAnimator", isDirectory: true)
+            .appendingPathComponent(fileName)
+        try? FileManager.default.removeItem(at: url)
+    }
+
     public init(fileName: String = "timeline.json") {
         self.fileName = fileName
         self.timeline = RingTimeline()

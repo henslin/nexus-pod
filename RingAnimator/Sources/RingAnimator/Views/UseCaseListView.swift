@@ -43,6 +43,17 @@ struct UseCaseListView: View {
                             onExport: { exportSingle(preset) },
                             onDelete: {
                                 store.delete(preset.id)
+                                // A use case's timeline lives in its own
+                                // store file (see
+                                // `TimelinePlayer.useCaseFileName`), which
+                                // nothing else would ever clean up — a
+                                // deleted use case would otherwise leave an
+                                // orphan in Application Support forever,
+                                // and a new use case can't collide with it
+                                // since the name is keyed by UUID.
+                                TimelinePlayer.deleteStore(
+                                    fileName: TimelinePlayer.useCaseFileName(preset.id)
+                                )
                                 if selectedUseCaseID == preset.id { selectedUseCaseID = nil }
                             }
                         )
