@@ -8,7 +8,7 @@ events = []   # (t_ms, kind, payload)
 def _ev(t, kind, payload): events.append((int(t), kind, payload))
 
 core = types.ModuleType("led_ring_core")
-core.TOTAL_LEDS = 16
+core.TOTAL_LEDS = 20
 def set_color0(system, r, g, b, *a): _ev(_now[0], "c0", (r, g, b))
 def set_color1(system, r, g, b, *a): _ev(_now[0], "c1", (r, g, b))
 def set_fade_rate(system, idx): _ev(_now[0], "fade", idx)
@@ -58,7 +58,7 @@ class Controller:
 
 common = types.ModuleType("pattern_common")
 common.__dict__["__file__"] = os.path.join(P, "pattern_common.py")
-sys.path.insert(0, "/Users/chris/Desktop")
+sys.path.insert(0, P)  # ripple.py lives beside the patterns
 exec(compile(open(os.path.join(P,"pattern_common.py"),encoding="utf-8").read(),
              "pattern_common.py","exec"), common.__dict__)
 sys.modules["pattern_common"] = common
@@ -67,7 +67,7 @@ pkg = types.ModuleType("patterns")
 pkg.__path__ = [P]
 sys.modules["patterns"] = pkg
 
-def replay(evs, total_ms, tick_ms, leds=16):
+def replay(evs, total_ms, tick_ms, leds=20):
     """Per-LED (register, selected) state sampled on a grid."""
     evs = sorted(evs, key=lambda e: e[0])
     frames = []
@@ -116,7 +116,7 @@ for fn in sorted(os.listdir(P)):
         total = sched(Controller(), None)
         total = int(total) if total else 8000
         tick = 100
-        frames = replay(list(events), min(total, 24000), tick)
+        frames = replay(list(events), min(total, 24000), tick, leds=20)
         out[name] = {"total_ms": total, "tick_ms": tick,
                      "events": len(events), "frames": frames,
                      "raw": [[t, k, list(pay) if isinstance(pay, tuple) else pay]

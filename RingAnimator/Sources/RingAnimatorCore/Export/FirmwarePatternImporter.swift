@@ -251,13 +251,14 @@ public enum FirmwarePatternImporter {
         "STANDBY_GREEN": rgb(0, 255, 0),
     ]
 
-    /// The ring is 16 LEDs.
+    /// The ring is 20 LEDs — the real hardware count.
     ///
-    /// `TOTAL_LEDS` itself lives in `led_ring_core`, which still isn't in
-    /// the folder, but `pattern_common`'s geometry pins it exactly:
-    /// `TOP_LEDS = [0, 15]`, `LEFT_HALF = [8...15]`, "opposite" is
-    /// `(i + 8) % TOTAL_LEDS`, and there are 8 symmetric pairs.
-    private static let ringLEDCount: Double = 16
+    /// `pattern_common`'s geometry constants still describe a 16-LED ring
+    /// (`TOP_LEDS = [0, 15]`, 8 symmetric pairs), which is why this was 16
+    /// before the hardware count was known. Almost every pattern derives
+    /// its motion from `TOTAL_LEDS` and rescales cleanly; the handful that
+    /// don't are called out in CLAUDE.md.
+    private static let ringLEDCount: Double = 20
 
     /// `FADE_TAU_MS` — the fade engine's time constant per rate index.
     private static let fadeTauMs: [Double] = [31, 63, 125, 250, 500, 1000, 2000, 4000]
@@ -425,7 +426,7 @@ public enum FirmwarePatternImporter {
         // --- than something read out of the individual file.
         if behavior != nil {
             config.diodeCount = ringLEDCount
-            applied.append("16-LED ring → Diode Count")
+            applied.append("20-LED ring → Diode Count")
         }
 
         // --- The exact field, for the patterns built on the firmware's
@@ -607,7 +608,7 @@ public enum FirmwarePatternImporter {
         if text.contains("_schedule_battery_cascade("), let lit = firstPositionalNumber(in: text) {
             litLEDs = lit
             config.trailFraction = min(max(lit / ringLEDCount, 0.02), 1)
-            applied.append("\(Int(lit)) of 16 LEDs lit → \(Int(lit / ringLEDCount * 100))% fill")
+            applied.append("\(Int(lit)) of \(Int(ringLEDCount)) LEDs lit → \(Int(lit / ringLEDCount * 100))% fill")
         }
 
         // --- Recognized but unrepresentable.

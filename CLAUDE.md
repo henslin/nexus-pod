@@ -472,6 +472,49 @@ Regenerate with `Sources/FirmwareFieldCheck/record_streams.py` when the
 pattern library changes. `firmware-streams.json` (180 KB) is a committed
 resource, so neither the app nor its checks need a copy of the library.
 
+### The ring is 20 LEDs
+
+`RingConfig.diodeCount` defaults to 20 and `FirmwarePatternImporter.ringLEDCount`
+is 20 — the real hardware count. Note that `pattern_common.py`'s *geometry
+constants* still describe a 16-LED ring (`TOP_LEDS = [0, 15]`, 8 symmetric
+pairs), which is why this was 16 before the hardware count was known.
+
+Almost everything rescales on its own: the patterns derive their motion from
+`TOTAL_LEDS`, so re-recording with `core.TOTAL_LEDS = 20` in
+`record_streams.py` is the whole change. 62 of the patterns use the full 20
+immediately. **Regenerate both fixtures at the same count** — the
+differential check must compare against real Python at 20, never be
+re-baselined against the port's own output.
+
+Three things the count change surfaced, worth knowing before trusting a
+pattern at 20:
+
+- **A parameter can be *derived* from `TOTAL_LEDS`.**
+  `wake_bloom_trio_gaps_green` computes
+  `speed_leds_per_s = revolutions_per_loop * TOTAL_LEDS / loop_seconds`,
+  which is 4.0 on a 16-ring and 5.0 on a 20-ring. It was ported as the
+  literal 4.0 and was the *only* field that broke — silently everywhere
+  except `FirmwareFieldCheck`. It's now kept as the expression. If you port
+  another field, check whether its constants are literals or derived.
+- **`battery_25/50/75` light 4 / 8 / 12 LEDs**, which was 25/50/75% of a
+  16-ring and is 20/40/60% of a 20-ring. The counts are faithful to the
+  source; the *names* no longer match the fraction. That's a pattern-library
+  fix, not an app one.
+- **`battery_low` blinks LEDs 0 and 15**, from the hardcoded
+  `TOP_LEDS = [0, 15]`. On a 20-ring the top pair is 0 and 19.
+
+The mirrored spin/comet patterns are fine, despite hardcoding `15` as the
+counter-rotating start: the two heads sweep separations 1..9 symmetrically
+and still cross, exactly as they did at 16.
+
+**`ripple.py` blocks two patterns at 20.** It declares `NUM_LEDS = 16` and
+`pattern_common` asserts that against the ring, so `listening` and
+`ripple_blue_white` refuse to record and fall back to parametric
+interpretation. The assert is the source protecting itself — the ripple
+motion maths is authored for 16 and needs updating by whoever owns it.
+`ripple_green` is unaffected (it authors steps directly). Coverage at 20 is
+therefore 67 of 69 exact.
+
 ### Bulk import: a whole library into Use Cases
 
 `UseCaseListView`'s "Import Pattern Folder…" creates one use case per `.py`
@@ -535,7 +578,7 @@ a time. It sits directly above Animation because levels 1 and 2 override
 overrides. It's hidden entirely when no firmware pattern is loaded — a card
 reading "Interpreted" on every hand-authored design is noise.
 
-**Coverage: 69 of 69 exact.** The ripple family needed `ripple.py` — the
+**Coverage: 67 of 69 exact at 20 LEDs** (69 of 69 at 16). The ripple family needed `ripple.py` — the
 canonical motion maths `pattern_common._import_ripple_math()` looks for —
 which isn't in `patterns/`. `record_streams.py` adds the Desktop to
 `sys.path` to find it; point that at wherever it lives if it moves.

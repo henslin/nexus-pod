@@ -146,12 +146,25 @@ struct UseCaseListView: View {
         }
 
         var imported = 0
+        var added = 0
+        var replaced = 0
         var exact = 0
         var phased = 0
         var skipped: [String] = []
 
         for file in files {
             guard let (text, _) = BlenderScriptImporter.readScriptFollowingDelegation(at: file) else {
+                skipped.append(file.lastPathComponent)
+                continue
+            }
+            // A pattern defines `schedule_<name>`. The support modules that
+            // live in the same folder don't — `ripple.py` is motion maths,
+            // `pattern_common.py` is the engine library — and a folder
+            // import shouldn't turn them into use cases. `ripple.py` in
+            // particular reads cleanly as a *scene* script (it has an
+            // uppercase `NUM_LEDS`), so without this it imported as a
+            // plausible-looking animation with the wrong ring size.
+            guard text.contains("def schedule_") else {
                 skipped.append(file.lastPathComponent)
                 continue
             }
@@ -163,7 +176,25 @@ struct UseCaseListView: View {
             }
 
             let name = displayName(for: file)
-            let preset = store.add(RingPreset(name: name, config: config))
+
+            // Replace by name rather than append.
+            //
+            // Re-importing a folder is how you pick up a corrected pattern,
+            // and appending turned that into a list with two of everything
+            // and no way to tell which was current. Keeping the existing
+            // id means the use case's timeline file, which is keyed by that
+            // id, is overwritten in place instead of orphaned.
+            let preset: RingPreset
+            if let existing = store.presets.first(where: { $0.name == name }) {
+                var updated = RingPreset(name: name, config: config)
+                updated.id = existing.id
+                store.update(updated)
+                preset = updated
+                replaced += 1
+            } else {
+                preset = store.add(RingPreset(name: name, config: config))
+                added += 1
+            }
             imported += 1
             if config.firmwarePatternStream != nil { exact += 1 }
 
@@ -171,13 +202,13 @@ struct UseCaseListView: View {
             // preset's UUID, so writing it means standing up that use case's
             // player and installing into it — the same path the detail view
             // uses when you import into an open use case.
-            if let timeline = outcome.timeline {
-                let player = TimelinePlayer(
-                    fileName: TimelinePlayer.useCaseFileName(preset.id)
-                )
-                player.installImported(timeline)
-                phased += 1
-            }
+            // Installed even when empty, so a pattern that used to import
+            // as phases and no longer does doesn't keep the old steps.
+            let player = TimelinePlayer(
+                fileName: TimelinePlayer.useCaseFileName(preset.id)
+            )
+            player.installImported(outcome.timeline ?? RingTimeline())
+            if outcome.timeline != nil { phased += 1 }
         }
 
         guard imported > 0 else {
@@ -185,7 +216,14 @@ struct UseCaseListView: View {
             return
         }
 
-        var summary = "Added \(imported) use case\(imported == 1 ? "" : "s")."
+        var summary: String
+        if replaced > 0 && added > 0 {
+            summary = "Added \(added), replaced \(replaced)."
+        } else if replaced > 0 {
+            summary = "Replaced \(replaced) existing use case\(replaced == 1 ? "" : "s")."
+        } else {
+            summary = "Added \(added) use case\(added == 1 ? "" : "s")."
+        }
         if exact > 0 {
             summary += " \(exact) replay the device's own command stream exactly."
         }

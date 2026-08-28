@@ -22,6 +22,10 @@ import RingAnimatorCore
 //
 // Not part of the app; `swift run FirmwareFieldCheck` before a release.
 
+/// The ring both fixtures were recorded at. Changing the hardware count
+/// means regenerating them, not editing this — see the scripts alongside.
+let ringLEDs = 20
+
 let mapping: [String: FirmwareLevelField] = [
     "braided_twist_green": .braidedTwist,
     "braided_twist_red": .braidedTwist,
@@ -76,7 +80,7 @@ for (module, reference) in references.sorted(by: { $0.key < $1.key }) {
     var maxDelta = 0.0
     var litMismatches = 0
     var index = 0
-    for led in 0..<16 {
+    for led in 0..<ringLEDs {
         for step in 0..<40 {
             let time = Double(step) * 0.25
             let mine = field.level(index: led, time: time)
@@ -171,15 +175,15 @@ for (name, reference) in recorded.sorted(by: { $0.key < $1.key }) {
         // One pass only. The wrap point is a boundary the two sides define
         // differently and it isn't part of the animation.
         guard frame.t < reference.total_ms else { continue }
-        let mine = stream.frame(atSeconds: frame.t / 1000, ledCount: 16)
-        for led in 0..<16 {
+        let mine = stream.frame(atSeconds: frame.t / 1000, ledCount: ringLEDs)
+        for led in 0..<ringLEDs {
             let explicit = frame.rgb?[led]
             let expected: [Int]? = explicit ?? (frame.sel[led] == 0
                 ? nil
                 : (frame.bits[led] == 0 ? frame.c0 : frame.c1))
             if expected != mine.leds[led].map(channels) { mismatches += 1 }
         }
-        ledFrames += 16
+        ledFrames += ringLEDs
     }
     if mismatches > 0 {
         print("❌ \(name): \(mismatches) LED-frame mismatches")

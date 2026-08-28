@@ -41,7 +41,7 @@ import Foundation
 ///   call site here has positive operands, but the helper keeps the port
 ///   honest rather than relying on that staying true.
 ///
-/// Every case is checked against the real Python over a 16 x 40 grid of
+/// Every case is checked against the real Python over a 20 x 40 grid of
 /// (LED, time) samples — see the differential test in `Tests`.
 public enum FirmwareLevelField: String, Codable, CaseIterable, Sendable {
     case braidedTwist
@@ -61,8 +61,14 @@ public enum FirmwareLevelField: String, Codable, CaseIterable, Sendable {
     case wakeBloomWaiting
     case warbleKaleidoscope
 
-    /// The ring these were all written for.
-    private static let totalLEDs: Double = 16
+    /// The ring these run on.
+    ///
+    /// The pattern library derives almost everything from `TOTAL_LEDS`, so
+    /// the fields rescale to the real hardware simply by changing this —
+    /// and the differential fixture is regenerated at the same count, so
+    /// the check stays honest rather than being re-baselined against the
+    /// port's own output.
+    private static let totalLEDs: Double = 20
 
     /// The threshold each pattern passes to the engine. Mostly the 0.5
     /// default, but three override it and those three look wrong at 0.5.
@@ -150,8 +156,14 @@ public enum FirmwareLevelField: String, Codable, CaseIterable, Sendable {
             return max(0, min(1, base + shimmer))
 
         case .wakeBloomTrioGaps:
-            // speed_leds_per_s 4.0, gap_half_width 1.5, n_arcs 3
-            let pos = pmod(t * 4.0, n)
+            // gap_half_width 1.5, n_arcs 3, and a speed the source *derives*
+            // from the ring: `revolutions_per_loop * TOTAL_LEDS /
+            // loop_seconds`, i.e. 2 x n / 8. Kept as that expression rather
+            // than the number it came to on a 16-LED ring — hardcoding 4.0
+            // was the one thing that broke when the count changed, and it
+            // broke silently everywhere except the differential check.
+            let speedLEDsPerSecond = 2 * n / 8
+            let pos = pmod(t * speedLEDsPerSecond, n)
             return inAnyArc(i: i, pos: pos, halfWidth: 1.5, arcs: 3) ? 0 : 1
 
         case .voiceprintShimmer:
@@ -264,7 +276,7 @@ public enum FirmwareLevelField: String, Codable, CaseIterable, Sendable {
         return x - floor(x)
     }
 
-    /// `_ring_distance` — shortest way round a 16-LED circle.
+    /// `_ring_distance` — shortest way round the ring.
     private func ringDistance(_ i: Double, _ pos: Double) -> Double {
         let d = abs(i - pos)
         return min(d, Self.totalLEDs - d)

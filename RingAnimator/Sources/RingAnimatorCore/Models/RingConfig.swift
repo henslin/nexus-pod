@@ -69,7 +69,7 @@ public final class RingConfig: ObservableObject {
 
     /// Number of individual "diode" dots in "Alternating" mode — string-lights
     /// style, where every other diode lights up and they swap back and forth.
-    @Published public var diodeCount: Double = 30
+    @Published public var diodeCount: Double = 20
     /// Blink modulation layered under `RingAnimationType.multiChase` — see
     /// `BlinkPattern`. `.steady` (no modulation) is the default so adding
     /// this changed nothing about how anything already looked.

@@ -4,7 +4,7 @@ P = "/Users/chris/Library/Mobile Documents/com~apple~CloudDocs/Claude/patterns"
 
 # Stub led_ring_core: only TOTAL_LEDS matters for the maths.
 core = types.ModuleType("led_ring_core")
-core.TOTAL_LEDS = 16
+core.TOTAL_LEDS = 20
 for name in ["set_color0","set_color1","set_fade_rate","select_led","select_all_leds",
              "global_off","set_driver_color0","set_driver_color1","schedule_steps"]:
     setattr(core, name, lambda *a, **k: None)
@@ -48,7 +48,7 @@ for fn in sorted(os.listdir(P)):
         lvl = captured.get("level")
         if lvl is None: continue
         grid = []
-        for i in range(16):
+        for i in range(20):
             for step in range(40):
                 t = step * 0.25
                 grid.append(float(lvl(i, t)))
