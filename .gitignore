@@ -27,6 +27,11 @@ RingAnimator.app/
 **/Packaging/stage/
 *.zip
 
+# Command-line `xcodebuild` (unlike Xcode.app, which uses DerivedData)
+# drops its output in a build/ next to the project — RingAnimator/build/
+# and RingAnimatoriOS/build/. Generated, and 60M+ of it.
+build/
+
 # Stray/junk files from earlier manual downloads — not source, safe to
 # leave untracked rather than delete outright.
 ziIlfxzQ
