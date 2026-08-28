@@ -196,7 +196,28 @@ at once), then File > Open Recent to reopen `RingAnimatoriOS.xcodeproj`
 fresh. Sometimes also needs Reset Package Caches + Clean Build Folder.
 This is a recurring SwiftPM local-package-lock quirk, not a real bug.
 
-**Signing/distribution (macOS):** `RingAnimator/Packaging/build_and_sign.sh`
+**Signing/distribution (macOS):** staging happens in
+`~/Developer/NexusPod-Release`, **outside iCloud on purpose** (override
+with `NEXUS_STAGE_DIR`). Staging inside the repo fails: `xattr -cr` strips
+`com.apple.FinderInfo` before signing, iCloud's file provider puts it back
+before `codesign --verify` runs, and the script dies with "resource fork,
+Finder information, or similar detritus not allowed". Stripping harder
+doesn't win that race.
+
+That bug silently cost a release once — the Aug 26 build was Developer ID
+signed but never notarized, because the script died after signing and
+nobody checked. Always verify the artifact the way a recipient gets it:
+
+```
+xcrun stapler validate "<app>"      # want: The validate action worked!
+spctl -a -vv "<app>"                # want: source=Notarized Developer ID
+```
+
+`spctl` reporting plain `source=Developer ID` means signed but *not*
+notarized — it passes on the machine that built it and warns on everyone
+else's.
+
+`RingAnimator/Packaging/build_and_sign.sh`
 — builds release, assembles a `.app`, strips iCloud extended attributes
 (see Known issues below), codesigns with Developer ID, notarizes, staples,
 and zips. One-time setup (signing identity + notarytool credentials) is

@@ -54,7 +54,18 @@ PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 EXECUTABLE_NAME="RingAnimator"
 BUNDLE_NAME="Nexus Pod"
 BUILD_DIR="$PACKAGE_DIR/.build/release"
-STAGE_DIR="$PACKAGE_DIR/Packaging/stage"
+# Staged OUTSIDE iCloud Drive, deliberately.
+#
+# This whole repo lives in iCloud, whose file provider stamps
+# com.apple.FinderInfo onto files as it syncs them. The `xattr -cr` below
+# strips that before signing, but iCloud puts it back between the signing
+# and verification steps — `codesign --verify` then fails with "resource
+# fork, Finder information, or similar detritus not allowed" and no
+# shippable artifact comes out. Stripping harder doesn't win the race; the
+# only fix that holds is assembling somewhere iCloud isn't watching.
+#
+# Override with NEXUS_STAGE_DIR if you want it elsewhere.
+STAGE_DIR="${NEXUS_STAGE_DIR:-$HOME/Developer/NexusPod-Release}"
 APP_BUNDLE="$STAGE_DIR/$BUNDLE_NAME.app"
 
 echo "→ Building Release..."
