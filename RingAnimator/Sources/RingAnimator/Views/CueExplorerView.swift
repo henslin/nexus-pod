@@ -21,6 +21,13 @@ struct CueListView: View {
     /// Onboarding alone is 23.
     @State private var expandedCategories: Set<String> = []
 
+    /// Which subcategories are open, keyed `category/subcategory`.
+    ///
+    /// Composite key because subcategory names aren't unique across
+    /// categories — keying on the bare name would tie unrelated groups in
+    /// different categories together.
+    @State private var expandedSubcategories: Set<String> = []
+
     var body: some View {
         List(selection: $selectedCueID) {
             ForEach(LEDCueLibrary.categories, id: \.self) { category in
@@ -31,22 +38,41 @@ struct CueListView: View {
                     Section(isExpanded: expansion(for: category)) {
                         ForEach(groups, id: \.subcategory) { group in
                             if let subcategory = group.subcategory {
-                                // Same `GroupCaption` treatment the control
-                                // cards use for their own sub-groups (e.g.
-                                // Particles' "Emission"/"Motion"/"Appearance")
-                                // — uppercase, small, tertiary — so this reads
-                                // as clearly one level below the native
-                                // Category `Section` header above it, instead
-                                // of blending in with the cue rows below it.
-                                GroupCaption(subcategory)
-                            }
-                            ForEach(group.cues) { cue in
-                                CueRow(
-                                    cue: cue,
-                                    parameters: store.parameters(for: cue),
-                                    isModified: store.isModified(cue)
-                                )
-                                .tag(cue.id)
+                                let isExpanded = subExpansion(category: category, subcategory: subcategory)
+                                DisclosureGroup(isExpanded: isExpanded) {
+                                    cueRows(group.cues)
+                                } label: {
+                                    // Deliberately between the two levels
+                                    // around it: smaller and dimmer than
+                                    // the category header so the hierarchy
+                                    // still reads, but not the tertiary
+                                    // caption2 this used to be — that was
+                                    // unclickably small once it became a
+                                    // control rather than a caption. Same
+                                    // full-width hit target as the header
+                                    // above, for the same reason.
+                                    Text(subcategory.uppercased())
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.vertical, 3)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                        // macOS `DisclosureGroup` only makes
+                                        // the chevron itself a toggle target
+                                        // — clicking the label does nothing,
+                                        // which is the same too-small hit
+                                        // target the category headers had,
+                                        // one level down. The `Section`
+                                        // headers above toggle on their
+                                        // whole row for free; this makes
+                                        // these match.
+                                        .onTapGesture { isExpanded.wrappedValue.toggle() }
+                                }
+                            } else {
+                                // Categories whose cues aren't grouped at
+                                // all — nothing to disclose, so the rows
+                                // sit directly under the category.
+                                cueRows(group.cues)
                             }
                         }
                     } header: {
@@ -85,6 +111,12 @@ struct CueListView: View {
                let selectedCueID,
                let cue = LEDCueLibrary.cue(id: selectedCueID) {
                 expandedCategories.insert(cue.category)
+                // And the subcategory too, or opening the category reveals
+                // nothing but another closed header and the selected cue
+                // still isn't visible.
+                if let subcategory = cue.subcategory {
+                    expandedSubcategories.insert("\(cue.category)/\(subcategory)")
+                }
             }
         }
         .toolbar {
@@ -106,6 +138,34 @@ struct CueListView: View {
                 .disabled(store.overrides.isEmpty)
             }
         }
+    }
+
+    @ViewBuilder
+    private func cueRows(_ cues: [LEDCue]) -> some View {
+        ForEach(cues) { cue in
+            CueRow(
+                cue: cue,
+                parameters: store.parameters(for: cue),
+                isModified: store.isModified(cue)
+            )
+            .tag(cue.id)
+        }
+    }
+
+    /// Binding for one subcategory's disclosure state. Same
+    /// search-overrides-everything rule as `expansion(for:)`.
+    private func subExpansion(category: String, subcategory: String) -> Binding<Bool> {
+        let key = "\(category)/\(subcategory)"
+        return Binding(
+            get: { !searchText.isEmpty || expandedSubcategories.contains(key) },
+            set: { isExpanded in
+                if isExpanded {
+                    expandedSubcategories.insert(key)
+                } else {
+                    expandedSubcategories.remove(key)
+                }
+            }
+        )
     }
 
     /// Binding for one category's disclosure state.
