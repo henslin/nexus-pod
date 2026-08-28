@@ -318,6 +318,33 @@ none of them should be picked up piecemeal while feature work continues.
   clean build log. Verify movie export end to end and the zoom gesture by
   hand before touching either.
 
+## Two Blender importers, doing different jobs
+
+- `CodeGenerators.applyBlenderCode` reads **this app's own export** by its
+  `NEXUS_PARAMS` block. Exact round-trip; fails cleanly on anything else.
+- `BlenderScriptImporter` reads **someone else's script** — a hand-written
+  ring animation against their own scene, with no agreed format. It
+  scrapes module-level uppercase `NAME = value` constants (numbers and
+  3-tuples) and maps the ones it recognizes: LED count, floor, speed,
+  front width, drop count, palette, and the style named in the header.
+
+Both import paths try the exact one first and fall back to the
+interpreting one.
+
+`BlenderScriptImporter` is deliberately an **interpretation**, and it
+reports itself as one — the `Outcome` carries what it applied *and* what
+it understood but had nowhere to put, and `BlenderImportReportView` shows
+both every time. The failure that matters here isn't rejecting a file;
+it's silently importing half of one and leaving someone to wonder why the
+ring doesn't match their render. If you extend the mapping, extend the
+dropped list too.
+
+Unit conversions are the fiddly part: these scripts express speed in ring
+positions per second and widths in LED units, both of which need the LED
+count to become the app's laps-per-second and ring fractions. Without a
+recognized LED count those get dropped rather than misread — a raw 5.5
+into `speed` would be wildly wrong.
+
 ## Verifying the code generators
 
 The generators emit **strings**. The package builds no matter what those

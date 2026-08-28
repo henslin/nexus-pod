@@ -23,6 +23,10 @@ struct SavedPresetsView: View {
     @State private var selectedPresetID: RingPreset.ID?
 
     @State private var showingSaveDialog = false
+    /// Non-nil while the Blender import report is up. A struct rather than a
+    /// pair of booleans so the sheet can't be presented without a result to
+    /// show.
+    @State private var blenderReport: BlenderReport?
     @State private var newPresetName = ""
 
     @State private var renamingPreset: RingPreset?
@@ -76,6 +80,8 @@ struct SavedPresetsView: View {
                     Button("Export Library…") { exportLibrary() }
                         .disabled(store.presets.isEmpty)
                     Button("Import…") { importPresets() }
+                    Divider()
+                    Button("Import Blender Script…") { importBlenderScript() }
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up.on.square")
                 }
@@ -90,6 +96,11 @@ struct SavedPresetsView: View {
         // typed ever landed in the field. A plain sheet gives room for the
         // paste-workaround button alongside it.
         .sheet(isPresented: $showingSaveDialog) { saveDialog }
+        .sheet(item: $blenderReport) { report in
+            BlenderImportReportView(fileName: report.fileName, outcome: report.outcome) {
+                blenderReport = nil
+            }
+        }
         .sheet(item: $renamingPreset) { _ in renameDialog }
         .alert(
             "Couldn't Import",
@@ -170,6 +181,35 @@ struct SavedPresetsView: View {
         }
     }
 
+
+    /// Opens a foreign Blender ring script and interprets it into `config`.
+    ///
+    /// Separate from the preset Import above, which reads this app's own
+    /// JSON. This one takes someone else's `.py` — see
+    /// `BlenderScriptImporter` for why it's an interpretation rather than a
+    /// translation, and why the report is always shown.
+    private func importBlenderScript() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "py") ?? .plainText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose a Blender LED-ring script (.py)"
+        guard panel.runModal() == .OK, let url = panel.url,
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+
+        // This app's own export round-trips exactly, so try that first and
+        // only fall back to interpreting a foreign script.
+        if case .success = CodeGenerators.applyBlenderCode(text, to: config) {
+            blenderReport = BlenderReport(url.lastPathComponent, BlenderScriptImporter.Outcome(
+                applied: ["Read this app's own NEXUS_PARAMS block — an exact round-trip, not an interpretation."],
+                dropped: [],
+                caveat: nil
+            ))
+            return
+        }
+        blenderReport = BlenderReport(url.lastPathComponent, BlenderScriptImporter.apply(text, to: config))
+    }
+
     private func exportLibrary() {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "ring-pod-animations.json"
@@ -248,5 +288,18 @@ private struct SavedAnimationRow: View {
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
         }
+    }
+}
+
+
+/// One Blender import's result, wrapped for `sheet(item:)`.
+struct BlenderReport: Identifiable {
+    let id = UUID()
+    let fileName: String
+    let outcome: BlenderScriptImporter.Outcome
+
+    init(_ fileName: String, _ outcome: BlenderScriptImporter.Outcome) {
+        self.fileName = fileName
+        self.outcome = outcome
     }
 }

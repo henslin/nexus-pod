@@ -1,4 +1,8 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+import UniformTypeIdentifiers
+#endif
 import Combine
 
 /// Detail pane for one "Use Case" — a named, fully-tunable `RingPreset`
@@ -51,6 +55,14 @@ public struct UseCaseDetailView: View {
     /// same arrangement as the Mac app's Preview tab.
     @State private var pausedPlayhead: Double = 0
 
+    #if os(macOS)
+    /// Non-nil while a Blender import report is up — see
+    /// `BlenderImportReportView`. Guarded because the type it holds is
+    /// itself macOS-only: the import needs `NSOpenPanel`, and iOS has no
+    /// file picker wired up here.
+    @State private var blenderReport: UseCaseBlenderReport?
+    #endif
+
     /// Caller (`ContentView`) is expected to key this view with
     /// `.id(preset.id)` at the call site — a `@StateObject` only runs its
     /// initial-value closure once per view *identity*, so without that,
@@ -90,6 +102,13 @@ public struct UseCaseDetailView: View {
             .onReceive(editingConfig.objectWillChange.debounce(for: .seconds(0.3), scheduler: RunLoop.main)) { _ in
                 persist()
             }
+            #if os(macOS)
+            .sheet(item: $blenderReport) { report in
+                BlenderImportReportView(fileName: report.fileName, outcome: report.outcome) {
+                    blenderReport = nil
+                }
+            }
+            #endif
     }
 
     /// `HSplitView` is a macOS-only API, but this type lives in the shared
@@ -176,9 +195,42 @@ public struct UseCaseDetailView: View {
     }
 
     private var header: some View {
-        Text(currentPreset?.name ?? "Use Case")
-            .font(.title2.bold())
+        HStack {
+            Text(currentPreset?.name ?? "Use Case")
+                .font(.title2.bold())
+            Spacer()
+            #if os(macOS)
+            Button("Import Blender…") { importBlenderScript() }
+                .ringGlassButtonStyle()
+                .help("Read a Blender LED-ring script and interpret it into this use case")
+            #endif
+        }
     }
+
+    #if os(macOS)
+    /// Interprets a Blender ring script into this use case's config — the
+    /// same importer the Nexus panel uses, applied to `editingConfig` so it
+    /// autosaves through the same path as any other edit here.
+    private func importBlenderScript() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "py") ?? .plainText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose a Blender LED-ring script (.py)"
+        guard panel.runModal() == .OK, let url = panel.url,
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+
+        if case .success = CodeGenerators.applyBlenderCode(text, to: editingConfig) {
+            blenderReport = UseCaseBlenderReport(url.lastPathComponent, BlenderScriptImporter.Outcome(
+                applied: ["Read this app's own NEXUS_PARAMS block — an exact round-trip, not an interpretation."],
+                dropped: [],
+                caveat: nil
+            ))
+            return
+        }
+        blenderReport = UseCaseBlenderReport(url.lastPathComponent, BlenderScriptImporter.apply(text, to: editingConfig))
+    }
+    #endif
 
     private func centeredPreview(playback: TimelinePlayback?) -> some View {
         VStack(spacing: 12) {
@@ -263,3 +315,18 @@ public struct UseCaseDetailView: View {
         )
     }
 }
+
+
+#if os(macOS)
+/// One Blender import's result, wrapped for `sheet(item:)`.
+struct UseCaseBlenderReport: Identifiable {
+    let id = UUID()
+    let fileName: String
+    let outcome: BlenderScriptImporter.Outcome
+
+    init(_ fileName: String, _ outcome: BlenderScriptImporter.Outcome) {
+        self.fileName = fileName
+        self.outcome = outcome
+    }
+}
+#endif
