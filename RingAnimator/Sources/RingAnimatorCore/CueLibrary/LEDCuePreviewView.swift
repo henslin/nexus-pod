@@ -85,6 +85,7 @@ public struct LEDCuePreviewView: View {
         // simply isn't read. Optional on the parameters (they postdate the
         // saved cue JSON), so each falls back to `RingConfig`'s own default.
         animationConfig.diodeShape = parameters.diodeShape ?? .round
+        animationConfig.diodeColorMode = parameters.diodeColorMode ?? .perDiode
         animationConfig.diodeModeEnabled = parameters.diodeModeEnabled ?? false
         animationConfig.diodeScale = parameters.diodeScale ?? 1.0
         animationConfig.diodeGap = parameters.diodeGap ?? 0.12

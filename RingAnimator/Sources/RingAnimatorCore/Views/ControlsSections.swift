@@ -121,6 +121,19 @@ struct AnimationSection: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+            if config.diodeModeEnabled {
+                Picker("Diode Color", selection: $config.diodeColorMode) {
+                    ForEach(DiodeColorMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text(config.diodeColorMode.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             if config.diodeShape.dividesTheRing {
                 LabeledSlider(title: "Segment Gap", value: $config.diodeGap, range: 0...0.6, format: "%.2f")
 

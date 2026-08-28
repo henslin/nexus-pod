@@ -42,6 +42,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// these existed would throw `keyNotFound`. `nil` means the defaults —
     /// `.steady` and 2.0.
     public var diodeShape: DiodeShape?
+    public var diodeColorMode: DiodeColorMode?
     public var diodeScale: Double?
     public var diodeGap: Double?
     public var bloomCount: Double?
@@ -131,6 +132,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         chasingFillStyle = config.chasingFillStyle
         diodeCount = config.diodeCount
         diodeShape = config.diodeShape
+        diodeColorMode = config.diodeColorMode
         diodeScale = config.diodeScale
         diodeGap = config.diodeGap
         bloomCount = config.bloomCount
@@ -207,6 +209,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.chasingFillStyle = chasingFillStyle
         config.diodeCount = diodeCount
         config.diodeShape = diodeShape ?? .round
+        config.diodeColorMode = diodeColorMode ?? .perDiode
         config.diodeScale = diodeScale ?? 1.0
         config.diodeGap = diodeGap ?? 0.12
         config.bloomCount = bloomCount ?? 6

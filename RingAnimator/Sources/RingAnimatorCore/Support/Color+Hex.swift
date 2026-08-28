@@ -19,6 +19,26 @@ extension Color {
         self = Color(red: r, green: g, blue: b)
     }
 
+    /// Red/green/blue in 0...1.
+    ///
+    /// Same platform split `hexString` below already needed — SwiftUI's
+    /// `Color` doesn't expose components directly, so it goes through
+    /// `NSColor`/`UIColor`. Pulled out separately because interpolating
+    /// between two colors needs the numbers, not a formatted string.
+    public var rgbComponents: (red: Double, green: Double, blue: Double) {
+        #if canImport(AppKit)
+        let c = NSColor(self).usingColorSpace(.deviceRGB) ?? NSColor(self)
+        return (Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent))
+        #elseif canImport(UIKit)
+        let c = UIColor(self)
+        var rf: CGFloat = 0, gf: CGFloat = 0, bf: CGFloat = 0, af: CGFloat = 0
+        c.getRed(&rf, green: &gf, blue: &bf, alpha: &af)
+        return (Double(rf), Double(gf), Double(bf))
+        #else
+        return (1, 1, 1)
+        #endif
+    }
+
     /// Hex string (e.g. "#4C9EFF") used both for on-screen labels and code export.
     public var hexString: String {
         #if canImport(AppKit)

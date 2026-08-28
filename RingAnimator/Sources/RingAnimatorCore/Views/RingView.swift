@@ -1078,7 +1078,9 @@ public struct RingView: View {
                     colors: all
                 )
                 return DiodeState(
-                    color: lit.color,
+                    color: config.diodeColorMode == .byLevel
+                        ? levelColor(lit.brightness, colors: all)
+                        : lit.color,
                     opacity: lit.brightness * blinkMultiplier(index: i, elapsed: elapsed)
                 )
             },
@@ -1306,6 +1308,34 @@ public struct RingView: View {
         // dim full-circle track behind its arc — otherwise the ring's shape
         // disappears wherever no comet currently is.
         return best.brightness > 0.06 ? best : (best.colorIndex, 0.06)
+    }
+
+    /// The palette read as a brightness ramp rather than a per-diode
+    /// lookup — see `DiodeColorMode.byLevel`.
+    ///
+    /// Interpolates across every configured color in order: the first at
+    /// black, the last at full. With three colors that's exactly the shape
+    /// an LED ring script writes by hand — a low tint, a mid, and a hot
+    /// core — except the core here is whatever you set rather than being
+    /// hardcoded to white.
+    ///
+    /// Interpolation is in plain sRGB components. Not perceptually
+    /// uniform, but it's what the hardware crossfade does too, so matching
+    /// it is the point rather than a shortcut.
+    private func levelColor(_ level: Double, colors: [Color]) -> Color {
+        guard colors.count > 1 else { return colors.first ?? .white }
+        let clamped = min(max(level, 0), 1)
+        let scaled = clamped * Double(colors.count - 1)
+        let index = min(Int(scaled), colors.count - 2)
+        let t = scaled - Double(index)
+
+        let low = colors[index].rgbComponents
+        let high = colors[index + 1].rgbComponents
+        return Color(
+            red: low.red + (high.red - low.red) * t,
+            green: low.green + (high.green - low.green) * t,
+            blue: low.blue + (high.blue - low.blue) * t
+        )
     }
 
     /// `BlinkPattern` as a 0...1 multiplier on a diode's brightness.

@@ -95,6 +95,37 @@ public enum DiodeShape: String, CaseIterable, Identifiable, Codable, Sendable, H
     }
 }
 
+/// Where a diode's *color* comes from.
+///
+/// The distinction matters more on hardware than it looks. An addressable
+/// ring driver typically holds a small number of color registers and a
+/// global fade — so "this LED is green because it's LED 3" and "this LED
+/// is white because it's at full brightness" are different things to
+/// implement, and only the second is free.
+///
+/// Learned from a hand-written Blender ring script that spelled it out:
+/// its palette ramps sea-green → light-green → white purely by level, with
+/// a note that the white core "is a strength effect, not a 3rd color", so
+/// firmware can store two colors and crossfade between them. This app
+/// could only assign color by index, which can't express that at all.
+public enum DiodeColorMode: String, CaseIterable, Identifiable, Codable, Sendable, Hashable {
+    /// Each diode takes its own color from the Color section, cycling
+    /// through the configured list by index. The original behavior.
+    case perDiode = "Per Diode"
+    /// Every diode takes its color from the palette by *brightness* —
+    /// first color when dim, last when fully lit, interpolated between.
+    case byLevel = "By Brightness"
+
+    public var id: String { rawValue }
+
+    public var summary: String {
+        switch self {
+        case .perDiode: return "Each diode keeps its own color from the list above."
+        case .byLevel: return "Color comes from brightness — first color when dim, last at full."
+        }
+    }
+}
+
 /// How diodes blink underneath a chase, layered on top of whatever the
 /// chase itself is doing.
 ///

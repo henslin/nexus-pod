@@ -140,6 +140,32 @@ public enum BlenderScriptImporter {
             applied.append("\(palette.count) palette color\(palette.count == 1 ? "" : "s") → Color section")
         }
 
+        // --- Brightness-driven color. A script with a level→hue ramp is
+        // --- describing exactly what `DiodeColorMode.byLevel` does, and
+        // --- the app can't express it any other way, so it's worth
+        // --- detecting rather than dropping the palette into per-diode
+        // --- slots where it would read as unrelated colored pixels.
+        let lowered = text.lowercased()
+        let ramps = lowered.contains("colcurve")
+            || lowered.contains("hue ramp")
+            || lowered.contains("color ramp")
+            || lowered.contains("strength effect, not a")
+        if ramps, palette.count > 1 {
+            config.diodeColorMode = .byLevel
+            var note = "Level→hue ramp → Diode Color: By Brightness"
+
+            // A ramp that tops out at white usually says so in constants
+            // the tuple scraper can't see (`_WHITE = [1.0, 1.0, 1.0]` is a
+            // list, and often built rather than declared). Append it so the
+            // hot core exists, since that's the end of the ramp the script
+            // is describing.
+            if lowered.contains("white") && config.additionalColors.count < 2 {
+                config.additionalColors.append(.white)
+                note += ", white added as the hot core"
+            }
+            applied.append(note)
+        }
+
         // --- Things worth naming as understood-but-unrepresentable, so the
         // --- report explains a mismatch instead of leaving it a mystery.
         for (key, label) in [

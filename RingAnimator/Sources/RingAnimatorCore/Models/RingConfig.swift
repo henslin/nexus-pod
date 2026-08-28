@@ -77,6 +77,10 @@ public final class RingConfig: ObservableObject {
     /// diode-based animation, and to everything when `diodeModeEnabled`
     /// is on.
     @Published public var diodeShape: DiodeShape = .round
+    /// Where a diode's color comes from — see `DiodeColorMode`. Applies in
+    /// Diode Mode, where the ring is a set of fixed pixels and "color by
+    /// level" is a meaningful alternative to "color by position".
+    @Published public var diodeColorMode: DiodeColorMode = .perDiode
     /// Diode size as a multiple of the ring's band width (`lineWidth`).
     ///
     /// 1.0 — the default — makes each diode exactly as tall as the band,
