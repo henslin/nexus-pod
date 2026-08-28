@@ -196,13 +196,17 @@ at once), then File > Open Recent to reopen `RingAnimatoriOS.xcodeproj`
 fresh. Sometimes also needs Reset Package Caches + Clean Build Folder.
 This is a recurring SwiftPM local-package-lock quirk, not a real bug.
 
-**Signing/distribution (macOS):** staging happens in
-`~/Developer/NexusPod-Release`, **outside iCloud on purpose** (override
-with `NEXUS_STAGE_DIR`). Staging inside the repo fails: `xattr -cr` strips
-`com.apple.FinderInfo` before signing, iCloud's file provider puts it back
-before `codesign --verify` runs, and the script dies with "resource fork,
-Finder information, or similar detritus not allowed". Stripping harder
-doesn't win that race.
+**Signing/distribution (macOS):** both the *build* and the *staging* happen
+outside iCloud on purpose — `~/Developer/NexusPod-Build` (override with
+`NEXUS_BUILD_DIR`) and `~/Developer/NexusPod-Release` (`NEXUS_STAGE_DIR`).
+
+Neither can live in the repo. `xattr -cr` strips `com.apple.FinderInfo`
+before signing, iCloud's file provider puts it back before
+`codesign --verify` runs, and the step dies with "resource fork, Finder
+information, or similar detritus not allowed". Stripping harder doesn't win
+that race. The build needs the same treatment as the staging, because
+SwiftPM codesigns the resource bundle *during* the build — an in-tree
+`swift build -c release` fails before any of the signing steps run.
 
 That bug silently cost a release once — the Aug 26 build was Developer ID
 signed but never notarized, because the script died after signing and
@@ -223,6 +227,33 @@ else's.
 and zips. One-time setup (signing identity + notarytool credentials) is
 documented in the script's own header comments. Run from
 `RingAnimator/` with `Packaging/build_and_sign.sh`.
+
+### Cutting a release
+
+Four checks, then the script. The first three take seconds and each one has
+caught a real defect that would otherwise have shipped.
+
+```
+cd RingAnimator
+swift run FirmwareFieldCheck                       # fields + streams exact
+swift run ExportCheck                              # all 30 exports compile
+python3 Sources/FirmwareFieldCheck/library_manifest.py verify <patterns-dir>
+xcodebuild -project ../RingAnimatoriOS/RingAnimatoriOS.xcodeproj   -target RingAnimatoriOS -sdk iphonesimulator build   # iOS still builds
+Packaging/build_and_sign.sh
+```
+
+Bump `Packaging/Info.plist` (`CFBundleShortVersionString` and
+`CFBundleVersion`) first — the script doesn't.
+
+`library_manifest.py verify` is the one people will skip. It is the only
+thing that catches a pattern edited upstream and synced down, which leaves
+the committed recordings silently describing an animation the device no
+longer plays.
+
+To rehearse the packaging without submitting anything to Apple, run the
+script with everything from `→ Submitting to Apple notary service` onward
+removed; it will build, assemble, sign and verify, which is where the
+failures actually happen.
 
 ## Packaging naming (important, easy to misread as a bug)
 
@@ -443,7 +474,7 @@ it imports as whichever helper it defines first. The discriminator is
 definition versus use: the library *defines* `_schedule_*`, a pattern only
 calls them.
 
-### Sixty-six patterns replay the device's own command stream
+### Every pattern replays the device's own command stream
 
 `FirmwarePatternStream` ships each pattern's literal command stream and
 replays it. Every scheduler is run once, offline, against a recorder that
@@ -452,7 +483,7 @@ call with its timestamp — the exact bytes the device receives. Replaying
 that is not a reproduction of the animation; it *is* the animation.
 
 This exists because the level-threshold engine below covers 21 patterns and
-the other 45 schedule LED commands directly: comets stepping head and tail,
+the other 48 schedule LED commands directly: comets stepping head and tail,
 cascades filling frame by frame, Perlin fields sampled per tick, palette
 rewrites mid-animation. There is no closed form to port, and transcribing 45
 hand-written bodies would only ever *approach* what the recording already is.
