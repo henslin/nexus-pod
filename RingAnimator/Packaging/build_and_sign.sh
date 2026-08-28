@@ -53,7 +53,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 EXECUTABLE_NAME="RingAnimator"
 BUNDLE_NAME="Nexus Pod"
-BUILD_DIR="$PACKAGE_DIR/.build/release"
 # Staged OUTSIDE iCloud Drive, deliberately.
 #
 # This whole repo lives in iCloud, whose file provider stamps
@@ -68,9 +67,21 @@ BUILD_DIR="$PACKAGE_DIR/.build/release"
 STAGE_DIR="${NEXUS_STAGE_DIR:-$HOME/Developer/NexusPod-Release}"
 APP_BUNDLE="$STAGE_DIR/$BUNDLE_NAME.app"
 
-echo "→ Building Release..."
+# The *build* has to leave iCloud too, not just the staging.
+#
+# SwiftPM's default `.build` sits inside this repo, and the resource-bundle
+# codesign step runs during the build itself — so `swift build -c release`
+# here fails with the same "resource fork, Finder information, or similar
+# detritus not allowed" as the staging did, before any of the signing below
+# gets a chance to run. Same fix, one step earlier.
+#
+# Override with NEXUS_BUILD_DIR.
+SCRATCH_DIR="${NEXUS_BUILD_DIR:-$HOME/Developer/NexusPod-Build}"
+BUILD_DIR="$SCRATCH_DIR/release"
+
+echo "→ Building Release (scratch: $SCRATCH_DIR)..."
 cd "$PACKAGE_DIR"
-swift build -c release
+swift build -c release --scratch-path "$SCRATCH_DIR"
 
 echo "→ Assembling $BUNDLE_NAME.app..."
 rm -rf "$STAGE_DIR"
