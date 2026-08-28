@@ -29,19 +29,21 @@ private let infoPlistPath = packageDirectory.appendingPathComponent("Packaging/I
 
 let package = Package(
     name: "RingAnimator",
-    // Neither `.v26` nor `.v27` are available as `SupportedPlatform` cases
-    // in this Xcode beta's `PackageDescription` — bumping the declared
-    // swift-tools-version didn't unlock them either, so this genuinely
-    // appears to be a gap in the beta's SwiftPM support rather than a
-    // manifest-version ceiling. Back to the known-good baseline: the
-    // package's minimum stays low, and every real Glass API call site
-    // (TabBarPreview.swift, ExportView.swift) goes back to an explicit
-    // `#available(macOS 26.0, *)` check with a pre-Glass material fallback,
-    // same as before the "drop the fallback" pass. The separate iOS Xcode
-    // project isn't affected by this — its deployment target is set
-    // directly in project settings (27.0), not through this file, so
-    // RootView.swift's glass calls there can stay unconditional.
-    platforms: [.macOS(.v14), .iOS(.v17)],
+    // The `.v26` *enum case* genuinely doesn't exist in this Xcode beta's
+    // `PackageDescription` — but the string initializer does, and it works.
+    // That distinction matters more than it looks: the deployment target
+    // recorded in the binary is what makes macOS draw an app with the
+    // current control appearance rather than the legacy one. Built at
+    // macOS 14, every system control — toggles above all — rendered in
+    // compatibility style no matter what the SwiftUI code asked for, and
+    // no amount of `.glassEffect` at call sites could change it. Confirmed
+    // with `vtool -show-build`: minos 14.0 before, 26.0 after.
+    //
+    // The `#available(macOS 26.0, *)` checks throughout are now always
+    // true. They're harmless and left in place; collapsing them is
+    // cleanup, not a fix, and worth doing deliberately rather than as a
+    // side effect of this.
+    platforms: [.macOS("26.0"), .iOS("26.0")],
     products: [
         // Exposes the shared core to other Xcode projects (e.g. the iOS
         // app) via a local Swift Package dependency.

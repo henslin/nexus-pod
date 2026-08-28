@@ -133,6 +133,37 @@ Both apps display as **"Nexus Pod"** (rebranded from "RingAnimator"/"Ring
 Pod" — display name only, internal identifiers/executable/module names are
 still `RingAnimator` throughout, intentionally, see Packaging section).
 
+## Deployment target — read this before "the UI looks dated"
+
+The package targets **macOS 26 / iOS 26**, set with the *string*
+initializer: `platforms: [.macOS("26.0"), .iOS("26.0")]`. The `.v26`
+enum case does not exist in this Xcode beta's `PackageDescription`; the
+string form does and works.
+
+This is not a formality. The deployment target recorded in the binary is
+what makes macOS draw an app with the current control appearance instead
+of the legacy one. While this was built at macOS 14, **every system
+control rendered in compatibility style** — toggles most visibly — and no
+amount of `.glassEffect` or `buttonStyle(.glass)` at the call sites could
+change it, because the call sites were never the problem. If the app ever
+looks a generation old again, check the binary first:
+
+```
+vtool -show-build <path to binary> | grep minos
+```
+
+`minos 26.0` is correct. `minos 14.0` means something reset the platform
+line in `Package.swift`, and every control in the app will be wrong until
+it's put back.
+
+Consequence, stated plainly: the app no longer runs on macOS 14–25. That
+was a deliberate trade for the modern appearance. Reverting is a one-line
+change to that `platforms:` array plus `LSMinimumSystemVersion` in
+`Packaging/Info.plist`.
+
+The `#available(macOS 26.0, *)` checks scattered through the views are
+now always true. They're harmless; collapsing them is cleanup, not a fix.
+
 ## Build & run
 
 **macOS (RingAnimator):**
