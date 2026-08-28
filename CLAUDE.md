@@ -846,12 +846,24 @@ exactly that reason.
   binary's `CFBundleDisplayName` — not fixable from Xcode or this repo.
   Needs a manual edit in the App Store Connect web portal. Unconfirmed
   whether this has been done yet.
-- **Local test data**: `~/Library/Application Support/RingAnimator/` may
-  still hold local `saved-presets.json`/`use-cases.json` test data on the
-  dev machine. This is *not* shipped (confirmed — `RingPresetStore` has no
-  seed data, `SavedPresetsView`/`UseCaseListView` already have correct
-  empty states + Add buttons), it's purely local dev-machine state. Never
-  explicitly asked to be cleared.
+- **Local test data**: `~/Library/Application Support/RingAnimator/` holds
+  local `saved-presets.json`/`use-cases.json` on the dev machine — currently
+  the 69 imported firmware patterns. This is *not* shipped (confirmed —
+  `RingPresetStore` has no seed data, `SavedPresetsView`/`UseCaseListView`
+  have correct empty states), it's purely local state. A recipient opens the
+  app empty and runs Import Pattern Folder themselves.
+- **Two stale copies in `/Applications`** share the bundle id
+  `ringanimator.RingAnimator`: `Nexus Pod.app` (2.0) and `RingAnimator.app`
+  (1.0, the old name). LaunchServices can resolve `open` to the wrong one —
+  that cost an hour of chasing a phantom bug once, reading behavior from a
+  binary that predated the change under test. Deleting the 1.0 copy removes
+  the ambiguity.
+- **The pattern library's edits aren't upstream yet.** `patterns/` is an
+  extract of a firmware repo (see "The app depends on `patterns/` but must
+  not own it"), and the 20-LED corrections currently exist only in iCloud.
+  They're firmware-behavior changes and belong in that repo, reviewed.
+  Until then `library_manifest.py` at least pins which snapshot the
+  committed recordings came from.
 
 ## Git
 
