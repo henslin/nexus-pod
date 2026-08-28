@@ -28,7 +28,7 @@ struct CueListView: View {
                     .map { group in (subcategory: group.subcategory, cues: group.cues.filter { matches($0) }) }
                     .filter { !$0.cues.isEmpty }
                 if !groups.isEmpty {
-                    Section(category, isExpanded: expansion(for: category)) {
+                    Section(isExpanded: expansion(for: category)) {
                         ForEach(groups, id: \.subcategory) { group in
                             if let subcategory = group.subcategory {
                                 // Same `GroupCaption` treatment the control
@@ -49,6 +49,28 @@ struct CueListView: View {
                                 .tag(cue.id)
                             }
                         }
+                    } header: {
+                        // A custom header rather than `Section(category,
+                        // isExpanded:)`'s automatic one.
+                        //
+                        // The default renders category names in the small,
+                        // dim, secondary type a section header normally
+                        // wants — correct when a header labels visible
+                        // content, wrong here. With every section closed
+                        // these headers *are* the navigation, and label
+                        // styling doesn't advertise that they're the thing
+                        // to click. Their height was never really the
+                        // problem (~27pt, about a standard sidebar row);
+                        // they just didn't read as targets.
+                        //
+                        // `contentShape` makes the whole width clickable
+                        // rather than only the glyph-width of the text.
+                        Text(category)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                 }
             }
