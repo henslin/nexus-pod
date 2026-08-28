@@ -443,6 +443,46 @@ it imports as whichever helper it defines first. The discriminator is
 definition versus use: the library *defines* `_schedule_*`, a pattern only
 calls them.
 
+### Twenty-one patterns render frame-exactly
+
+`FirmwareLevelField` ports the firmware's own per-LED `level(i, t_s)`
+functions to Swift. Twenty-one of the patterns are built on one shared
+engine, `_schedule_level_threshold`, which takes such a closure, samples it
+every 100 ms for every LED, and writes one of two palette registers
+depending on whether the sample cleared a threshold. That is the entire
+rendering model, and `RingView` already evaluates animations as a scalar
+field over (diode, time) — the same shape — so `diodeIntensity`
+short-circuits to the field when `RingConfig.firmwareLevelField` is set.
+
+**Two colors, both lit.** The engine opens with `select_all_leds(True, 0x00)`
+and never deselects, so every diode is always full brightness and the level
+picks its *color*, not its intensity. There is no ramp between the two
+states; the quantization is what gives these patterns their crisp edges, and
+smoothing it would be a prettier animation than the device can produce.
+
+**The port is bit-identical, and that is checked.**
+`swift run FirmwareFieldCheck` compares every field against ground truth
+captured from the real Python — `_schedule_level_threshold` is stubbed to
+grab each closure, which is then sampled over a 16 x 40 grid and written to
+`firmware-levels.json` at full precision. 13440 samples, worst delta 0.0.
+Run it before a release, alongside `ExportCheck`.
+
+The check is deliberately exact rather than tolerant: these feed a hard
+threshold, so a last-bit difference flips a diode between palette registers
+and the pattern visibly changes. Two things had to be right for that:
+
+- **`roundHalfToEven` is Python's `round`.** Swift's `rounded()` is
+  half-away-from-zero and they disagree at exactly the half-integers
+  `strobe_pulsing_lattice_red` hits — `i / step` lands on 0.5 and 2.5 for a
+  16-LED ring with 4 anchors.
+- **`pmod` is Python's `%`,** which takes the sign of the divisor.
+
+Parameters are the values the closures actually capture, read out of
+`__closure__` rather than transcribed by eye — which is also where the real
+thresholds came from. Three patterns override the 0.5 default (0.42, 0.55,
+0.35) and look wrong without it, and several declare no `DURATION_MS` at
+all, so the field is the only place their true loop length appears.
+
 ### Multi-phase patterns import as timeline steps
 
 Several of these engines are sequences, not loops, and flattening one into

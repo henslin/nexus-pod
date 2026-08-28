@@ -235,6 +235,7 @@ public struct UseCaseDetailView: View {
             ))
             return
         }
+        let hadSteps = !player.timeline.segments.isEmpty
         var outcome = BlenderScriptImporter.apply(text, to: editingConfig)
         // Say so when the chosen file only hands off to another one, rather
         // than silently reporting a pattern the user didn't pick.
@@ -248,8 +249,14 @@ public struct UseCaseDetailView: View {
         // this use case's timeline and selects the first step, which loads
         // it back into `editingConfig` — so the ring shows phase one rather
         // than whatever the flattened config happened to hold.
-        if let timeline = outcome.timeline {
-            player.installImported(timeline)
+        if !outcome.applied.isEmpty {
+            // Always install, phases or not — an empty timeline clears any
+            // steps left from a previous import so the strip and the ring
+            // agree on which pattern is loaded.
+            player.installImported(outcome.timeline ?? RingTimeline())
+            if outcome.timeline == nil, hadSteps {
+                outcome.applied.append("Single looping behavior → cleared the previous pattern's timeline steps")
+            }
         }
         blenderReport = UseCaseBlenderReport(url.lastPathComponent, outcome)
     }

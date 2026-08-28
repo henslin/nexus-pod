@@ -146,6 +146,28 @@ struct AnimationSection: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                // Only shown once a pattern has brought one in. It's not a
+                // knob you'd reach for while designing — it's a statement
+                // that this animation is the device's own maths rather than
+                // this app's, and the way to step back off it.
+                if let field = config.firmwareLevelField {
+                    Divider()
+                    HStack(alignment: .firstTextBaseline) {
+                        Label("Exact firmware field", systemImage: "checkmark.seal.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.green)
+                        Spacer()
+                        Button("Clear") { config.firmwareLevelField = nil }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                    }
+                    Text("\(field.displayName) — the firmware's own level(i, t) function, ported and verified sample for sample. Threshold \(field.threshold, specifier: "%.2f"), \(Int(field.tickMs)) ms tick. This overrides Type above; clearing it falls back to the nearest equivalent animation.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Divider()
+                }
+
                 Picker("Diode Color", selection: $config.diodeColorMode) {
                     ForEach(DiodeColorMode.allCases) { mode in
                         Text(mode.rawValue).tag(mode)

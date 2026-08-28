@@ -278,6 +278,12 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     /// Selecting the first step is what makes the Controls panel show the
     /// imported pattern rather than whatever was being edited before, and
     /// `select` already loads that step's snapshot into the bound config.
+    /// An empty timeline is a meaningful import result, not a no-op: it
+    /// means the pattern is a single looping behavior. Clearing the steps
+    /// is what stops the strip from still showing the *previous* import's
+    /// phases while the ring renders the new pattern — the same
+    /// two-files-blended-together confusion the config reset exists to
+    /// prevent, one level up.
     public func installImported(_ imported: RingTimeline) {
         timeline = imported
         select(imported.segments.first?.id)

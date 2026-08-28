@@ -82,6 +82,16 @@ public final class RingConfig: ObservableObject {
     /// level" is a meaningful alternative to "color by position".
     @Published public var diodeColorMode: DiodeColorMode = .perDiode
 
+    /// When set, every diode's color comes from the firmware's own
+    /// `level(i, t_s)` function rather than from this app's interpretation
+    /// of the animation — see `FirmwareLevelField`.
+    ///
+    /// Overrides `animationType` for rendering while leaving it in place, so
+    /// clearing this falls back to the nearest equivalent behavior rather
+    /// than to nothing. `nil` — the default — is every animation this app
+    /// authors itself.
+    @Published public var firmwareLevelField: FirmwareLevelField? = nil
+
     // MARK: - Ripple drops
     //
     // Modeled on how a real LED-ring script writes a ripple: not one wave

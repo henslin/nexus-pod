@@ -43,6 +43,9 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// `.steady` and 2.0.
     public var diodeShape: DiodeShape?
     public var diodeColorMode: DiodeColorMode?
+    /// See `RingConfig.firmwareLevelField`. Optional like its neighbours so
+    /// presets written before it decode unchanged.
+    public var firmwareLevelField: FirmwareLevelField?
     public var rippleDropCount: Double?
     public var rippleDecay: Double?
     public var rippleLife: Double?
@@ -140,6 +143,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         diodeCount = config.diodeCount
         diodeShape = config.diodeShape
         diodeColorMode = config.diodeColorMode
+        firmwareLevelField = config.firmwareLevelField
         rippleDropCount = config.rippleDropCount
         rippleDecay = config.rippleDecay
         rippleLife = config.rippleLife
@@ -224,6 +228,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.diodeCount = diodeCount
         config.diodeShape = diodeShape ?? .round
         config.diodeColorMode = diodeColorMode ?? .perDiode
+        config.firmwareLevelField = firmwareLevelField
         config.rippleDropCount = rippleDropCount ?? 3
         config.rippleDecay = rippleDecay ?? 0.65
         config.rippleLife = rippleLife ?? 5.5

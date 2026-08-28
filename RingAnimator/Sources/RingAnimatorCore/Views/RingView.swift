@@ -1228,6 +1228,21 @@ public struct RingView: View {
         colors all: [Color],
         rippleNorm: Double
     ) -> (color: Color, brightness: Double) {
+        // The firmware's own field, when the pattern came from one.
+        //
+        // Short-circuits `animationType` entirely: this *is* what the device
+        // computes, so there is nothing to approximate. The engine writes
+        // one of two palette registers and never deselects an LED, so both
+        // states are full brightness and the level picks the color rather
+        // than dimming it — no ramp between them, because the hardware has
+        // none. See `FirmwareLevelField`.
+        if let field = config.firmwareLevelField {
+            let lit = field.isLit(index: index, time: elapsed)
+            let color0 = all[0]
+            let color1 = all.count > 1 ? all[1] : all[0]
+            return (lit ? color1 : color0, 1)
+        }
+
         let head = phase / (2 * Double.pi)
         let ownColor = all[index % all.count]
         let floorBrightness = 0.06

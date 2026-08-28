@@ -217,6 +217,7 @@ struct SavedPresetsView: View {
             ))
             return
         }
+        let hadSteps = !timelinePlayer.timeline.segments.isEmpty
         var outcome = BlenderScriptImporter.apply(text, to: config)
         // Say so when the chosen file only hands off to another one, rather
         // than silently reporting a pattern the user didn't pick.
@@ -229,8 +230,14 @@ struct SavedPresetsView: View {
         // See `UseCaseDetailView.importBlenderScript` — a multi-phase
         // pattern becomes timeline steps rather than collapsing into one
         // config.
-        if let timeline = outcome.timeline {
-            timelinePlayer.installImported(timeline)
+        if !outcome.applied.isEmpty {
+            // Always install, phases or not — an empty timeline clears any
+            // steps left from a previous import so the strip and the ring
+            // agree on which pattern is loaded.
+            timelinePlayer.installImported(outcome.timeline ?? RingTimeline())
+            if outcome.timeline == nil, hadSteps {
+                outcome.applied.append("Single looping behavior → cleared the previous pattern's timeline steps")
+            }
         }
         blenderReport = BlenderReport(url.lastPathComponent, outcome)
     }

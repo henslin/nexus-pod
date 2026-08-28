@@ -408,6 +408,25 @@ public enum FirmwarePatternImporter {
             applied.append("16-LED ring → Diode Count")
         }
 
+        // --- The exact field, for the patterns built on the firmware's
+        // --- level-threshold engine. This is a reproduction rather than an
+        // --- interpretation, so it overrides the behavior chosen above and
+        // --- brings the engine's real threshold, loop and tick with it.
+        let levelField = levelFields[spacedName]
+        if let levelField {
+            config.firmwareLevelField = levelField
+            config.diodeModeEnabled = true
+            config.diodeCount = ringLEDCount
+            // The engine picks between two palette registers; it never
+            // dims, so color must come from the field and not from level.
+            config.diodeColorMode = .perDiode
+            config.diodeFloor = 0
+            config.firmwareTickMs = levelField.tickMs
+            config.loopSeconds = min(max(levelField.loopSeconds, 0.5), 60)
+            applied.append("Exact firmware field: \(levelField.displayName) — the device's own level(i, t) maths, not an approximation")
+            applied.append("threshold \(trim(levelField.threshold)), \(Int(levelField.tickMs)) ms tick, \(trim(levelField.loopSeconds)) s loop → from the engine")
+        }
+
         // --- Palette. Call-argument tuples first (most specific), then
         // --- body locals, then named constants.
         var palette = callArgumentColors(in: text)
@@ -439,7 +458,10 @@ public enum FirmwarePatternImporter {
         }
 
         // --- Timing.
-        if let loop = locals["loop_seconds"], loop > 0 {
+        if levelField != nil {
+            // The engine's own loop and tick are already in place above and
+            // are more authoritative than anything scraped from the body.
+        } else if let loop = locals["loop_seconds"], loop > 0 {
             config.loopSeconds = min(max(loop, 0.5), 60)
             applied.append("loop_seconds \(trim(loop)) → Loop Length")
         } else if let ms = durationMS(in: text), ms > 0 {
@@ -455,7 +477,7 @@ public enum FirmwarePatternImporter {
         // Tick: the hardware's real update rate, which is exactly what
         // Firmware Tick exists to preview. `hue_tick_ms` is the same
         // quantity in the files that key color separately from brightness.
-        if let tick = locals["tick_ms"] ?? locals["hue_tick_ms"], tick > 0 {
+        if levelField == nil, let tick = locals["tick_ms"] ?? locals["hue_tick_ms"], tick > 0 {
             config.firmwareTickMs = min(max(tick, 1), 200)
             applied.append("tick \(Int(tick)) ms → Firmware Tick")
         }
@@ -566,7 +588,9 @@ public enum FirmwarePatternImporter {
         if applied.isEmpty {
             caveat = "This is a firmware pattern module, but nothing in it named a behavior this app renders. Nothing was changed."
         } else {
-            caveat = "Timings, palette and ring size are the firmware's own, read from pattern_common.py. The per-LED maths still isn't reproduced — this app renders its nearest equivalent behavior, so expect a close match in color and cadence rather than a frame-exact one."
+            caveat = levelField != nil
+                ? "Frame-exact. This pattern's per-LED level(i, t) function is ported from pattern_common.py and verified against it sample for sample, including the 100 ms tick and the two-color threshold. What you see is what the device renders."
+                : "Timings, palette and ring size are the firmware's own, read from pattern_common.py. The per-LED maths isn't reproduced for this one — this app renders its nearest equivalent behavior, so expect a close match in color and cadence rather than a frame-exact one."
                 + (description.isEmpty ? "" : "\n\nThe pattern describes itself as: \(description)")
         }
 
@@ -707,6 +731,41 @@ public enum FirmwarePatternImporter {
             return nil
         }
     }
+
+    /// Which pattern modules are built on the firmware's level-threshold
+    /// engine, and which ported field reproduces each one.
+    ///
+    /// These twenty-one import *exactly* rather than approximately — see
+    /// `FirmwareLevelField`. Keyed on the module's own name because that is
+    /// what identifies the specific `level(i, t_s)` closure; the helper name
+    /// only says which engine runs it.
+    ///
+    /// The four warbles, two braids and two wake-blooms share a field and
+    /// differ only in palette, which is exactly how the source has it — the
+    /// engine is in `pattern_common` and the files pass colors to it.
+    private static let levelFields: [String: FirmwareLevelField] = [
+        "braided twist green": .braidedTwist,
+        "braided twist red": .braidedTwist,
+        "cellular automaton green": .cellularAutomaton,
+        "flocking drift connection green": .flockingDrift,
+        "mic level jitter listening blue": .micLevelJitter,
+        "pendulum swing deterrence red": .pendulumSwing,
+        "quantum tunneling speaking blue": .quantumTunneling,
+        "resonant ping decay occupancy green": .resonantPingDecay,
+        "ribbon phase warp red": .ribbonPhaseWarp,
+        "speaking response waveform blue": .speakingWaveform,
+        "strobe pulsing lattice red": .strobePulsingLattice,
+        "tidal modulation loading green": .tidalModulation,
+        "utterance loudness envelope blue": .utteranceEnvelope,
+        "voiceprint shimmer blue": .voiceprintShimmer,
+        "wake bloom trio gaps green": .wakeBloomTrioGaps,
+        "wake bloom waiting blue navy cobalt": .wakeBloomWaiting,
+        "wake bloom waiting blue steel ice": .wakeBloomWaiting,
+        "warble kaleidoscope amber": .warbleKaleidoscope,
+        "warble kaleidoscope blue": .warbleKaleidoscope,
+        "warble kaleidoscope green": .warbleKaleidoscope,
+        "warble kaleidoscope red": .warbleKaleidoscope,
+    ]
 
     /// Phases for the hand-written patterns — the ones that sequence
     /// without delegating to a shared engine.

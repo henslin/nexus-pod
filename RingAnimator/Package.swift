@@ -71,6 +71,16 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/ExportCheck"
         ),
+        // Verifies every ported firmware level field still matches the
+        // real Python sample for sample — see the header comment in
+        // Sources/FirmwareFieldCheck/main.swift. Not part of the app;
+        // `swift run FirmwareFieldCheck` before a release.
+        .executableTarget(
+            name: "FirmwareFieldCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/FirmwareFieldCheck",
+            exclude: ["firmware-levels.json", "dump_reference.py"]
+        ),
         // macOS design tool: sidebar controls + tab bar mockup + code export.
         .executableTarget(
             name: "RingAnimator",
