@@ -222,7 +222,17 @@ public struct TimelineStripView: View {
                     Circle()
                         .fill(Color.accentColor)
                         .frame(width: Self.rulerHeight, height: Self.rulerHeight)
-                        .offset(x: x(forTime: position, widths: widths) - Self.rulerHeight / 2)
+                        // Clamped to the track's own bounds. Centering the
+                        // knob on the playhead puts half of it past the
+                        // left edge at 0:00 (and past the right edge at the
+                        // end), where the strip's padding clips it — it read
+                        // as a half-circle stuck to the edge. Clamping only
+                        // affects the two extremes; everything in between
+                        // is unchanged.
+                        .offset(x: min(
+                            max(x(forTime: position, widths: widths) - Self.rulerHeight / 2, 0),
+                            max(geo.size.width - Self.rulerHeight, 0)
+                        ))
                 }
                 .frame(height: Self.rulerHeight)
                 .contentShape(Rectangle())
@@ -375,18 +385,18 @@ public struct TimelineStripView: View {
     private func block(_ segment: TimelineSegment, width: CGFloat) -> some View {
         let isSelected = player.selectedSegmentID == segment.id
         return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(Color(hex: segment.snapshot.primaryColorHex))
-                    .frame(width: 8, height: 8)
-                Text(segment.name)
-                    .font(.caption.weight(.medium))
-                    .lineLimit(1)
+            HStack(spacing: 5) {
+                StepPreview(snapshot: segment.snapshot)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(segment.name)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                    Text(lengthLabel(for: segment))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
-            Text(lengthLabel(for: segment))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
             Spacer(minLength: 0)
         }
         .padding(6)
@@ -575,5 +585,32 @@ private extension SegmentLength {
     var isRotations: Bool {
         if case .rotations = self { return true }
         return false
+    }
+}
+
+
+/// A live thumbnail of what a step actually looks like, in place of the
+/// flat color dot the blocks used to carry.
+///
+/// Same shape as the rows in Saved Animations and Use Cases: a private
+/// `RingConfig` the snapshot is applied into, rather than making the
+/// caller assemble one or duplicating `RingPreset.apply(to:)`'s
+/// field-by-field copy. The `onChange` keeps it current while you tune
+/// the step, since the Controls panel edits the selected step's snapshot
+/// live.
+///
+/// Deliberately smaller than those rows' 22pt ring: a block can be as
+/// narrow as `minBlockWidth`, and at that size a 22pt ring leaves no room
+/// for the name beside it.
+private struct StepPreview: View {
+    let snapshot: RingPreset
+
+    @StateObject private var previewConfig = RingConfig()
+
+    var body: some View {
+        RingView(config: previewConfig, diameter: 15)
+            .frame(width: 19, height: 19)
+            .onAppear { snapshot.apply(to: previewConfig) }
+            .onChange(of: snapshot) { _, newValue in newValue.apply(to: previewConfig) }
     }
 }

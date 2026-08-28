@@ -16,7 +16,15 @@ public struct GlassSectionCard<Content: View>: View {
     let title: String
     let systemImage: String
     var footer: String? = nil
-    var masterToggle: Binding<Bool>? = nil
+    var masterToggle: Binding<Bool>?
+    /// Whether this card's content is label/control rows that should line
+    /// up in columns.
+    ///
+    /// True for almost everything. False for sections whose content isn't
+    /// rows at all — the Color section is a swatch grid, and inside a form
+    /// the label column steals enough width to wrap it from two tidy rows
+    /// into a ragged three.
+    var alignsAsForm: Bool = true
     @Binding var isExpanded: Bool
     @ViewBuilder var content: () -> Content
 
@@ -25,6 +33,7 @@ public struct GlassSectionCard<Content: View>: View {
         systemImage: String,
         footer: String? = nil,
         masterToggle: Binding<Bool>? = nil,
+        alignsAsForm: Bool = true,
         isExpanded: Binding<Bool>,
         @ViewBuilder content: @escaping () -> Content
     ) {
@@ -32,6 +41,7 @@ public struct GlassSectionCard<Content: View>: View {
         self.systemImage = systemImage
         self.footer = footer
         self.masterToggle = masterToggle
+        self.alignsAsForm = alignsAsForm
         self._isExpanded = isExpanded
         self.content = content
     }
@@ -74,7 +84,24 @@ public struct GlassSectionCard<Content: View>: View {
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 10) {
-                    content()
+                    // `.columns` form style, not a plain VStack: it gives
+                    // the label/control column alignment and standard
+                    // control metrics macOS forms have, without the
+                    // grouped-list background a default `Form` would draw
+                    // underneath (which would fight the card's own glass).
+                    //
+                    // Laying these out by hand is what left Pattern Style
+                    // spanning the full width while Type and Easing hugged
+                    // their content, and switches sitting flush against
+                    // their labels instead of in a column.
+                    if alignsAsForm {
+                        Form {
+                            content()
+                        }
+                        .formStyle(.columns)
+                    } else {
+                        content()
+                    }
                     if let footer {
                         Text(footer)
                             .font(.caption)

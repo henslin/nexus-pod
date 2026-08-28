@@ -69,7 +69,7 @@ public struct ControlsView: View {
     public var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                card("color", "Color", "paintpalette") {
+                card("color", "Color", "paintpalette", alignsAsForm: false) {
                     ColorSection(config: config)
                 }
 
@@ -138,6 +138,7 @@ public struct ControlsView: View {
         _ systemImage: String,
         footer: String? = nil,
         masterToggle: Binding<Bool>? = nil,
+        alignsAsForm: Bool = true,
         // `@escaping` because `GlassSectionCard.content` is a stored
         // property, not a parameter — Swift requires any closure that
         // outlives the function call it was passed into (i.e. gets stored
@@ -151,6 +152,7 @@ public struct ControlsView: View {
             systemImage: systemImage,
             footer: footer,
             masterToggle: masterToggle,
+            alignsAsForm: alignsAsForm,
             isExpanded: Binding(
                 get: { expanded[id, default: true] },
                 set: { expanded[id] = $0 }
