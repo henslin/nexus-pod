@@ -230,30 +230,30 @@ documented in the script's own header comments. Run from
 
 ### Cutting a release
 
-Four checks, then the script. The first three take seconds and each one has
-caught a real defect that would otherwise have shipped.
-
 ```
 cd RingAnimator
-swift run FirmwareFieldCheck                       # fields + streams exact
-swift run ExportCheck                              # all 30 exports compile
-python3 Sources/FirmwareFieldCheck/library_manifest.py verify <patterns-dir>
-xcodebuild -project ../RingAnimatoriOS/RingAnimatoriOS.xcodeproj   -target RingAnimatoriOS -sdk iphonesimulator build   # iOS still builds
+./preflight.sh                                   # four checks, ~1 min
+# bump Packaging/Info.plist — the script doesn't
 Packaging/build_and_sign.sh
 ```
 
-Bump `Packaging/Info.plist` (`CFBundleShortVersionString` and
-`CFBundleVersion`) first — the script doesn't.
+`preflight.sh` runs the firmware-fidelity check, the export typecheck, the
+pattern-library manifest and an iOS build, each with the scratch path it
+needs, and prints one ready/not-ready verdict. It's a script rather than a
+list here because the list was wrong the moment it was written — every one
+of those commands fails in-tree without `--scratch-path`, and a checklist
+you have to remember to decorate is one that gets run wrong.
 
-`library_manifest.py verify` is the one people will skip. It is the only
-thing that catches a pattern edited upstream and synced down, which leaves
-the committed recordings silently describing an animation the device no
-longer plays.
+The manifest check is the one people will skip. It is the only thing that
+catches a pattern edited upstream and synced down, which leaves the
+committed recordings silently describing an animation the device no longer
+plays.
 
-To rehearse the packaging without submitting anything to Apple, run the
-script with everything from `→ Submitting to Apple notary service` onward
-removed; it will build, assemble, sign and verify, which is where the
-failures actually happen.
+To rehearse the packaging without submitting anything to Apple, run
+`build_and_sign.sh` with everything from `→ Submitting to Apple notary
+service` onward removed. It will build, assemble, sign and verify — which is
+where the failures actually happen. Verified working at 2.1: `valid on
+disk`, `satisfies its Designated Requirement`, `source=Developer ID`.
 
 ## Packaging naming (important, easy to misread as a bug)
 
