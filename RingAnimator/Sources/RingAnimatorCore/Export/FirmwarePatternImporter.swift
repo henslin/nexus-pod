@@ -605,7 +605,7 @@ public enum FirmwarePatternImporter {
         // A bare number passed to the cascade is how many of the 16 LEDs
         // fill — that's the battery level the pattern is showing.
         var litLEDs: Double?
-        if text.contains("_schedule_battery_cascade("), let lit = firstPositionalNumber(in: text) {
+        if let lit = batteryFillCount(in: text) {
             litLEDs = lit
             config.trailFraction = min(max(lit / ringLEDCount, 0.02), 1)
             applied.append("\(Int(lit)) of \(Int(ringLEDCount)) LEDs lit → \(Int(lit / ringLEDCount * 100))% fill")
@@ -1307,13 +1307,35 @@ public enum FirmwarePatternImporter {
         return result
     }
 
-    /// The first bare number passed to a scheduler call — the cascade's
-    /// lit-LED count.
-    private static func firstPositionalNumber(in text: String) -> Double? {
-        guard let regex = try? NSRegularExpression(pattern: #"_schedule_battery_cascade\(controller,\s*system,\s*(\d+)"#),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range(at: 1), in: text) else { return nil }
-        return Double(text[range])
+    /// How many LEDs the battery cascade fills.
+    ///
+    /// The argument is written as a *fraction of the ring* rather than a
+    /// count — `TOTAL_LEDS // 4` for the 25% pattern — because a fixed 4
+    /// meant 25% of a 16-LED ring and 20% of a 20-LED one. So this
+    /// evaluates the small set of forms that appear rather than reading a
+    /// literal, and falls back to a bare number for anything written the
+    /// old way.
+    private static func batteryFillCount(in text: String) -> Double? {
+        guard let range = text.range(of: "_schedule_battery_cascade(controller, system, ") else { return nil }
+        let argument = text[range.upperBound...]
+            .prefix { $0 != ")" && $0 != "," && $0 != "\n" }
+            .trimmingCharacters(in: .whitespaces)
+
+        if let literal = Double(argument) { return literal }
+
+        // `[k *] TOTAL_LEDS // d` — the only shape the library uses.
+        guard argument.contains("TOTAL_LEDS") else { return nil }
+        let numerator: Double
+        if let star = argument.range(of: "*"),
+           let k = Double(argument[..<star.lowerBound].trimmingCharacters(in: .whitespaces)) {
+            numerator = k * ringLEDCount
+        } else {
+            numerator = ringLEDCount
+        }
+        guard let slashes = argument.range(of: "//"),
+              let divisor = Double(argument[slashes.upperBound...].trimmingCharacters(in: .whitespaces)),
+              divisor != 0 else { return numerator }
+        return (numerator / divisor).rounded(.down)
     }
 
     private static func orderOfAppearance(_ needle: String, _ text: String) -> Int {

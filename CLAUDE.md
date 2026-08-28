@@ -486,8 +486,7 @@ immediately. **Regenerate both fixtures at the same count** — the
 differential check must compare against real Python at 20, never be
 re-baselined against the port's own output.
 
-Three things the count change surfaced, worth knowing before trusting a
-pattern at 20:
+One thing the count change surfaced that is worth carrying forward:
 
 - **A parameter can be *derived* from `TOTAL_LEDS`.**
   `wake_bloom_trio_gaps_green` computes
@@ -496,24 +495,33 @@ pattern at 20:
   literal 4.0 and was the *only* field that broke — silently everywhere
   except `FirmwareFieldCheck`. It's now kept as the expression. If you port
   another field, check whether its constants are literals or derived.
-- **`battery_25/50/75` light 4 / 8 / 12 LEDs**, which was 25/50/75% of a
-  16-ring and is 20/40/60% of a 20-ring. The counts are faithful to the
-  source; the *names* no longer match the fraction. That's a pattern-library
-  fix, not an app one.
-- **`battery_low` blinks LEDs 0 and 15**, from the hardcoded
-  `TOP_LEDS = [0, 15]`. On a 20-ring the top pair is 0 and 19.
 
-The mirrored spin/comet patterns are fine, despite hardcoding `15` as the
-counter-rotating start: the two heads sweep separations 1..9 symmetrically
-and still cross, exactly as they did at 16.
+### The pattern library was a 16-LED library
 
-**`ripple.py` blocks two patterns at 20.** It declares `NUM_LEDS = 16` and
-`pattern_common` asserts that against the ring, so `listening` and
-`ripple_blue_white` refuse to record and fall back to parametric
-interpretation. The assert is the source protecting itself — the ripple
-motion maths is authored for 16 and needs updating by whoever owns it.
-`ripple_green` is unaffected (it authors steps directly). Coverage at 20 is
-therefore 67 of 69 exact.
+`patterns/` had 16 baked into it in three ways, all now derived from
+`TOTAL_LEDS` so the library follows the ring instead of assuming one:
+
+- **Geometry constants.** `TOP_LEDS = [0, 15]`, `BOTTOM_LEDS`, the halves
+  and `SYMMETRIC_PAIRS`, plus `led_opposite` (`+8`) and `led_mirror`
+  (`15 - index`).
+- **Counter-rotating starts.** `start_ccw = 15` and `(15 - k) % TOTAL_LEDS`
+  in the spin/comet engines and four pattern files — "the far side of the
+  ring", written as the index it happened to be.
+- **Battery levels.** `_schedule_battery_cascade(..., 4 / 8 / 12)` — 25/50/75%
+  of sixteen LEDs, but 20/40/60% of twenty. Now `TOTAL_LEDS // 4`,
+  `// 2`, `3 * // 4`, so the pattern means the *fraction* it is named for.
+  `battery_100` filled `range(16)`; now `range(TOTAL_LEDS)`. Their
+  `DURATION_MS` headers moved with them (7300 / 9800 / 12300 / 16000), since
+  a longer ring takes longer to fill at 500 ms a frame.
+
+`ripple.py` declares its own `NUM_LEDS`, asserted against the ring by
+`pattern_common`, and is now 20 — which unblocked `listening` and
+`ripple_blue_white`. **Coverage at 20 is 69 of 69 exact.**
+
+Because the fill argument is now an expression rather than a literal,
+`FirmwarePatternImporter.batteryFillCount` evaluates the
+`[k *] TOTAL_LEDS // d` shapes instead of scraping a digit. A digit still
+works, for anything written the old way.
 
 ### Bulk import: a whole library into Use Cases
 
@@ -578,7 +586,7 @@ a time. It sits directly above Animation because levels 1 and 2 override
 overrides. It's hidden entirely when no firmware pattern is loaded — a card
 reading "Interpreted" on every hand-authored design is noise.
 
-**Coverage: 67 of 69 exact at 20 LEDs** (69 of 69 at 16). The ripple family needed `ripple.py` — the
+**Coverage: 69 of 69 exact at 20 LEDs.** The ripple family needed `ripple.py` — the
 canonical motion maths `pattern_common._import_ripple_math()` looks for —
 which isn't in `patterns/`. `record_streams.py` adds the Desktop to
 `sys.path` to find it; point that at wherever it lives if it moves.
