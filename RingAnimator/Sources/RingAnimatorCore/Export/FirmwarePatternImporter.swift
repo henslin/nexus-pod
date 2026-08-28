@@ -58,7 +58,15 @@ public enum FirmwarePatternImporter {
         return text.contains("DESCRIPTION") && text.contains("def schedule_")
     }
 
-    /// One entry in the closed vocabulary of shared schedulers.
+    /// One entry in the closed vocabulary of shared schedulers, carrying
+    /// the helper's own documented defaults.
+    ///
+    /// These numbers are read out of `pattern_common.py` rather than
+    /// guessed: `_schedule_spin_solid_fade` really does turn once per
+    /// 2200 ms with a 5-LED trail and a 3 s hold, and its three phases
+    /// really do add up to the 9400 ms its callers declare. A file that
+    /// overrides one of them in its own body overrides it here too — the
+    /// defaults are applied first and the locals land on top.
     private struct Behavior {
         var type: RingAnimationType?
         var style: LEDPatternStyle?
@@ -68,6 +76,15 @@ public enum FirmwarePatternImporter {
         /// Color comes from level rather than from position — the
         /// one-color-at-two-brightnesses shape the firmware uses.
         var byLevel: Bool = false
+        /// Rotations per second.
+        var speed: Double?
+        var loopSeconds: Double?
+        /// Trail length as a fraction of the ring, already divided by the
+        /// 16 LEDs the helpers count in.
+        var trailFraction: Double?
+        var tickMs: Double?
+        var holdSeconds: Double?
+        var fadeOutSeconds: Double?
         var note: String
     }
 
@@ -76,42 +93,58 @@ public enum FirmwarePatternImporter {
     /// Ordered longest-first at the point of use so `_schedule_spin_solid_fade`
     /// can't be matched by `_schedule_spin_firmware`'s shorter prefix.
     private static let behaviors: [String: Behavior] = [
+        // hold 3000 + off 1000 = the 4000 ms its callers declare; fade_idx 4
+        // is MEDIUM, tau 500 ms.
         "_schedule_solid_firmware": Behavior(
             type: nil, style: .solid,
-            note: "steady unblinking color"),
+            holdSeconds: 3.0, fadeOutSeconds: 0.5,
+            note: "steady color, held 3 s then faded out"),
+        // Each frame lights *two* LEDs — cw index k and ccw index 15-k — so
+        // despite the name this is a mirrored pair sweeping in opposite
+        // directions, which is Dual Chase here, not Spin. 16 frames at the
+        // documented 312 ms is one 4.99 s revolution.
         "_schedule_spin_firmware": Behavior(
-            type: nil, style: .spin,
-            note: "single arc travelling the ring"),
+            type: .dualChase, style: nil,
+            speed: 1000.0 / (312.0 * 16.0),
+            note: "two mirrored heads sweeping in opposite directions"),
         "_schedule_spin_solid_fade": Behavior(
             type: nil, style: .spinThenSolidFade,
-            note: "spin resolving into a solid fade"),
+            speed: 1000.0 / 2200.0, trailFraction: 5.0 / 16.0,
+            holdSeconds: 3.0, fadeOutSeconds: 1.5,
+            note: "a comet twice around, then solid, then fade"),
         "_schedule_blink_cycle": Behavior(
             type: nil, style: .flash,
             note: "on/off blink cycle"),
         "_schedule_alternating_firmware": Behavior(
             type: .alternating, style: nil,
-            note: "even/odd diodes swapping"),
+            note: "the whole ring alternating between colors"),
         "_schedule_white_breath": Behavior(
             type: .pulse, style: nil,
-            note: "whole-ring breath"),
+            speed: 1000.0 / 4000.0, tickMs: 100,
+            note: "whole-ring breath on a raised-cosine envelope"),
         "_schedule_wake_bloom": Behavior(
             type: .bloom, style: nil,
-            note: "soft zones surfacing and receding"),
+            speed: 0.25, loopSeconds: 8, tickMs: 100,
+            note: "a slow global breath with a 3-cycle shimmer over it"),
         "_schedule_warble_kaleidoscope": Behavior(
             type: .wobble, style: nil,
-            note: "folded warble"),
+            speed: 0.6, loopSeconds: 10, tickMs: 100,
+            note: "four mirrored segments breathing symmetrically"),
         "_schedule_connected_flow": Behavior(
             type: .chasing, style: nil,
-            note: "flowing arc"),
+            loopSeconds: 17.4, tickMs: 100,
+            note: "three phases — breathe, bloom, then hold solid"),
         "_schedule_battery_cascade": Behavior(
             type: .liquidFill, style: nil, byLevel: true,
-            note: "cascading fill to a level"),
+            note: "a cascade filling to a level, then blinking the last LED"),
         "_schedule_braided_twist": Behavior(
             type: .dualChase, style: nil,
-            note: "two counter-rotating arcs"),
+            speed: 0.3, loopSeconds: 10, tickMs: 100,
+            note: "two phase-opposed strands crossing"),
         "_dual_comet_varied": Behavior(
             type: .dualChase, style: nil,
-            note: "two comets at differing speeds"),
+            speed: 1000.0 / 3000.0, loopSeconds: 13, trailFraction: 2.0 / 16.0,
+            note: "two comets, 3000 ms and 3400 ms per lap"),
     ]
 
     /// Helpers that are *rendering primitives* rather than behaviors.
@@ -127,7 +160,8 @@ public enum FirmwarePatternImporter {
     private static let weakBehaviors: [String: Behavior] = [
         "_schedule_level_threshold": Behavior(
             type: .liquidFill, style: nil, byLevel: true,
-            note: "per-LED level mapped onto two colors"),
+            tickMs: 100,
+            note: "per-LED level hard-thresholded onto two colors"),
         "_in_any_arc": Behavior(
             type: .bloom, style: nil,
             note: "lit arcs with gaps between them"),
@@ -180,25 +214,45 @@ public enum FirmwarePatternImporter {
         ("spin", Behavior(type: nil, style: .spin, note: "an arc travelling the ring")),
         ("wave", Behavior(type: .wave, style: nil, note: "travelling wave")),
         ("load", Behavior(type: .chasing, style: nil, note: "a progress arc")),
+        ("fill", Behavior(type: .liquidFill, style: nil, byLevel: true, note: "the ring filling up")),
         ("sos", Behavior(type: nil, style: .flash, note: "urgent blink")),
     ]
 
-    /// Named palette constants, which live in the absent `pattern_common`.
-    /// Resolved to this app's own spec palette — see the type's doc comment
-    /// for why that substitution is reported rather than hidden.
+    /// The firmware palette, read from `pattern_common.py`.
+    ///
+    /// These are the actual `RGB_*` macro values the device uses, not
+    /// lookalikes: the firmware's green is pure `(0, 255, 0)` and its amber
+    /// is `(255, 126, 0)`, both a long way from the app's own spec colors
+    /// that stood in for them before `pattern_common` was available.
+    ///
+    /// Matched with word boundaries so `COLOR_GREEN` can't claim a
+    /// `COLOR_GREEN_WHITE`, and `COLOR_RED` can't claim a `COLOR_ALARM_RED`.
     private static let namedColors: [String: Color] = [
         "COLOR_WHITE": rgb(255, 255, 255),
-        "COLOR_GREEN": rgb(48, 209, 88),
-        "COLOR_RED": rgb(255, 59, 48),
-        "COLOR_AMBER": rgb(255, 176, 0),
-        "COLOR_BLUE": rgb(10, 132, 255),
-        "COLOR_PURPLE": rgb(175, 82, 222),
-        "COLOR_ALARM": rgb(255, 59, 48),
-        "ARM_RED": rgb(255, 59, 48),
-        "ARM_AWAY_RED": rgb(255, 59, 48),
-        "ARM_HOME_AMBER": rgb(255, 176, 0),
-        "STANDBY_GREEN": rgb(48, 209, 88),
+        "COLOR_BLUE": rgb(0, 0, 255),
+        "COLOR_GREEN": rgb(0, 255, 0),
+        "COLOR_RED": rgb(255, 0, 0),
+        "COLOR_AMBER": rgb(255, 126, 0),
+        "COLOR_ALARM_RED": rgb(220, 0, 0),
+        "COLOR_LIGHT_GREEN": rgb(40, 215, 10),
+        "COLOR_GREEN_WHITE": rgb(120, 255, 60),
+        "COLOR_BLACK": rgb(0, 0, 0),
+        "BREATH_WHITE_RGB": rgb(170, 170, 165),
+        "ARM_AWAY_RED": rgb(255, 0, 0),
+        "ARM_HOME_AMBER": rgb(255, 126, 0),
+        "STANDBY_GREEN": rgb(0, 255, 0),
     ]
+
+    /// The ring is 16 LEDs.
+    ///
+    /// `TOTAL_LEDS` itself lives in `led_ring_core`, which still isn't in
+    /// the folder, but `pattern_common`'s geometry pins it exactly:
+    /// `TOP_LEDS = [0, 15]`, `LEFT_HALF = [8...15]`, "opposite" is
+    /// `(i + 8) % TOTAL_LEDS`, and there are 8 symmetric pairs.
+    private static let ringLEDCount: Double = 16
+
+    /// `FADE_TAU_MS` — the fade engine's time constant per rate index.
+    private static let fadeTauMs: [Double] = [31, 63, 125, 250, 500, 1000, 2000, 4000]
 
     private static func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color {
         Color(red: r / 255, green: g / 255, blue: b / 255)
@@ -209,6 +263,28 @@ public enum FirmwarePatternImporter {
     public static func apply(_ text: String, to config: RingConfig) -> BlenderScriptImporter.Outcome {
         var applied: [String] = []
         var dropped: [String] = []
+
+        // The shared library and the registry are not patterns.
+        //
+        // `pattern_common.py` sits in the same folder, matches every
+        // structural test a pattern module passes, and — read as one —
+        // imports as whichever helper it happens to define first. The clean
+        // discriminator is definition versus use: the library *defines*
+        // `_schedule_*`, and a pattern module only ever calls them.
+        if text.contains("def _schedule_") {
+            return BlenderScriptImporter.Outcome(
+                applied: [],
+                dropped: [],
+                caveat: "This is pattern_common.py — the shared library the patterns are built from, not a pattern itself. Nothing was changed. Import one of the individual pattern files instead."
+            )
+        }
+        if !text.contains("DESCRIPTION") && !text.contains("def schedule_") {
+            return BlenderScriptImporter.Outcome(
+                applied: [],
+                dropped: [],
+                caveat: "This file is part of the pattern package but doesn't define a pattern of its own. Nothing was changed."
+            )
+        }
 
         let description = self.description(in: text)
         let locals = self.locals(in: text)
@@ -281,8 +357,45 @@ public enum FirmwarePatternImporter {
                 config.diodeColorMode = .byLevel
                 applied.append("One color at varying brightness → Color by Brightness")
             }
+
+            // The helper's documented defaults. Applied before the file's
+            // own locals and keywords, which land on top where present.
+            if let speed = behavior.speed {
+                config.speed = min(max(speed, 0.05), 5)
+                applied.append("\(source) turns at \(trim(speed)) rotations/s → Speed")
+            }
+            if let loop = behavior.loopSeconds {
+                config.loopSeconds = min(max(loop, 0.5), 60)
+                applied.append("\(trim(loop)) s loop → Loop Length")
+            }
+            if let trail = behavior.trailFraction {
+                config.trailFraction = min(max(trail, 0.02), 1)
+                applied.append("\(Int(trail * ringLEDCount))-LED trail → Trail Length")
+            }
+            if let tick = behavior.tickMs {
+                config.firmwareTickMs = min(max(tick, 1), 200)
+                applied.append("\(Int(tick)) ms scheduler tick → Firmware Tick")
+            }
+            if let hold = behavior.holdSeconds {
+                config.holdSeconds = hold
+                config.sequencePlaybackEnabled = true
+                applied.append("held \(trim(hold)) s → Hold")
+            }
+            if let fade = behavior.fadeOutSeconds {
+                config.fadeOutSeconds = fade
+                config.sequencePlaybackEnabled = true
+                applied.append("\(trim(fade)) s fade to off → Fade Out")
+            }
         } else {
             dropped.append("No recognizable scheduler or behavior keyword — animation type left as-is")
+        }
+
+        // --- Ring size. Every one of these patterns addresses the same
+        // --- 16-pixel ring, so this is a fact about the hardware rather
+        // --- than something read out of the individual file.
+        if behavior != nil {
+            config.diodeCount = ringLEDCount
+            applied.append("16-LED ring → Diode Count")
         }
 
         // --- Palette. Call-argument tuples first (most specific), then
@@ -291,8 +404,13 @@ public enum FirmwarePatternImporter {
         if palette.isEmpty { palette = localColors(in: text) }
         var usedNamedColors: [String] = []
         if palette.isEmpty {
-            for name in namedColors.keys.sorted(by: { orderOfAppearance($0, text) < orderOfAppearance($1, text) })
-            where text.contains(name) {
+            let present = namedColors.keys
+                .compactMap { name -> (String, Int)? in
+                    guard let at = wordOccurrence(name, in: text) else { return nil }
+                    return (name, at)
+                }
+                .sorted { $0.1 < $1.1 }
+            for (name, _) in present {
                 if let color = namedColors[name] {
                     palette.append(color)
                     usedNamedColors.append(name)
@@ -306,7 +424,7 @@ public enum FirmwarePatternImporter {
             if usedNamedColors.isEmpty {
                 applied.append("\(palette.count) color\(palette.count == 1 ? "" : "s") from the pattern → palette")
             } else {
-                applied.append("\(usedNamedColors.joined(separator: ", ")) → palette (this app's spec colors — pattern_common's own RGB values aren't in the folder)")
+                applied.append("\(usedNamedColors.joined(separator: ", ")) → palette (the firmware's own RGB values, from pattern_common)")
             }
         }
 
@@ -354,8 +472,48 @@ public enum FirmwarePatternImporter {
             applied.append("\(Int(cycles)) cycles → Flash Count")
         }
 
+        // --- Keyword arguments at the call site, which is where these
+        // --- files state their real timings: `on_ms=300, off_ms=300`,
+        // --- `interval_ms=500`. More specific than the helper defaults
+        // --- above, so they overwrite them.
+        let keywords = callKeywords(in: text)
+        if let on = keywords["on_ms"], let off = keywords["off_ms"], on + off > 0 {
+            config.blinkRate = min(max(1000 / (on + off), 0.1), 20)
+            applied.append("\(Int(on))/\(Int(off)) ms blink → \(trim(config.blinkRate)) Hz")
+        } else if let interval = keywords["interval_ms"], interval > 0 {
+            // Two colors at `interval_ms` each means a full there-and-back
+            // cycle takes twice that.
+            config.speed = min(max(1000 / (interval * 2), 0.05), 5)
+            applied.append("\(Int(interval)) ms per color → \(trim(config.speed)) Hz")
+        }
+        if let hold = keywords["hold_ms"] {
+            config.holdSeconds = hold / 1000
+            applied.append("hold_ms \(Int(hold)) → Hold \(trim(hold / 1000)) s")
+        }
+        if let off = keywords["off_ms"], keywords["on_ms"] == nil {
+            // `off_ms=0` on a solid means "stay on" — no fade to black.
+            config.fadeOutSeconds = off / 1000
+            applied.append(off == 0
+                ? "off_ms 0 → stays on, no fade to black"
+                : "off_ms \(Int(off)) → Fade Out")
+        }
+
+        // A bare number passed to the cascade is how many of the 16 LEDs
+        // fill — that's the battery level the pattern is showing.
+        if text.contains("_schedule_battery_cascade("), let lit = firstPositionalNumber(in: text) {
+            config.trailFraction = min(max(lit / ringLEDCount, 0.02), 1)
+            applied.append("\(Int(lit)) of 16 LEDs lit → \(Int(lit / ringLEDCount * 100))% fill")
+        }
+
         // --- Recognized but unrepresentable.
-        if locals["fade_rate_idx"] != nil || locals["fade_rate"] != nil {
+        //
+        // `fade_rate` indexes FADE_TAU_MS — the fade engine's exponential
+        // time constant. Now that the table is readable the report can name
+        // the actual figure instead of calling it an opaque register, even
+        // though there's still nowhere here to put a global fade tau.
+        if let idx = locals["fade_rate_idx"] ?? locals["fade_rate"], idx >= 0, Int(idx) < fadeTauMs.count {
+            dropped.append("fade_rate \(Int(idx)) — the hardware's global fade, \(Int(fadeTauMs[Int(idx)])) ms time constant; no per-diode equivalent here")
+        } else if locals["fade_rate_idx"] != nil || locals["fade_rate"] != nil {
             dropped.append("fade_rate — the hardware's global fade register, which has no per-diode equivalent here")
         }
         for (name, label) in [
@@ -367,18 +525,16 @@ public enum FirmwarePatternImporter {
         ] where locals[name] != nil {
             dropped.append(label)
         }
-        if text.contains("TOTAL_LEDS") {
-            dropped.append("TOTAL_LEDS — the ring's pixel count is defined in pattern_common, so Diode Count is unchanged at \(Int(config.diodeCount))")
-        }
+
         if text.contains("RENDER_ONLY = True") {
             dropped.append("RENDER_ONLY — a Blender-render-only flag with no meaning outside that scene")
         }
 
         let caveat: String
         if applied.isEmpty {
-            caveat = "This is a firmware pattern module, but nothing in it mapped onto a behavior this app renders. Its maths lives in pattern_common.py, which isn't in the folder."
+            caveat = "This is a firmware pattern module, but nothing in it named a behavior this app renders. Nothing was changed."
         } else {
-            caveat = "Interpreted from the pattern's scheduler name, palette and timing. The per-LED maths lives in pattern_common.py, which isn't alongside these files — so this is this app's nearest equivalent behavior, not a frame-exact reproduction."
+            caveat = "Timings, palette and ring size are the firmware's own, read from pattern_common.py. The per-LED maths still isn't reproduced — this app renders its nearest equivalent behavior, so expect a close match in color and cadence rather than a frame-exact one."
                 + (description.isEmpty ? "" : "\n\nThe pattern describes itself as: \(description)")
         }
 
@@ -552,6 +708,49 @@ public enum FirmwarePatternImporter {
             green: min(max(pieces[1] / scale, 0), 1),
             blue: min(max(pieces[2] / scale, 0), 1)
         )
+    }
+
+    /// Location of `name` as a whole word, or nil.
+    ///
+    /// Underscores count as word characters, which is exactly what's needed
+    /// here: `\bCOLOR_GREEN\b` does not match inside `COLOR_GREEN_WHITE`,
+    /// and `\bCOLOR_RED\b` does not match inside `COLOR_ALARM_RED`. A plain
+    /// `contains` picked up both and imported the wrong color.
+    private static func wordOccurrence(_ name: String, in text: String) -> Int? {
+        guard let regex = try? NSRegularExpression(pattern: "\\b\(name)\\b") else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        return match.range.location
+    }
+
+    /// `name=<number>` keyword arguments from the scheduler call.
+    private static func callKeywords(in text: String) -> [String: Double] {
+        var result: [String: Double] = [:]
+        guard let regex = try? NSRegularExpression(pattern: #"([a-z_]+)\s*=\s*(-?\d+(?:\.\d+)?)"#) else {
+            return result
+        }
+        for line in text.split(separator: "\n") where line.contains("_schedule_") || line.contains("_ms=") {
+            let string = String(line)
+            let range = NSRange(string.startIndex..., in: string)
+            regex.enumerateMatches(in: string, range: range) { match, _, _ in
+                guard let match,
+                      let nameRange = Range(match.range(at: 1), in: string),
+                      let valueRange = Range(match.range(at: 2), in: string),
+                      let value = Double(string[valueRange]) else { return }
+                let name = String(string[nameRange])
+                if result[name] == nil { result[name] = value }
+            }
+        }
+        return result
+    }
+
+    /// The first bare number passed to a scheduler call — the cascade's
+    /// lit-LED count.
+    private static func firstPositionalNumber(in text: String) -> Double? {
+        guard let regex = try? NSRegularExpression(pattern: #"_schedule_battery_cascade\(controller,\s*system,\s*(\d+)"#),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text) else { return nil }
+        return Double(text[range])
     }
 
     private static func orderOfAppearance(_ needle: String, _ text: String) -> Int {

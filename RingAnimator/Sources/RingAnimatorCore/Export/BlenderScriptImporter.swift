@@ -80,6 +80,34 @@ public enum BlenderScriptImporter {
         let text = rawText.replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
 
+        // Interpret into a *fresh* config, then commit only if something
+        // was understood.
+        //
+        // Both readers here set only the knobs they recognize, so importing
+        // over a config someone had already tuned left the rest of that
+        // tuning in place — a pattern that says nothing about glow or
+        // particles inherited whatever the last one used, and the ring on
+        // screen was a blend of two files rather than the one just opened.
+        // Starting from defaults makes an import mean the pattern and only
+        // the pattern.
+        //
+        // Committing only on success is the other half: a file that maps to
+        // nothing now leaves the existing design completely untouched,
+        // which is what "Nothing to import" should mean. `RingPreset` is
+        // the copy mechanism because it already knows which fields are part
+        // of an animation — preview sizing, background staging and voice
+        // credentials are deliberately not, so an import doesn't clear the
+        // user's backdrop along with the animation.
+        let scratch = RingConfig()
+        let outcome = interpret(text, into: scratch)
+        if !outcome.applied.isEmpty {
+            RingPreset(name: "Imported", config: scratch).apply(to: config)
+        }
+        return outcome
+    }
+
+    /// The reading itself, against a config that starts at defaults.
+    private static func interpret(_ text: String, into config: RingConfig) -> Outcome {
         // A firmware pattern module is a different shape of file entirely —
         // its tunables are lowercase locals inside `schedule_*` rather than
         // uppercase module constants, so the scraper below finds nothing in

@@ -414,10 +414,51 @@ Locals are whitelisted by name, never scraped wholesale: these bodies also
 contain `t_ms = 0` and `last_c0 = ...`, which look identical to tunables
 to a line-based reader.
 
-`pattern_common.py` is **not** in the folder, so the per-LED maths can't
-be read. Helper names map to this app's nearest behavior and named colors
-resolve to `LEDCueColors`, not to whatever `pattern_common` defines. Both
-substitutions are stated in the report rather than glossed.
+`pattern_common.py` and `led_ring_patterns.py` **are** in the folder, so
+the helpers' real defaults are read rather than guessed: 2200 ms per lap
+and a 5-LED trail for `_schedule_spin_solid_fade`, 312 ms per frame for
+`_schedule_spin_firmware`, the firmware `RGB_*` palette (green is pure
+`(0, 255, 0)`, amber `(255, 126, 0)`), and `FADE_TAU_MS` for what a fade
+rate index actually means in milliseconds. The 16-LED ring size comes from
+`pattern_common`'s geometry — `TOP_LEDS = [0, 15]`, opposite is `(i + 8)`,
+8 symmetric pairs — since `TOTAL_LEDS` itself lives in the still-absent
+`led_ring_core`.
+
+Two things that reading the library corrected:
+
+- **`_schedule_spin_firmware` is not a spin.** Each frame lights *two*
+  LEDs, cw `k` and ccw `15-k` — a mirrored pair sweeping in opposite
+  directions, which is Dual Chase here.
+- **`_schedule_level_threshold` hard-quantizes.** It emits `0x07` or
+  `0x00` per LED against a threshold, so these are two-color patterns with
+  crisp edges, not smooth gradients.
+
+The per-LED maths still isn't reproduced — helper names map to this app's
+nearest behavior, so expect a close match in color and cadence rather than
+a frame-exact one. The report says so.
+
+**The library is not a pattern.** `pattern_common.py` sits in the same
+folder and passes every structural test a pattern module does; read as one
+it imports as whichever helper it defines first. The discriminator is
+definition versus use: the library *defines* `_schedule_*`, a pattern only
+calls them.
+
+### Import resets first
+
+`BlenderScriptImporter.apply` interprets into a fresh `RingConfig` and
+commits it with `RingPreset` only if something was understood. Both
+readers set only the knobs they recognize, so importing over a tuned
+config used to leave the rest of that tuning in place — a pattern that
+says nothing about glow or particles inherited whatever the last one used,
+and the ring was a blend of two files. Committing only on success is the
+other half: a file that maps to nothing leaves the existing design
+completely untouched, which is what "Nothing to import" should mean.
+
+`RingPreset` is the copy mechanism because it already knows which fields
+are part of an animation — preview sizing, background staging and voice
+credentials deliberately aren't, so an import doesn't clear the backdrop
+along with the animation. The exact `NEXUS_PARAMS` round-trip does *not*
+reset, since it writes every field it knows about by definition.
 
 ### Normalize line endings before parsing
 
