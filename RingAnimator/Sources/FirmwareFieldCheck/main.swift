@@ -128,6 +128,9 @@ struct RecordedFrame: Decodable {
     let c1: [Int]
     let bits: [Int]
     let sel: [Int]
+    /// Non-nil per LED for the snapshot-native patterns, which carry a
+    /// brightness field rather than a two-register choice.
+    let rgb: [[Int]?]?
 }
 struct RecordedPattern: Decodable {
     let total_ms: Double
@@ -170,9 +173,10 @@ for (name, reference) in recorded.sorted(by: { $0.key < $1.key }) {
         guard frame.t < reference.total_ms else { continue }
         let mine = stream.frame(atSeconds: frame.t / 1000, ledCount: 16)
         for led in 0..<16 {
-            let expected: [Int]? = frame.sel[led] == 0
+            let explicit = frame.rgb?[led]
+            let expected: [Int]? = explicit ?? (frame.sel[led] == 0
                 ? nil
-                : (frame.bits[led] == 0 ? frame.c0 : frame.c1)
+                : (frame.bits[led] == 0 ? frame.c0 : frame.c1))
             if expected != mine.leds[led].map(channels) { mismatches += 1 }
         }
         ledFrames += 16

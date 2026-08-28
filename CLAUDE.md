@@ -489,10 +489,29 @@ a time. It sits directly above Animation because levels 1 and 2 override
 overrides. It's hidden entirely when no firmware pattern is loaded — a card
 reading "Interpreted" on every hand-authored design is noise.
 
-**Coverage: 66 of 69 exact.** The three that aren't are the ripple family
-(`ripple_green`, `ripple_blue_white`, `listening`), and only because
-`pattern_common._import_ripple_math()` needs a `ripple.py` that isn't in the
-folder. Drop one in and re-run the recorder and they join the rest.
+**Coverage: 69 of 69 exact.** The ripple family needed `ripple.py` — the
+canonical motion maths `pattern_common._import_ripple_math()` looks for —
+which isn't in `patterns/`. `record_streams.py` adds the Desktop to
+`sys.path` to find it; point that at wherever it lives if it moves.
+
+`ripple_green` is the one pattern that isn't two palette registers. It is
+**snapshot-native**: `build_ripple_green_steps` authors `RingStep[]` carrying
+a per-LED `(r, g, b, brightness)` field, played through the step player. The
+recorder folds the brightness into each LED's color and emits it as event
+kind 6, an explicit per-LED RGB, because that is what the LED actually emits.
+Any future per-LED-brightness pattern records the same way with no new
+format.
+
+Two structural rules earn their keep here:
+
+- **A pattern that imports the ripple maths is a ripple**, whatever it calls
+  itself. `listening.py` is a re-tuned ripple whose `DESCRIPTION` reads
+  "voice-assistant listening feedback (blue water + white glimmers)" and
+  never uses the word — by keyword alone it matched nothing and imported as
+  the default Wave.
+- **The ripple engine's knobs are whitelisted locals** (`n_drops`,
+  `ripple_speed`, `decay_rate`, `pulse_w`), so even without a stream these
+  map onto Drop Count, Speed, Decay and Front Width.
 
 ### Twenty-one patterns also have their maths ported
 

@@ -42,7 +42,7 @@ public struct FirmwarePatternStream: Sendable {
     public struct Event: Sendable {
         public var timeMs: Double
         /// 0 = Color0, 1 = Color1, 2 = one LED, 3 = all LEDs, 4 = global
-        /// off, 5 = fade rate.
+        /// off, 5 = fade rate, 6 = one LED set to an explicit packed RGB.
         public var kind: Int
         public var a: Int
         public var b: Int
@@ -81,6 +81,11 @@ public struct FirmwarePatternStream: Sendable {
         var color1 = Color.black
         var bits = [Int](repeating: 0, count: ledCount)
         var selected = [Bool](repeating: false, count: ledCount)
+        // The snapshot-native patterns (ripple_green) carry a per-LED
+        // brightness field rather than a choice between two palette
+        // registers, so their LEDs hold an explicit color with the
+        // brightness already folded in — which is what the LED emits.
+        var explicit = [Color?](repeating: nil, count: ledCount)
 
         for event in events {
             if event.timeMs > t { break }
@@ -91,16 +96,27 @@ public struct FirmwarePatternStream: Sendable {
                 guard event.a >= 0, event.a < ledCount else { continue }
                 selected[event.a] = event.b != 0
                 bits[event.a] = event.c
+                explicit[event.a] = nil
             case 3:
                 for i in 0..<ledCount {
                     selected[i] = event.a != 0
                     bits[i] = event.b
+                    explicit[i] = nil
                 }
             case 4:
                 for i in 0..<ledCount {
                     selected[i] = false
                     bits[i] = 0
+                    explicit[i] = nil
                 }
+            case 6:
+                guard event.a >= 0, event.a < ledCount else { continue }
+                explicit[event.a] = Self.rgb(
+                    (event.b >> 16) & 0xFF,
+                    (event.b >> 8) & 0xFF,
+                    event.b & 0xFF
+                )
+                selected[event.a] = true
             default:
                 // Fade rate: a hardware ramp between states with no
                 // equivalent in a per-frame snapshot. Recorded so the
@@ -110,6 +126,7 @@ public struct FirmwarePatternStream: Sendable {
         }
 
         let leds = (0..<ledCount).map { i -> Color? in
+            if let color = explicit[i] { return color }
             guard selected[i] else { return nil }
             return bits[i] == 0 ? color0 : color1
         }

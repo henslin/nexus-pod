@@ -15,7 +15,21 @@ def set_fade_rate(system, idx): _ev(_now[0], "fade", idx)
 def select_led(system, idx, sel, bits, *a): _ev(_now[0], "led", (idx, bool(sel), bits))
 def select_all_leds(system, sel, bits): _ev(_now[0], "all", (bool(sel), bits))
 def global_off(system): _ev(_now[0], "off", None)
-def schedule_steps(controller, system, steps): return 0
+def schedule_steps(controller, system, steps):
+    """Play a snapshot sequence as explicit per-LED colors.
+
+    These steps carry (r, g, b, brightness) per LED rather than a choice
+    between two palette registers, so they are recorded as an explicit
+    color per LED with the brightness already folded in — which is exactly
+    what the LED emits."""
+    t = 0
+    for st in steps:
+        for i, led in enumerate(st.leds):
+            scale = led.brightness / 255.0
+            _ev(t, "rgb", (i, int(round(led.r * scale)),
+                           int(round(led.g * scale)), int(round(led.b * scale))))
+        t += st.duration_ms
+    return t
 _now = [0]
 for n, f in [("set_color0",set_color0),("set_color1",set_color1),("set_fade_rate",set_fade_rate),
              ("select_led",select_led),("select_all_leds",select_all_leds),("global_off",global_off),
@@ -27,9 +41,12 @@ sys.modules["led_ring_core"] = core
 
 ktd = types.ModuleType("ktd2064_ring_model")
 class RingLed:
-    def __init__(self, *a, **k): self.a = a; self.k = k
+    # (r, g, b, brightness) — the snapshot firmware's per-LED field.
+    def __init__(self, r=0, g=0, b=0, brightness=0):
+        self.r, self.g, self.b, self.brightness = r, g, b, brightness
 class RingStep:
-    def __init__(self, *a, **k): self.a = a; self.k = k
+    def __init__(self, leds=None, transition=0, duration_ms=0):
+        self.leds = leds or []; self.transition = transition; self.duration_ms = duration_ms
 ktd.RingLed = RingLed; ktd.RingStep = RingStep
 ktd.AGW_RINGLED_TRANSITION_IMMEDIATE = 0
 sys.modules["ktd2064_ring_model"] = ktd
@@ -56,6 +73,7 @@ def replay(evs, total_ms, tick_ms, leds=16):
     frames = []
     c0 = (0,0,0); c1 = (0,0,0)
     bits = [0x00]*leds; sel = [False]*leds
+    explicit = [None]*leds
     k = 0
     t = 0
     while t <= total_ms:
@@ -68,10 +86,14 @@ def replay(evs, total_ms, tick_ms, leds=16):
             elif kind == "all":
                 s, b = pay
                 for i in range(leds): bits[i] = b; sel[i] = s
+            elif kind == "rgb":
+                i, r, g, b = pay
+                explicit[i] = (r, g, b); sel[i] = True
             elif kind == "off":
-                for i in range(leds): bits[i] = 0x00; sel[i] = False
+                for i in range(leds): bits[i] = 0x00; sel[i] = False; explicit[i] = None
         frames.append({"t": t, "c0": list(c0), "c1": list(c1),
-                       "bits": list(bits), "sel": [1 if x else 0 for x in sel]})
+                       "bits": list(bits), "sel": [1 if x else 0 for x in sel],
+                       "rgb": [list(e) if e else None for e in explicit]})
         t += tick_ms
     return frames
 

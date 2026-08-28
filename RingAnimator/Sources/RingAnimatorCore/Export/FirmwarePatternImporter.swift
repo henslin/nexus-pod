@@ -323,6 +323,20 @@ public enum FirmwarePatternImporter {
             break
         }
 
+        // A pattern that imports the ripple motion maths is a ripple,
+        // whatever it calls itself. Structural, so it outranks both the name
+        // and the prose: `listening.py` is a re-tuned ripple whose
+        // DESCRIPTION reads "voice-assistant listening feedback (blue water
+        // + white glimmers)" and never uses the word. Read by keyword alone
+        // it matched nothing and imported as the default Wave.
+        if behavior == nil, text.contains("_import_ripple_math") {
+            behavior = Behavior(
+                type: .ripple, style: nil, byLevel: true,
+                note: "the shared raindrop-ripple engine"
+            )
+            source = "imports the ripple engine"
+        }
+
         // Underscores flattened to spaces so a single space-form keyword
         // table matches both `circular_fill` and "circular fill".
         let rawName = rawModuleName(in: text).lowercased()
@@ -507,6 +521,36 @@ public enum FirmwarePatternImporter {
         if let floor = locals["brightness_min"], floor > 0, floor <= 1 {
             config.diodeFloor = floor
             applied.append("brightness_min \(trim(floor)) → Diode Floor")
+        }
+
+        // --- Ripple parameters. `listening.py` states all of these as
+        // --- literals, and they are the same figures its render handoff
+        // --- documents, so this reproduces the authored design even though
+        // --- the motion maths itself (ripple.py) isn't in the folder.
+        if let drops = locals["n_drops"], drops >= 1 {
+            config.rippleDropCount = min(max(drops, 1), 12)
+            applied.append("n_drops \(Int(drops)) → Drop Count")
+        }
+        if let decay = locals["decay_rate"], decay > 0 {
+            config.rippleDecay = min(max(decay, 0.05), 3)
+            applied.append("decay_rate \(trim(decay)) → Decay")
+        }
+        if let rippleSpeed = locals["ripple_speed"], rippleSpeed > 0 {
+            // LEDs per second in the engine; the app's speed is laps per
+            // second, so it divides by the ring.
+            config.speed = min(max(rippleSpeed / ringLEDCount, 0.05), 5)
+            applied.append("ripple_speed \(trim(rippleSpeed)) LEDs/s → \(trim(config.speed)) laps/s")
+        }
+        if let width = locals["pulse_w"], width > 0 {
+            config.trailFraction = min(max(width / ringLEDCount, 0.02), 1)
+            applied.append("pulse_w \(trim(width)) LEDs → Front Width")
+        }
+        // The engine crosses to the highlight color above this level, which
+        // is what By Brightness renders — so it also implies the mode.
+        if let threshold = locals["threshold"], threshold > 0, threshold < 1,
+           config.animationType == .ripple {
+            config.diodeColorMode = .byLevel
+            applied.append("white core threshold \(trim(threshold)) → Color by Brightness")
         }
 
         if let seed = locals["seed"] {
@@ -1096,6 +1140,11 @@ public enum FirmwarePatternImporter {
         "brightness_min", "trail_length", "num_cycles", "num_rotations",
         "fade_rate_idx", "fade_rate", "zone_scale", "drift_speed",
         "white_green_balance", "threshold", "start_led",
+        // The ripple engine's own knobs. These map cleanly onto controls
+        // this app already has, which matters more than usual here: the
+        // ripple patterns are the only ones with no recorded stream, so a
+        // faithful parametric import is all they get.
+        "n_drops", "ripple_speed", "decay_rate", "pulse_w",
     ]
 
     private static func locals(in text: String) -> [String: Double] {
