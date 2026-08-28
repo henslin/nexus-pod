@@ -78,6 +78,21 @@ public struct LEDCuePreviewView: View {
         animationConfig.trailFraction = parameters.trailFraction
         animationConfig.chasingFillStyle = parameters.chasingFillStyle
         animationConfig.diodeCount = parameters.diodeCount
+        // The parameters added alongside Diode Mode, Multi Chase and Bloom.
+        // They were carried on `LEDCueParameters` for storage but never
+        // copied here, so a cue set to any of those rendered with the
+        // defaults instead — silently, since nothing errors when a field
+        // simply isn't read. Optional on the parameters (they postdate the
+        // saved cue JSON), so each falls back to `RingConfig`'s own default.
+        animationConfig.diodeShape = parameters.diodeShape ?? .round
+        animationConfig.diodeModeEnabled = parameters.diodeModeEnabled ?? false
+        animationConfig.diodeScale = parameters.diodeScale ?? 1.0
+        animationConfig.diodeGap = parameters.diodeGap ?? 0.12
+        animationConfig.blinkPattern = parameters.blinkPattern ?? .steady
+        animationConfig.blinkRate = parameters.blinkRate ?? 2.0
+        animationConfig.bloomCount = parameters.bloomCount ?? 6
+        animationConfig.bloomBase = parameters.bloomBase ?? 0.6
+        animationConfig.bloomSoftness = parameters.bloomSoftness ?? 0.15
         animationConfig.primaryColor = Color(hex: parameters.primaryColorHex)
         animationConfig.secondaryColor = Color(hex: parameters.secondaryColorHex)
         animationConfig.glowEnabled = parameters.glowEnabled

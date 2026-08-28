@@ -459,12 +459,62 @@ struct CueDetailView: View {
                             value: $params.trailFraction, range: 0.05...1.0, format: "%.2f"
                         )
                     }
-                    if params.animationType == .alternating || params.animationType == .equalizer || params.animationType == .sparkle {
+                    if params.animationType == .multiChase {
+                        LabeledSlider(title: "Comet Length", value: $params.trailFraction, range: 0.05...1.0, format: "%.2f")
+                    }
+
+                    // Diode Mode and its shape controls, mirroring
+                    // `AnimationSection`. Every one of these is Optional on
+                    // `LEDCueParameters` — they postdate the saved cue JSON
+                    // — so each binding supplies the same default
+                    // `RingConfig` uses.
+                    Toggle("Diode Mode", isOn: optional($params.diodeModeEnabled, default: false))
+                    if params.diodeModeEnabled == true
+                        || params.animationType == .alternating
+                        || params.animationType == .sparkle
+                        || params.animationType == .multiChase {
+                        Picker("Diode Shape", selection: optional($params.diodeShape, default: .round)) {
+                            ForEach(DiodeShape.allCases) { shape in
+                                Text(shape.rawValue).tag(shape)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        if (params.diodeShape ?? .round).dividesTheRing {
+                            LabeledSlider(title: "Segment Gap", value: optional($params.diodeGap, default: 0.12), range: 0...0.6, format: "%.2f")
+                        } else {
+                            LabeledSlider(title: "Diode Size", value: optional($params.diodeScale, default: 1.0), range: 0.4...3.0, format: "%.2fx")
+                        }
+                    }
+
+                    if params.animationType == .alternating || params.animationType == .equalizer
+                        || params.animationType == .sparkle || params.animationType == .multiChase
+                        || params.diodeModeEnabled == true {
                         LabeledSlider(
                             title: params.animationType == .equalizer ? "Segment Count" : params.animationType == .sparkle ? "Sparkle Count" : "Diode Count",
                             value: $params.diodeCount, range: 8...60, format: "%.0f"
                         )
                     }
+
+                    if params.animationType == .multiChase || params.diodeModeEnabled == true {
+                        Picker("Blink", selection: optional($params.blinkPattern, default: .steady)) {
+                            ForEach(BlinkPattern.allCases) { pattern in
+                                Text(pattern.rawValue).tag(pattern)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        if (params.blinkPattern ?? .steady) != .steady {
+                            LabeledSlider(title: "Blink Rate", value: optional($params.blinkRate, default: 2.0), range: 0.2...12, format: "%.1f/s")
+                        }
+                    }
+
+                    if params.animationType == .bloom {
+                        LabeledSlider(title: "Patches", value: optional($params.bloomCount, default: 6), range: 2...14, format: "%.0f")
+                        LabeledSlider(title: "Average Size", value: $params.trailFraction, range: 0.05...0.5, format: "%.2f")
+                        LabeledSlider(title: "Base Brightness", value: optional($params.bloomBase, default: 0.6), range: 0...1, format: "%.2f")
+                        LabeledSlider(title: "Softness", value: optional($params.bloomSoftness, default: 0.15), range: 0...1, format: "%.2f")
+                    }
+
                     Text("Only used by the \"Continuous Animation (Nexus)\" style above — the exact same knobs as Nexus's own Animation section, so anything designed there reproduces here.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -617,4 +667,20 @@ private struct LabeledSlider: View {
                 .frame(width: 56, alignment: .trailing)
         }
     }
+}
+
+
+/// Unwraps an `Optional` parameter into a plain `Binding` with a default.
+///
+/// Everything added to `LEDCueParameters` after the cue library shipped is
+/// Optional — synthesized `Decodable` won't fill in a key that saved JSON
+/// doesn't have, so those fields can't be plain defaulted properties. The
+/// editors want ordinary bindings, and the default supplied here is always
+/// the matching `RingConfig` default, so an untouched cue behaves exactly
+/// as one that never had the field.
+private func optional<T>(_ source: Binding<T?>, default fallback: T) -> Binding<T> {
+    Binding(
+        get: { source.wrappedValue ?? fallback },
+        set: { source.wrappedValue = $0 }
+    )
 }
