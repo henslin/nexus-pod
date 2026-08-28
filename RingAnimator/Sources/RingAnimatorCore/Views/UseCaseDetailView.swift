@@ -287,6 +287,15 @@ public struct UseCaseDetailView: View {
                 ColorSection(config: editingConfig)
             }
 
+            // Same placement and rule as Nexus (see `ControlsView`): above
+            // Animation because it overrides it, and absent when no
+            // firmware pattern is loaded.
+            if editingConfig.firmwarePatternStream != nil || editingConfig.firmwareLevelField != nil {
+                card("fidelity", "Firmware Fidelity", "checkmark.seal") {
+                    FirmwareFidelitySection(config: editingConfig)
+                }
+            }
+
             card("animation", "Animation", "play.circle") {
                 AnimationSection(config: editingConfig)
             }

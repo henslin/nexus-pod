@@ -472,6 +472,52 @@ Regenerate with `Sources/FirmwareFieldCheck/record_streams.py` when the
 pattern library changes. `firmware-streams.json` (180 KB) is a committed
 resource, so neither the app nor its checks need a copy of the library.
 
+### Bulk import: a whole library into Use Cases
+
+`UseCaseListView`'s "Import Pattern Folder…" creates one use case per `.py`
+file, each with its palette, timings and phase steps. Everything routes
+through `BlenderScriptImporter.apply`, so a bulk import and a single import
+cannot drift — same reading, same streams, same timelines. Files that aren't
+patterns apply nothing and are skipped by name in the summary rather than
+becoming empty use cases.
+
+The single-file button in `UseCaseDetailView` imports *into* the use case
+you're editing, which is right for reworking one animation and wrong for
+taking delivery of sixty-nine.
+
+### Timeline steps are windows into the stream, not re-creations
+
+A phased pattern holds the recorded stream on *every* step, each with
+`RingConfig.firmwarePatternStreamOffset` set to where that phase begins.
+Without it the two halves of an import contradict each other: the config
+replays the real thing while every step holds a hand-built approximation of
+the same phase, so selecting a step quietly swapped exact for approximate.
+
+The offsets are a genuine cross-check. They're just the running sum of the
+step durations, and for `spotlight_deterrence` they land on 0.5 / 4.0 / 6.5 /
+11.0 / 14.5 — exactly the `t_white_on` / `t_ramp` / `t_steady` /
+`t_break_start` / `t_alarm_start` computed in the Python. The phases derived
+by hand and the recorded stream agree.
+
+Three precedence rules make this actually render, and each one was a bug
+first:
+
+- **A stream outranks `patternStyle`.** `effectivePatternStyle` returns nil
+  when a stream is set. `patternStyle` short-circuits the whole diode path —
+  it renders via `LEDCuePreviewView` — so a step that was both a stream
+  window and a named spec-sheet style drew the style and never reached the
+  stream. Steps carry both on purpose: the style is the fallback once you
+  step down off the stream.
+- **A stream step gets `localTime`, not `phaseTime`.** `phaseTime` exists to
+  keep the ring's *angle* continuous across a boundary; a recorded stream has
+  no angle to keep continuous, and its events carry absolute timestamps.
+  Feeding it the rotation offset indexed into an unrelated part of the stream
+  and rendered as a blank ring partway through playback.
+- **`_import_ripple_math` needs its parentheses.** Every pattern lists it in
+  the bulk `from pattern_common import (...)` line, so matching the bare name
+  typed a dozen unrelated patterns — a shimmer, a lattice, a spotlight — as
+  Ripple. Only a *call* means the pattern uses the engine.
+
 ### The fidelity ladder
 
 An imported pattern can hold three levels at once, and they nest — clearing

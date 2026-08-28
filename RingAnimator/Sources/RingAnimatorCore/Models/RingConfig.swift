@@ -101,6 +101,16 @@ public final class RingConfig: ObservableObject {
     /// Clearing it falls back to whichever of those is set.
     @Published public var firmwarePatternStream: String? = nil
 
+    /// Seconds into `firmwarePatternStream` this config starts at.
+    ///
+    /// Exists so a timeline step can be an exact *window* into the stream
+    /// rather than a re-interpretation of it. A pattern that imports as
+    /// phases holds the recorded stream on every step, each offset to where
+    /// that phase begins — so "Steady hold" plays the real thing 6.5 s in,
+    /// and the sequence stays both exact and editable. 0 for everything
+    /// else.
+    @Published public var firmwarePatternStreamOffset: Double = 0
+
     // MARK: - Ripple drops
     //
     // Modeled on how a real LED-ring script writes a ripple: not one wave

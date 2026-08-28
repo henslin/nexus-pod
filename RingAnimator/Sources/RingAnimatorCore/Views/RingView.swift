@@ -90,7 +90,16 @@ public struct RingView: View {
     /// give it here. `ControlsView`'s picker for this leaves it out
     /// entirely for the same reason; this guard just means nothing breaks
     /// if it ends up set some other way (e.g. hand-edited state restore).
+    ///
+    /// A recorded firmware stream outranks it. `patternStyle` short-circuits
+    /// the whole diode path — it renders through `LEDCuePreviewView`
+    /// instead — so a timeline step that is a window into a stream *and*
+    /// names a spec-sheet style would draw the style and never reach the
+    /// stream. The steps do both on purpose: the style is what the phase
+    /// falls back to once you step down off the stream, and the stream is
+    /// what it shows until then.
     private var effectivePatternStyle: LEDPatternStyle? {
+        guard config.firmwarePatternStream == nil else { return nil }
         guard let style = config.patternStyle, style != .continuousAnimation else { return nil }
         return style
     }
@@ -1096,7 +1105,7 @@ public struct RingView: View {
         // reasoning as `rippleNorm` above.
         let streamFrame = config.firmwarePatternStream
             .flatMap { FirmwarePatternStream.stream(named: $0) }
-            .map { $0.frame(atSeconds: tickedElapsed, ledCount: count) }
+            .map { $0.frame(atSeconds: tickedElapsed + config.firmwarePatternStreamOffset, ledCount: count) }
         return glow(
             diodeLayer(count: count, scale: scale) { i in
                 let position = Double(i) / Double(count)

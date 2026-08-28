@@ -298,12 +298,23 @@ public struct RingTimeline: Codable, Equatable {
         let local = min(max(t - starts[index], 0), segment.duration)
         let speed = max(abs(segment.speed), 0.001)
 
+        // A step replaying a recorded firmware stream gets its own local
+        // time, not the rotation-accumulated offset.
+        //
+        // `phaseTime` exists to keep the ring's *angle* continuous across a
+        // boundary — see its doc comment. A recorded stream has no angle to
+        // keep continuous: its events carry absolute timestamps, and the
+        // step knows where it starts via
+        // `RingConfig.firmwarePatternStreamOffset`. Feeding it a rotation
+        // offset instead indexed into an unrelated part of the stream, which
+        // rendered as a blank ring partway through playback.
+        let isStream = segment.snapshot.firmwarePatternStream != nil
         return Resolved(
             segmentIndex: index,
             segment: segment,
             localTime: local,
             opacity: segment.opacity(atLocalTime: local),
-            phaseTime: rotationOffsets[index] / speed + local
+            phaseTime: isStream ? local : rotationOffsets[index] / speed + local
         )
     }
 }

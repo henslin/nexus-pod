@@ -329,7 +329,12 @@ public enum FirmwarePatternImporter {
         // DESCRIPTION reads "voice-assistant listening feedback (blue water
         // + white glimmers)" and never uses the word. Read by keyword alone
         // it matched nothing and imported as the default Wave.
-        if behavior == nil, text.contains("_import_ripple_math") {
+        // The parentheses are load-bearing: every pattern file lists
+        // `_import_ripple_math` in its bulk `from pattern_common import (...)`
+        // line, so matching the bare name typed a dozen unrelated patterns —
+        // a shimmer, a lattice, a spotlight — as Ripple. Only a *call* means
+        // the pattern actually uses the engine.
+        if behavior == nil, text.contains("_import_ripple_math()") {
             behavior = Behavior(
                 type: .ripple, style: nil, byLevel: true,
                 note: "the shared raindrop-ripple engine"
@@ -442,7 +447,8 @@ public enum FirmwarePatternImporter {
             applied.append("threshold \(trim(levelField.threshold)), \(Int(levelField.tickMs)) ms tick, \(trim(levelField.loopSeconds)) s loop → from the engine")
         }
 
-        // --- The recorded command stream, where one exists. This is the
+        // --- The recorded command stream, where one exists.
+        // --- Runs after the phase timeline is built so it can window it. This is the
         // --- device's literal output rather than a model of it, so it
         // --- outranks everything above. The behavior and any level field
         // --- stay set underneath: clearing the stream in Controls reveals
@@ -459,6 +465,7 @@ public enum FirmwarePatternImporter {
             config.diodeFloor = 0
             config.loopSeconds = min(max(stream.loopSeconds, 0.5), 60)
             applied.append("Recorded firmware stream: \(stream.events.count) commands over \(trim(stream.loopSeconds)) s — the device's literal output, replayed")
+
         }
 
         // --- Palette. Call-argument tuples first (most specific), then
@@ -644,8 +651,30 @@ public enum FirmwarePatternImporter {
             timeline = built
             phases = names
         }
+        // Make each phase an exact window into the recorded stream.
+        //
+        // Without this the two halves of the import contradict each other:
+        // the config replays the real thing while every step holds a
+        // hand-built approximation of the same phase, so selecting a step
+        // quietly swapped exact for approximate. Giving each step the stream
+        // and the offset where its phase begins makes the sequence exact
+        // *and* editable — the step keeps its own name, length and fades,
+        // which is what makes it worth being a step at all.
+        if let streamName = config.firmwarePatternStream, var built = timeline {
+            var offset: Double = 0
+            for index in built.segments.indices {
+                built.segments[index].snapshot.firmwarePatternStream = streamName
+                built.segments[index].snapshot.firmwarePatternStreamOffset = offset
+                offset += built.segments[index].duration
+            }
+            timeline = built
+        }
+
         if let phases {
             applied.append("\(phases.count) phases → timeline steps: \(phases.joined(separator: ", "))")
+            if config.firmwarePatternStream != nil {
+                applied.append("Each step is an exact window into the recorded stream, not a re-creation of its phase")
+            }
         }
 
         let caveat: String
