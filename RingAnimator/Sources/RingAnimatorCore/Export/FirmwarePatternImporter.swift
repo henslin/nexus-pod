@@ -545,15 +545,21 @@ public enum FirmwarePatternImporter {
         // --- Phases. A sequencing engine becomes timeline steps rather
         // --- than collapsing into whichever phase happened to win.
         var timeline: RingTimeline?
-        if let strongHelper,
-           let (built, phaseNames) = phaseTimeline(
-               helper: strongHelper,
-               palette: palette,
-               keywords: keywords,
-               litLEDs: litLEDs
-           ) {
+        var phases: [String]?
+        if let strongHelper {
+            (timeline, phases) = phaseTimeline(
+                helper: strongHelper,
+                palette: palette,
+                keywords: keywords,
+                litLEDs: litLEDs
+            ).map { ($0.0, $0.1) } ?? (nil, nil)
+        }
+        if timeline == nil, let (built, names) = customPhaseTimeline(name: spacedName) {
             timeline = built
-            applied.append("\(phaseNames.count) phases → timeline steps: \(phaseNames.joined(separator: ", "))")
+            phases = names
+        }
+        if let phases {
+            applied.append("\(phases.count) phases → timeline steps: \(phases.joined(separator: ", "))")
         }
 
         let caveat: String
@@ -700,6 +706,208 @@ public enum FirmwarePatternImporter {
         default:
             return nil
         }
+    }
+
+    /// Phases for the hand-written patterns — the ones that sequence
+    /// without delegating to a shared engine.
+    ///
+    /// Keyed on the module's own name because these files have no helper
+    /// call to key off. Every number is transcribed from the body rather
+    /// than inferred, and where the file declares a `DURATION_MS` the
+    /// phases are checked against it: alarm_sos comes to 7560 ms, battery_100
+    /// to 14000, device_offline to 10850 — each one matching its header.
+    ///
+    /// Colors are transcribed too. These bodies pin their own RGB values
+    /// (`white_rgb = (180, 180, 180)`, `deterrence_rgb = (180, 35, 0)`), and
+    /// a phase means that specific color, not whichever entry of the
+    /// scraped palette happened to sort first.
+    private static func customPhaseTimeline(name: String) -> (RingTimeline, [String])? {
+        let amber = rgb(255, 126, 0)
+        let red = rgb(255, 0, 0)
+        let alarmRed = rgb(220, 0, 0)
+        let blue = rgb(0, 0, 255)
+        let white = rgb(255, 255, 255)
+
+        switch name {
+        case "alarm sos":
+            // 500 ms lead-in, 4 x {3 flashes at 110/170 + 800 ms gap},
+            // 500 ms trail. Exactly the 7560 ms its header declares.
+            var steps = [step("Lead-in", length: .seconds(0.5)) { $0.patternStyle = .off }]
+            steps += burstCycles(
+                cycles: 4, flashes: 3,
+                onMs: 110, offMs: 170, gapMs: 800, color: alarmRed
+            )
+            steps.append(step("Trail-off", length: .seconds(0.5)) { $0.patternStyle = .off })
+            return (RingTimeline(segments: steps, loops: true),
+                    ["lead-in (0.5 s)", "4 x triple burst + gap (6.56 s)", "trail-off (0.5 s)"])
+
+        case "battery 100":
+            // 16 cascade frames at 500 ms, hold 5 s, fade off 1 s = 14000.
+            let fill = step("Cascade fill", length: .seconds(8)) { c in
+                c.animationType = .liquidFill
+                c.diodeColorMode = .byLevel
+                c.trailFraction = 1
+                c.primaryColor = white
+            }
+            let hold = step("Hold", length: .seconds(5)) { c in
+                c.patternStyle = .solid
+                c.primaryColor = white
+            }
+            let fade = step("Fade off", length: .seconds(1), fadeOut: 1) { c in
+                c.patternStyle = .solid
+                c.primaryColor = white
+            }
+            return (RingTimeline(segments: [fill, hold, fade], loops: true),
+                    ["cascade fill (8 s)", "hold (5 s)", "fade off (1 s)"])
+
+        case "booting up":
+            // One cycle is 3 s white then 3 s off, both on the SLOW fade.
+            // The 30 s in the header is this 6 s loop played five times, so
+            // the loop is what's modeled and the timeline repeats it.
+            let lit = step("White", length: .seconds(3), fadeIn: 1, fadeOut: 1) { c in
+                c.patternStyle = .solid
+                c.primaryColor = white
+            }
+            let dark = step("Off", length: .seconds(3)) { $0.patternStyle = .off }
+            return (RingTimeline(segments: [lit, dark], loops: true),
+                    ["white (3 s)", "off (3 s)", "looped 5x for the header's 30 s"])
+
+        case "device offline":
+            // A one-time 350 ms fade to dark, then amber/red alternating at
+            // 500/500 filling the rest of the 10850 ms.
+            let off = step("Fade off", length: .seconds(0.35), fadeOut: 0.35) { c in
+                c.patternStyle = .solid
+                c.primaryColor = amber
+            }
+            let alternating = step("Amber / red", length: .seconds(10.5)) { c in
+                c.animationType = .alternating
+                c.speed = 1.0
+                c.primaryColor = amber
+                c.secondaryColor = red
+            }
+            return (RingTimeline(segments: [off, alternating], loops: true),
+                    ["fade off (0.35 s)", "amber/red alternating (10.5 s)"])
+
+        case "spotlight deterrence":
+            // The seven phases its docstring names, with `breathe = False`
+            // and `alarm = True` as the body sets them:
+            //   off 500 | white hold 3500 | crossfade 2500 | steady 4500
+            //   | dark break 3500 | 4 alarm cycles 6680 | pad 500  = 21680
+            let deterrence = rgb(180, 35, 0)
+            let spotWhite = rgb(180, 180, 180)
+            var steps = [
+                step("Off", length: .seconds(0.5)) { $0.patternStyle = .off },
+                step("White spotlight", length: .seconds(3.5), fadeIn: 0.5) { c in
+                    c.patternStyle = .solid
+                    c.primaryColor = spotWhite
+                },
+                // The crossfade is white to deterrence, so the step carries
+                // both and reads as the transition rather than either end.
+                step("Crossfade", length: .seconds(2.5)) { c in
+                    c.animationType = .pulse
+                    c.speed = 1.0 / 5.0
+                    c.primaryColor = spotWhite
+                    c.secondaryColor = deterrence
+                },
+                step("Steady hold", length: .seconds(4.5)) { c in
+                    c.patternStyle = .solid
+                    c.primaryColor = deterrence
+                },
+                step("Dark break", length: .seconds(3.5)) { $0.patternStyle = .off },
+            ]
+            steps += burstCycles(
+                cycles: 4, flashes: 3,
+                onMs: 110, offMs: 180, gapMs: 800, color: alarmRed
+            )
+            steps.append(step("Off", length: .seconds(0.5)) { $0.patternStyle = .off })
+            return (RingTimeline(segments: steps, loops: true),
+                    ["off (0.5 s)", "white spotlight (3.5 s)", "crossfade (2.5 s)",
+                     "steady hold (4.5 s)", "dark break (3.5 s)",
+                     "4 x triple burst + gap (6.68 s)", "off (0.5 s)"])
+
+        case "firmware update circular fill":
+            // The palette alternates every full loop — blue fill, then amber
+            // fill — for 4 cycles at 2000 ms each.
+            let blueFill = step("Blue fill", length: .seconds(2)) { c in
+                c.animationType = .liquidFill
+                c.primaryColor = blue
+            }
+            let amberFill = step("Amber fill", length: .seconds(2)) { c in
+                c.animationType = .liquidFill
+                c.primaryColor = amber
+            }
+            return (RingTimeline(segments: [blueFill, amberFill], loops: true),
+                    ["blue fill (2 s)", "amber fill (2 s)", "looped for 4 cycles"])
+
+        case "firmware update comet":
+            // Same alternation, as a comet at 1700 ms a lap for 6 cycles.
+            let blueComet = step("Blue comet", length: .rotations(1)) { c in
+                c.patternStyle = .spin
+                c.speed = 1000.0 / 1700.0
+                c.trailFraction = 1.0 / 16.0
+                c.primaryColor = blue
+            }
+            let amberComet = step("Amber comet", length: .rotations(1)) { c in
+                c.patternStyle = .spin
+                c.speed = 1000.0 / 1700.0
+                c.trailFraction = 1.0 / 16.0
+                c.primaryColor = amber
+            }
+            return (RingTimeline(segments: [blueComet, amberComet], loops: true),
+                    ["blue comet (1.7 s)", "amber comet (1.7 s)", "looped for 6 cycles"])
+
+        default:
+            return nil
+        }
+    }
+
+    /// `cycles` repetitions of "N quick flashes, then a dark gap".
+    ///
+    /// Each burst is one step using the app's own Flash style with a
+    /// matching `flashCount`, rather than N separate on/off steps — the
+    /// primitive already renders exactly this, and three steps per burst
+    /// would make a four-cycle alarm a twenty-step document to edit.
+    private static func burstCycles(
+        cycles: Int, flashes: Int,
+        onMs: Double, offMs: Double, gapMs: Double,
+        color: Color
+    ) -> [TimelineSegment] {
+        let cycleMs = onMs + offMs
+        var steps: [TimelineSegment] = []
+        for index in 1...cycles {
+            steps.append(
+                step("Burst \(index)", length: .seconds(Double(flashes) * cycleMs / 1000)) { c in
+                    c.patternStyle = .flash
+                    c.flashCount = flashes
+                    c.blinkRate = 1000 / cycleMs
+                    c.primaryColor = color
+                }
+            )
+            steps.append(step("Gap \(index)", length: .seconds(gapMs / 1000)) { $0.patternStyle = .off })
+        }
+        return steps
+    }
+
+    /// The sibling module a pattern hands off to, if it does.
+    ///
+    /// `wifi_critical` is nothing but `return schedule_bluetooth_critical(...)`,
+    /// and `wifi_failed` the same — the real pattern is in the other file.
+    /// Read on its own, such a file has no behavior to find and imports off
+    /// a keyword in its one-line description. The caller resolves the name
+    /// against the folder it opened, since only it knows where that is.
+    ///
+    /// `schedule_steps` is excluded: that's the step player in
+    /// `led_ring_core`, not a pattern module.
+    public static func delegatedModule(in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"return\s+schedule_([a-z0-9_]+)\s*\(\s*controller"#),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text) else { return nil }
+        let name = String(text[range])
+        guard name != "steps" else { return nil }
+        // Only a hand-off: a file that also defines its own body is doing
+        // its own work and merely happens to call a sibling at the end.
+        guard !text.contains("add_event_at_time_ms") else { return nil }
+        return name
     }
 
     /// One timeline step, built on a config that starts at defaults and

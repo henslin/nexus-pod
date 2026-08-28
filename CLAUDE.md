@@ -460,8 +460,40 @@ Four families sequence, covering 13 files:
 | `_schedule_solid_firmware` | solid (`hold_ms`), off (`off_ms`) |
 | `_schedule_battery_cascade` | fill (`num_leds` x 500 ms), 8 blink cycles (4.8 s) |
 
+The hand-written patterns that sequence get one too, keyed on the module
+name since they have no helper call — `alarm_sos` (500 ms lead-in, 4 x
+{3 flashes at 110/170 + 800 ms gap}, 500 ms trail), `battery_100`,
+`booting_up`, `device_offline`, `spotlight_deterrence` (the seven phases
+its docstring names, 14 steps at 21.68 s), and the two `firmware_update`
+cycles that alternate blue/amber each loop. Their numbers and their colors
+are transcribed from the body rather than inferred: a phase means
+`deterrence_rgb = (180, 35, 0)`, not whichever palette entry sorted first.
+
+A burst of N flashes is one step using the Flash style with a matching
+`flashCount`, not N on/off pairs — the primitive already renders exactly
+that, and three steps per burst would make a four-cycle alarm a twenty-step
+document.
+
 Everything else loops one behavior and is fully described by its config; a
 one-step timeline would just be a document to manage.
+
+**`booting_up` is the one deliberate mismatch.** Its phases come to a 6 s
+loop against a declared 30000 ms, because the header counts the renderer
+repeating that loop five times. The timeline models the loop.
+
+### Follow a hand-off to the sibling module
+
+`wifi_critical.py` is one line — `return schedule_bluetooth_critical(...)` —
+and `wifi_failed.py` the same. Read alone they have no behavior to find and
+fall back to a keyword in their one-line description.
+`readScriptFollowingDelegation` resolves the named module against the
+folder the user opened and imports that instead, reporting the hand-off so
+the file you picked isn't silently swapped for another.
+
+One hop only, and `schedule_steps` is excluded — that's the step player in
+`led_ring_core`, not a pattern. A file that also has its own
+`add_event_at_time_ms` body is doing its own work and merely calls a
+sibling at the end, so it isn't treated as a hand-off.
 
 **The phase durations are a check, not an estimate.** Each family's steps
 sum to the `DURATION_MS` its own callers declare, and that is how two real

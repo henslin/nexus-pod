@@ -64,6 +64,32 @@ public enum BlenderScriptImporter {
         case triple(Double, Double, Double)
     }
 
+    /// Reads a script, following a hand-off to a sibling module.
+    ///
+    /// `wifi_critical.py` is a one-liner —
+    /// `return schedule_bluetooth_critical(controller, system)` — and the
+    /// pattern it names lives in the file next to it. Read on its own it
+    /// has nothing to interpret. Resolving the hand-off against the folder
+    /// the user opened means importing `wifi_critical` gives you the
+    /// pattern wifi_critical actually plays.
+    ///
+    /// Returns the text to interpret and, when a hand-off was followed, the
+    /// name of the file it came from so the report can say so. One hop
+    /// only: these hand-offs are a single alias deep, and following a chain
+    /// would need cycle detection for no benefit.
+    public static func readScriptFollowingDelegation(at url: URL) -> (text: String, delegatedTo: String?)? {
+        guard let text = readScript(at: url) else { return nil }
+        guard let module = FirmwarePatternImporter.delegatedModule(in: text) else {
+            return (text, nil)
+        }
+        let sibling = url.deletingLastPathComponent().appendingPathComponent("\(module).py")
+        guard FileManager.default.fileExists(atPath: sibling.path),
+              let siblingText = readScript(at: sibling) else {
+            return (text, nil)
+        }
+        return (siblingText, sibling.lastPathComponent)
+    }
+
     /// Reads a script file as text, trying the encodings these scripts
     /// actually turn up in.
     ///

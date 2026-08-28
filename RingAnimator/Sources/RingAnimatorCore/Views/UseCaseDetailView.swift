@@ -218,7 +218,7 @@ public struct UseCaseDetailView: View {
         panel.canChooseDirectories = false
         panel.message = "Choose a Blender LED-ring script (.py)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        guard let text = BlenderScriptImporter.readScript(at: url) else {
+        guard let (text, delegatedTo) = BlenderScriptImporter.readScriptFollowingDelegation(at: url) else {
             blenderReport = UseCaseBlenderReport(url.lastPathComponent, BlenderScriptImporter.Outcome(
                 applied: [],
                 dropped: [],
@@ -235,7 +235,15 @@ public struct UseCaseDetailView: View {
             ))
             return
         }
-        let outcome = BlenderScriptImporter.apply(text, to: editingConfig)
+        var outcome = BlenderScriptImporter.apply(text, to: editingConfig)
+        // Say so when the chosen file only hands off to another one, rather
+        // than silently reporting a pattern the user didn't pick.
+        if let delegatedTo, !outcome.applied.isEmpty {
+            outcome.applied.insert(
+                "This pattern hands off to \(delegatedTo) — imported from there",
+                at: 0
+            )
+        }
         // A multi-phase pattern arrives as steps. Installing them replaces
         // this use case's timeline and selects the first step, which loads
         // it back into `editingConfig` — so the ring shows phase one rather
