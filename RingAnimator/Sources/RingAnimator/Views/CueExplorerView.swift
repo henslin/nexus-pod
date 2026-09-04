@@ -194,7 +194,7 @@ struct CueListView: View {
     private var subtitle: String {
         let total = LEDCueLibrary.all.count
         let tweaked = store.overrides.count
-        let base = "\(total) cues from the hardware spec"
+        let base = "The hardware spec, cue by cue · \(total)"
         return tweaked == 0 ? base : base + " · \(tweaked) tweaked"
     }
 

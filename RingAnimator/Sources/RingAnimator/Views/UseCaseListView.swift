@@ -121,10 +121,16 @@ struct UseCaseListView: View {
         }
     }
 
+    /// The built-in section says what it's for; a user-made one is named
+    /// by whoever made it, so a purpose line here would be putting words
+    /// in their mouth.
+    var purpose: String = "Hardware animations, in app"
+
     private var subtitle: String {
         let count = store.presets.count
-        guard count > 0 else { return "No animations yet" }
-        return count == 1 ? "1 animation" : "\(count) animations"
+        guard count > 0 else { return purpose.isEmpty ? "Nothing here yet" : purpose }
+        let tally = count == 1 ? "1 animation" : "\(count) animations"
+        return purpose.isEmpty ? tally : "\(purpose) · \(count)"
     }
 
     /// Reads a Blender script into whichever use case is selected.

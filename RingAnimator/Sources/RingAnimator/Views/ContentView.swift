@@ -171,7 +171,8 @@ struct ContentView: View {
                 UseCaseListView(
                     store: store(forSection: id),
                     selectedUseCaseID: binding(forSection: id),
-                    title: userSections.sections.first(where: { $0.id == id })?.name ?? "Section"
+                    title: userSections.sections.first(where: { $0.id == id })?.name ?? "Section",
+                    purpose: ""
                 )
                 .id(id)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)

@@ -187,10 +187,15 @@ struct SavedPresetsView: View {
 
     // MARK: - Export / Import
 
+    /// What the section is *for*, then how much is in it — Mail's
+    /// "All Mail · 628,761 messages" shape. A count on its own doesn't say
+    /// why you'd come here, and the purpose on its own goes stale the
+    /// moment you want to know whether you've saved anything.
     private var subtitle: String {
         let count = store.presets.count
-        guard count > 0 else { return "The live ring · nothing saved yet" }
-        return count == 1 ? "The live ring · 1 saved" : "The live ring · \(count) saved"
+        let purpose = "Discovery design for the agentic tab"
+        guard count > 0 else { return purpose }
+        return count == 1 ? "\(purpose) · 1 saved" : "\(purpose) · \(count) saved"
     }
 
     private func exportSingle(_ preset: RingPreset) {
