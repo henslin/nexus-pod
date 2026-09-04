@@ -73,13 +73,26 @@ struct UseCaseListView: View {
                 }
                 .help("Create a new use-case animation, with its own full set of controls")
             }
+            // Its own button rather than a third item inside the Share
+            // menu below. Taking delivery of a pattern library is the way
+            // most of this list gets populated, and it was sitting behind
+            // an upload-looking icon in a menu of JSON import/export —
+            // findable only if you already knew it was there.
+            ToolbarItem {
+                Button {
+                    importPatternFolder()
+                } label: {
+                    Label("Import Patterns", systemImage: "tray.and.arrow.down")
+                }
+                .help("Import a folder of firmware pattern scripts (.py) — one use case per pattern")
+            }
             ToolbarItem {
                 Menu {
                     Button("Export Library…") { exportLibrary() }
                         .disabled(store.presets.isEmpty)
                     Button("Import…") { importUseCases() }
                     Divider()
-                    Button("Import Pattern Folder…") { importPatternFolder() }
+                    Button("Import Pattern Scripts…") { importPatternFolder() }
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up.on.square")
                 }
@@ -109,143 +122,36 @@ struct UseCaseListView: View {
     // MARK: - Bulk pattern import
 
     /// Imports a whole firmware pattern library at once — one use case per
-    /// `.py` file, each with its palette, timings and phase steps.
-    ///
-    /// The single-file button in `UseCaseDetailView` imports *into* the use
-    /// case you're editing, which is the right shape for reworking one
-    /// animation and the wrong shape for taking delivery of sixty-nine.
-    /// This creates them instead.
-    ///
-    /// Everything goes through `BlenderScriptImporter.apply`, so a bulk
-    /// import and a single import cannot drift: same reading, same recorded
-    /// streams, same phase timelines. Files that aren't patterns —
-    /// `pattern_common.py`, the registry, `__init__.py` — apply nothing and
-    /// are skipped rather than becoming empty use cases.
+    /// script file. The reading, replacing and reporting all live in
+    /// `PatternFolderImport`; this is just the panel in front of it.
     private func importPatternFolder() {
         let panel = NSOpenPanel()
+        // Both, and several of each. A library turns up as a folder, but
+        // "re-import just these three" is the more common follow-up, and
+        // an open panel that only takes folders makes that a folder's
+        // worth of work.
         panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.message = "Choose a folder of firmware pattern scripts (.py)"
-        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [UTType(filenameExtension: "py") ?? .plainText]
+        panel.message = "Choose a folder of firmware pattern scripts, or the scripts themselves"
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
 
-        let files: [URL]
-        do {
-            files = try FileManager.default
-                .contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-                .filter { $0.pathExtension.lowercased() == "py" }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        } catch {
-            importErrorMessage = "Couldn't read that folder: \(error.localizedDescription)"
-            return
-        }
-
+        let files = PatternFolderImport.scriptURLs(in: panel.urls)
         guard !files.isEmpty else {
-            importErrorMessage = "No .py files in that folder."
+            importErrorMessage = "No .py files in there."
             return
         }
 
-        var imported = 0
-        var added = 0
-        var replaced = 0
-        var exact = 0
-        var phased = 0
-        var skipped: [String] = []
-
-        for file in files {
-            guard let (text, _) = BlenderScriptImporter.readScriptFollowingDelegation(at: file) else {
-                skipped.append(file.lastPathComponent)
-                continue
-            }
-            // A pattern defines `schedule_<name>`. The support modules that
-            // live in the same folder don't — `ripple.py` is motion maths,
-            // `pattern_common.py` is the engine library — and a folder
-            // import shouldn't turn them into use cases. `ripple.py` in
-            // particular reads cleanly as a *scene* script (it has an
-            // uppercase `NUM_LEDS`), so without this it imported as a
-            // plausible-looking animation with the wrong ring size.
-            guard text.contains("def schedule_") else {
-                skipped.append(file.lastPathComponent)
-                continue
-            }
-            let config = RingConfig()
-            let outcome = BlenderScriptImporter.apply(text, to: config)
-            guard !outcome.applied.isEmpty else {
-                skipped.append(file.lastPathComponent)
-                continue
-            }
-
-            let name = displayName(for: file)
-
-            // Replace by name rather than append.
-            //
-            // Re-importing a folder is how you pick up a corrected pattern,
-            // and appending turned that into a list with two of everything
-            // and no way to tell which was current. Keeping the existing
-            // id means the use case's timeline file, which is keyed by that
-            // id, is overwritten in place instead of orphaned.
-            let preset: RingPreset
-            if let existing = store.presets.first(where: { $0.name == name }) {
-                var updated = RingPreset(name: name, config: config)
-                updated.id = existing.id
-                store.update(updated)
-                preset = updated
-                replaced += 1
-            } else {
-                preset = store.add(RingPreset(name: name, config: config))
-                added += 1
-            }
-            imported += 1
-            if config.firmwarePatternStream != nil { exact += 1 }
-
-            // A use case's timeline lives in its own store file keyed by the
-            // preset's UUID, so writing it means standing up that use case's
-            // player and installing into it — the same path the detail view
-            // uses when you import into an open use case.
-            // Installed even when empty, so a pattern that used to import
-            // as phases and no longer does doesn't keep the old steps.
-            let player = TimelinePlayer(
-                fileName: TimelinePlayer.useCaseFileName(preset.id)
-            )
-            player.installImported(outcome.timeline ?? RingTimeline())
-            if outcome.timeline != nil { phased += 1 }
-        }
-
-        guard imported > 0 else {
-            importErrorMessage = "Nothing in that folder read as a firmware pattern."
+        let result = PatternFolderImport.run(files, into: store)
+        guard result.imported > 0 else {
+            importErrorMessage = "Nothing in there read as a firmware pattern."
             return
         }
-
-        var summary: String
-        if replaced > 0 && added > 0 {
-            summary = "Added \(added), replaced \(replaced)."
-        } else if replaced > 0 {
-            summary = "Replaced \(replaced) existing use case\(replaced == 1 ? "" : "s")."
-        } else {
-            summary = "Added \(added) use case\(added == 1 ? "" : "s")."
-        }
-        if exact > 0 {
-            summary += " \(exact) replay the device's own command stream exactly."
-        }
-        if phased > 0 {
-            summary += " \(phased) came in as multi-step timelines."
-        }
-        if !skipped.isEmpty {
-            // Named rather than counted: the skips are usually the library
-            // and the registry, and saying which ones they were is the
-            // difference between "as expected" and "something went wrong".
-            summary += "\n\nSkipped \(skipped.count) file\(skipped.count == 1 ? "" : "s") that aren't patterns: \(skipped.joined(separator: ", "))"
-        }
-        importSuccessMessage = summary
+        importSuccessMessage = PatternFolderImport.summary(result)
     }
 
-    /// `warble_kaleidoscope_blue.py` → "Warble Kaleidoscope Blue".
-    private func displayName(for file: URL) -> String {
-        file.deletingPathExtension().lastPathComponent
-            .split(separator: "_")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
-    }
 
     // MARK: - New / Rename dialogs
 

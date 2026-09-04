@@ -81,7 +81,15 @@ EOF
 
 echo "→ Zipping..."
 rm -f "$OUT"
-(cd "$STAGE" && ditto -c -k --sequesterRsrc patterns "$OUT")
+# --norsrc --noextattr, not --sequesterRsrc. Every file here comes out of
+# iCloud carrying a com.apple.FinderInfo xattr (the same one that breaks
+# codesign — see preflight.sh), and --sequesterRsrc preserves those by
+# writing an AppleDouble `__MACOSX/._foo.py` beside every real script. That
+# doubled the archive's file count with binary sidecars that end in `.py`,
+# which the folder importer then has to know to ignore. Dropping the
+# metadata is strictly better: these are plain text files whose resource
+# forks carry nothing anyone wants.
+(cd "$STAGE" && ditto -c -k --norsrc --noextattr --noqtn patterns "$OUT")
 
 echo
 echo "✅ $OUT"

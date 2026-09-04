@@ -829,6 +829,89 @@ count to become the app's laps-per-second and ring fractions. Without a
 recognized LED count those get dropped rather than misread — a raw 5.5
 into `speed` would be wildly wrong.
 
+## Taking delivery of a whole library
+
+`PatternFolderImport` (in the core, not in a view) is the folder importer
+both macOS entry points run: the **Import Patterns** button in Use Cases,
+and **Import Pattern Library → Use Cases…** in Nexus's Share menu. It
+creates one use case per file and *replaces by name*, keeping the existing
+id so the use case's timeline file — which is keyed by that id — is
+overwritten in place instead of orphaned.
+
+It lands in Use Cases from both buttons, deliberately. A saved animation in
+Nexus is a bookmark of `config` alone and the Nexus timeline is one shared
+document, so the twenty-one multi-phase patterns would arrive there with
+their steps silently dropped. A use case owns a timeline keyed by its id,
+which is the only place a library can arrive intact. The Nexus menu item
+says where the result goes rather than quietly sending it elsewhere.
+
+Two things the scan has to know:
+
+- **It's recursive.** A library arrives as a zip, and where the scripts end
+  up depends on who expanded it. A flat scan of the folder you were looking
+  at reported "no .py files in that folder" with the scripts one level down.
+- **`._foo.py` is not a Python file.** It's an AppleDouble sidecar — `foo.py`'s
+  resource fork and xattrs, split out because the archive can't carry them
+  inline. Binary, ends in `.py`, one beside every real script. Recursion
+  without that exclusion imports the library twice, once correctly and once
+  as garbage.
+
+They were in the shipped zip because `package_patterns.sh` used `ditto
+--sequesterRsrc`, which *writes* them — every file here comes out of iCloud
+carrying the same `com.apple.FinderInfo` that breaks codesign. Now
+`--norsrc --noextattr --noqtn`: these are plain text files whose resource
+forks carry nothing anyone wants.
+
+### `swift run ImportCheck`
+
+Runs the real import path over the library headlessly and reports what each
+file produced. It exists because "the import is broken" is a claim about a
+code path that normally only runs behind a file picker, in a signed app,
+against files in iCloud — and every part of that makes the answer
+ambiguous. A file that imports nothing looks exactly like a file the app
+couldn't read, which looks exactly like an app that never reloaded (see
+"Verifying you're testing what you think you are"). Currently **69 patterns,
+69 exact, 21 phased**. It's a preflight gate.
+
+It has to know the same two discriminators the importer does: a pattern
+defines `schedule_<name>`, and `pattern_common.py` defines the `_schedule_*`
+helpers every pattern calls. Importing nothing from the library is correct,
+not a failure — miss that and it reads as the one file that broke.
+
+## Smoothing — the same animation, app-shaped
+
+Everything else in this app exists to be *accurate*: quantized ticks, two
+palette registers, hard-thresholded levels, twenty pixels that are on or
+off. `RingConfig.smoothingEnabled` is the other direction — soft edges and
+persistence, so a pattern reads as design rather than as a driver.
+
+It's a **treatment, not a different animation**. It takes whatever the diode
+field already produced — recorded stream, ported firmware field, or one of
+this app's own types — and spreads it in space and trails it in time. One
+implementation, applying to all 69 imported patterns at once, and switching
+it off returns the hardware-exact render pixel for pixel.
+
+Three things worth not rediscovering:
+
+- **Decaying max, never a weighted average.** An average dims a lone lit
+  diode to a fraction of itself — blur a single pixel and you get a smudge,
+  not a glow. Taking the strongest neighbouring contribution, attenuated by
+  distance, keeps the peak exactly where it was and adds falloff around it.
+  Same over time: the head of a comet stays at full brightness and only the
+  tail decays. Both passes carry the *contributor's* color, so a trail is
+  the hue of the head that left it.
+- **No frame-to-frame state.** `RingView` is a pure function of elapsed
+  time, which is what makes scrubbing, timeline playback and frame export
+  agree. Persistence resamples the field at earlier instants instead of
+  accumulating. That also buys the soft *rise*: there's no "next frame" to
+  wait for, just another instant to evaluate, so it samples slightly
+  forward too.
+- **It costs 0.45 ms/frame** (release, 20 diodes, 9 taps, measured against
+  1.38 ms for the hardware path). No optimization needed; don't add a cache.
+
+Preview only — the code generators still emit the hardware render, and the
+Smooth card's footer says so.
+
 ## Verifying the code generators
 
 The generators emit **strings**. The package builds no matter what those

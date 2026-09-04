@@ -1106,8 +1106,22 @@ public struct RingView: View {
         let streamFrame = config.firmwarePatternStream
             .flatMap { FirmwarePatternStream.stream(named: $0) }
             .map { $0.frame(atSeconds: tickedElapsed + config.firmwarePatternStreamOffset, ledCount: count) }
-        return glow(
-            diodeLayer(count: count, scale: scale) { i in
+
+        // Resolved up front into an array rather than left in the closure.
+        // Smoothing needs the whole ring at once — a diode's level depends
+        // on its neighbours — so it can't be answered one index at a time,
+        // and having both paths hand `diodeLayer` the same finished array
+        // keeps the hardware render the single source of what smoothing is
+        // smoothing.
+        let states: [DiodeState] = config.smoothingEnabled
+            ? smoothedStates(
+                count: count,
+                elapsed: elapsed,
+                voiceLevel: voiceLevel,
+                colors: all,
+                rippleNorm: rippleNorm
+            )
+            : (0..<count).map { i in
                 let position = Double(i) / Double(count)
                 let lit = diodeIntensity(
                     index: i,
@@ -1130,11 +1144,215 @@ public struct RingView: View {
                         : lit.color,
                     opacity: level * blinkMultiplier(index: i, elapsed: tickedElapsed)
                 )
+            }
+
+        return glow(
+            diodeLayer(count: count, scale: scale) { i in
+                states.indices.contains(i) ? states[i] : DiodeState(color: all[0], opacity: 0)
             },
             color: all[0],
             boost: voiceLevel,
             scale: scale
         )
+    }
+
+    // MARK: - Smoothing
+
+    /// One diode's color and level at one instant, in a form that can be
+    /// combined with another — `Color` can't be added together, and going
+    /// through `rgbComponents` per combination rather than once per sample
+    /// would be the expensive way round.
+    private struct FieldSample {
+        var red: Double = 0
+        var green: Double = 0
+        var blue: Double = 0
+        var level: Double = 0
+    }
+
+    /// The whole ring at one instant, before any smoothing.
+    ///
+    /// Deliberately re-derives `phase` and re-resolves the stream frame from
+    /// the time it's given: smoothing samples the field at instants either
+    /// side of now, and a phase carried in from the caller would describe
+    /// the wrong one.
+    private func rawField(
+        at time: Double,
+        count: Int,
+        colors all: [Color],
+        rippleNorm: Double,
+        voiceLevel: Double
+    ) -> [FieldSample] {
+        let phase = easedPhaseValue(elapsed: time)
+        // Once per sampled instant, not once per diode — same reasoning as
+        // the frame resolve in `diodeFieldRing`.
+        let streamFrame = config.firmwarePatternStream
+            .flatMap { FirmwarePatternStream.stream(named: $0) }
+            .map { $0.frame(atSeconds: time + config.firmwarePatternStreamOffset, ledCount: count) }
+
+        return (0..<count).map { i in
+            let lit = diodeIntensity(
+                index: i,
+                position: Double(i) / Double(count),
+                count: count,
+                phase: phase,
+                elapsed: time,
+                voiceLevel: voiceLevel,
+                colors: all,
+                rippleNorm: rippleNorm,
+                streamFrame: streamFrame
+            )
+            // Blink belongs in the sample so it gets smeared along with
+            // everything else — a strobe under persistence should read as a
+            // pulse with a falloff, not as a strobe with a halo. The floor
+            // does not: it's a display minimum, applied once at the end, and
+            // folding it in here would let the trail decay *from* the floor
+            // instead of to it.
+            let level = lit.brightness * blinkMultiplier(index: i, elapsed: time)
+            let rgb = (config.diodeColorMode == .byLevel
+                       ? levelColor(level, colors: all)
+                       : lit.color).rgbComponents
+            return FieldSample(red: rgb.red, green: rgb.green, blue: rgb.blue, level: level)
+        }
+    }
+
+    /// The smoothed ring: the raw field spread across neighbours and trailed
+    /// through time.
+    ///
+    /// See `RingConfig.smoothingEnabled` for why both passes take a decaying
+    /// max rather than a weighted average, and why the time pass resamples
+    /// instead of accumulating.
+    private func smoothedStates(
+        count: Int,
+        elapsed: Double,
+        voiceLevel: Double,
+        colors all: [Color],
+        rippleNorm: Double
+    ) -> [DiodeState] {
+        // Continuous time is most of what "smooth" means for an imported
+        // pattern: `quantized` is what makes a 312 ms tick visible as a
+        // series of held frames.
+        let base = config.smoothingFluidTime ? elapsed : quantized(elapsed)
+        let release = max(config.smoothingTrail, 0)
+        // A shorter look *forward*, which softens the rise. Possible only
+        // because the field is a pure function of time — there's no "next
+        // frame" to wait for, just another instant to evaluate. Kept
+        // proportional rather than exposed: an attack longer than about a
+        // third of the release stops reading as a light coming on.
+        let attack = release * 0.35
+
+        var field = rawField(
+            at: base, count: count, colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
+        )
+
+        if release > 0.001 {
+            let pastTaps = 6
+            let futureTaps = 3
+            // Weights land on e^-3 ≈ 0.05 at the far end of each side, so
+            // the trail fades out within the time asked for instead of
+            // being cut off mid-decay.
+            for k in 1...pastTaps {
+                let f = Double(k) / Double(pastTaps)
+                accumulate(
+                    into: &field,
+                    at: base - f * release,
+                    weight: exp(-3 * f),
+                    count: count, colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
+                )
+            }
+            if attack > 0.001 {
+                for k in 1...futureTaps {
+                    let f = Double(k) / Double(futureTaps)
+                    accumulate(
+                        into: &field,
+                        at: base + f * attack,
+                        weight: exp(-3 * f),
+                        count: count, colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
+                    )
+                }
+            }
+        }
+
+        let spread = max(config.smoothingSpread, 0)
+        if spread > 0.01 {
+            field = spatiallySpread(field, spread: spread)
+        }
+
+        let floor = min(max(config.diodeFloor, 0), 1)
+        return field.map { sample in
+            let level = floor + (1 - floor) * min(max(sample.level, 0), 1)
+            return DiodeState(
+                color: Color(red: sample.red, green: sample.green, blue: sample.blue),
+                opacity: level
+            )
+        }
+    }
+
+    /// Folds one earlier or later instant into `field`, keeping whichever
+    /// contribution is brighter per diode — and, with it, that
+    /// contribution's color, so a trail carries the hue of the head that
+    /// left it rather than of the diode it's passing over.
+    private func accumulate(
+        into field: inout [FieldSample],
+        at time: Double,
+        weight: Double,
+        count: Int,
+        colors all: [Color],
+        rippleNorm: Double,
+        voiceLevel: Double
+    ) {
+        // Clamped rather than skipped: at t = 0 a backward tap would
+        // otherwise wrap into negative time, where a stream replay has no
+        // events and every pattern reads as dark — so the first fraction of
+        // a second would smooth *toward* black.
+        let sampled = rawField(
+            at: max(time, 0), count: count, colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
+        )
+        for i in field.indices where i < sampled.count {
+            let level = sampled[i].level * weight
+            if level > field[i].level {
+                field[i] = FieldSample(
+                    red: sampled[i].red,
+                    green: sampled[i].green,
+                    blue: sampled[i].blue,
+                    level: level
+                )
+            }
+        }
+    }
+
+    /// Bleeds each diode into its neighbours with a Gaussian falloff,
+    /// wrapping around the ring.
+    ///
+    /// A dilation, not a blur: each diode takes the brightest thing near it,
+    /// attenuated by distance. So a solid arc stays solid, a lone lit diode
+    /// keeps its full brightness and grows a halo, and the hard edges the
+    /// firmware's level threshold produces become gradients.
+    private func spatiallySpread(_ field: [FieldSample], spread: Double) -> [FieldSample] {
+        let n = field.count
+        guard n > 1 else { return field }
+        // Past two sigma the weight is under 0.14 and, on a twenty-diode
+        // ring, a wider reach starts wrapping onto itself.
+        let radius = min(max(Int(ceil(spread * 2)), 1), n / 2)
+
+        var out = field
+        for i in 0..<n {
+            var best = field[i]
+            for d in -radius...radius where d != 0 {
+                let weight = exp(-Double(d * d) / (2 * spread * spread))
+                let j = ((i + d) % n + n) % n
+                let level = field[j].level * weight
+                if level > best.level {
+                    best = FieldSample(
+                        red: field[j].red,
+                        green: field[j].green,
+                        blue: field[j].blue,
+                        level: level
+                    )
+                }
+            }
+            out[i] = best
+        }
+        return out
     }
 
     /// One drop: when it landed, and where on the ring.

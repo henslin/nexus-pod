@@ -81,6 +81,12 @@ public struct ControlsView: View {
                     }
                 }
 
+                card("smoothing", "Smooth", "drop.halffull",
+                     footer: "Spreads the hardware render in space and trails it in time — the same animation, without twenty hard edges. Off renders exactly what the device would. Preview only; the code exports stay hardware-accurate.",
+                     masterToggle: $config.smoothingEnabled) {
+                    SmoothingSection(config: config)
+                }
+
                 card("animation", "Animation", "play.circle") {
                     AnimationSection(config: config)
                 }

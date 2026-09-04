@@ -22,6 +22,18 @@ struct SavedPresetsView: View {
     /// The Nexus timeline, owned by `ContentView`. Needed here because a
     /// multi-phase pattern imports as steps, not as a single config.
     @ObservedObject var timelinePlayer: TimelinePlayer
+    /// The Use Cases store, only so a pattern *library* can be imported
+    /// from here as well.
+    ///
+    /// A folder import has to create something per file, and Nexus's own
+    /// saved animations can't hold what these files carry: a saved
+    /// animation is a bookmark of `config` alone, while the Nexus timeline
+    /// is one shared document — so the twenty-one multi-phase patterns
+    /// would land here with their steps silently dropped. Use cases each
+    /// own a timeline keyed by their id, so that's where a library can
+    /// arrive intact. The menu item says so rather than quietly sending
+    /// the result somewhere else.
+    @ObservedObject var useCaseStore: RingPresetStore
 
     @State private var selectedPresetID: RingPreset.ID?
 
@@ -85,6 +97,7 @@ struct SavedPresetsView: View {
                     Button("Import…") { importPresets() }
                     Divider()
                     Button("Import Blender Script…") { importBlenderScript() }
+                    Button("Import Pattern Library → Use Cases…") { importPatternFolder() }
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up.on.square")
                 }
@@ -240,6 +253,33 @@ struct SavedPresetsView: View {
             }
         }
         blenderReport = BlenderReport(url.lastPathComponent, outcome)
+    }
+
+    /// The same importer the Use Cases toolbar runs — see
+    /// `useCaseStore` above for why the result lands there rather than in
+    /// this list.
+    private func importPatternFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [UTType(filenameExtension: "py") ?? .plainText]
+        panel.message = "Choose a folder of firmware pattern scripts, or the scripts themselves"
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+
+        let files = PatternFolderImport.scriptURLs(in: panel.urls)
+        guard !files.isEmpty else {
+            importErrorMessage = "No .py files in there."
+            return
+        }
+        let result = PatternFolderImport.run(files, into: useCaseStore)
+        guard result.imported > 0 else {
+            importErrorMessage = "Nothing in there read as a firmware pattern."
+            return
+        }
+        importSuccessMessage = PatternFolderImport.summary(result)
+            + "\n\nThey're in the Use Cases tab."
     }
 
     private func exportLibrary() {

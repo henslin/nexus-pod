@@ -39,6 +39,14 @@ step "Firmware fidelity — ported fields and recorded streams"
 swift run --scratch-path "$SCRATCH" FirmwareFieldCheck 2>&1 | tail -3
 result "${PIPESTATUS[0]}" "FirmwareFieldCheck"
 
+step "The pattern library still imports"
+if [ -d "$PATTERNS_DIR" ]; then
+    swift run --scratch-path "$SCRATCH" ImportCheck "$PATTERNS_DIR" 2>&1 | tail -2
+    result "${PIPESTATUS[0]}" "ImportCheck"
+else
+    printf '  \033[33m! skipped — no pattern library at %s\033[0m\n' "$PATTERNS_DIR"
+fi
+
 step "Generated exports still compile"
 swift run --scratch-path "$SCRATCH" ExportCheck 2>&1 | tail -2
 result "${PIPESTATUS[0]}" "ExportCheck"

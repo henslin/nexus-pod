@@ -111,6 +111,60 @@ public final class RingConfig: ObservableObject {
     /// else.
     @Published public var firmwarePatternStreamOffset: Double = 0
 
+    // MARK: - Smoothing
+    //
+    // The hardware look, made app-shaped.
+    //
+    // Everything above this point exists to be *accurate*: quantized ticks,
+    // two palette registers, hard-thresholded levels, twenty pixels that are
+    // either on or off. That's what the ring can do. A phone isn't bound by
+    // any of it, and the same animation with soft edges and some persistence
+    // reads as a considered piece of design rather than as a driver.
+    //
+    // So this is a treatment, not a different animation. It takes whatever
+    // the diode field already produced — recorded stream, ported firmware
+    // field, or one of this app's own types — and spreads it in space and
+    // trails it in time. One implementation, applying to every pattern in
+    // the library at once, and switching it off returns the hardware-exact
+    // render pixel for pixel.
+    //
+    // Both passes are a *decaying max*, never an average. An average dims a
+    // lone lit diode to a fraction of itself — blur a single pixel and you
+    // get a smudge, not a glow — while taking the strongest neighbouring
+    // contribution keeps the peak exactly where it was and adds the falloff
+    // around it. The same holds over time: the head of a comet stays at full
+    // brightness, and the tail is what decays.
+    //
+    // Deliberately *not* frame-to-frame state. `RingView` is a pure function
+    // of elapsed time, which is what makes scrubbing, timeline playback and
+    // frame export agree with each other; a running average carried between
+    // frames would break all three. Persistence is computed by resampling
+    // the field at earlier instants instead, which is the same result and
+    // still reproducible from a timestamp alone.
+
+    /// Master switch. Off = the ring renders exactly what the device would.
+    @Published public var smoothingEnabled: Bool = false
+
+    /// How far a lit diode bleeds into its neighbours, in diodes.
+    ///
+    /// The single knob that turns twenty discrete points into a gradient.
+    @Published public var smoothingSpread: Double = 1.1
+
+    /// Seconds of persistence after a diode goes dark.
+    ///
+    /// Also softens the *rise*, by a shorter proportion of the same value —
+    /// see `RingView.smoothedStates`. A pattern on a 312 ms tick pops on
+    /// hard without it, and the pop is more of a giveaway than the gap
+    /// between steps.
+    @Published public var smoothingTrail: Double = 0.22
+
+    /// Sample the animation on the display's clock rather than the device's.
+    ///
+    /// `firmwareTickMs` is what makes an imported pattern step at the rate
+    /// the hardware actually updates. Off is the honest render; on is the
+    /// one that moves.
+    @Published public var smoothingFluidTime: Bool = true
+
     // MARK: - Ripple drops
     //
     // Modeled on how a real LED-ring script writes a ripple: not one wave

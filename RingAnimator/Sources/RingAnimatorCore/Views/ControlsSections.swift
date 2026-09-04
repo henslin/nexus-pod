@@ -859,6 +859,39 @@ struct LabeledSlider: View {
 /// Sits directly above Animation on purpose: levels 1 and 2 override
 /// `animationType`, so the override should be read before the control it
 /// overrides rather than after it.
+/// The other end of the fidelity dial from `FirmwareFidelitySection`.
+///
+/// That one asks how *true* the render is to the device; this one asks how
+/// far from it you want to go. They're deliberately adjacent in the panel:
+/// the accurate render and the designed one are the same animation, and
+/// which you're looking at should never be a mystery.
+public struct SmoothingSection: View {
+    @ObservedObject var config: RingConfig
+
+    public init(config: RingConfig) {
+        self.config = config
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LabeledSlider(
+                title: "Bleed",
+                value: $config.smoothingSpread,
+                range: 0...3,
+                format: "%.1f"
+            )
+            LabeledSlider(
+                title: "Persistence",
+                value: $config.smoothingTrail,
+                range: 0...0.8,
+                format: "%.2fs"
+            )
+            Toggle("Continuous time", isOn: $config.smoothingFluidTime)
+                .help("Sample on the display's clock instead of the device's update tick")
+        }
+    }
+}
+
 public struct FirmwareFidelitySection: View {
     @ObservedObject var config: RingConfig
 

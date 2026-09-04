@@ -84,6 +84,15 @@ let package = Package(
                 "dump_reference.py", "record_streams.py",
             ]
         ),
+        // Runs the real import path over a folder of pattern scripts and
+        // reports what each one produced — see the header comment in
+        // Sources/ImportCheck/main.swift. Not part of the app;
+        // `swift run ImportCheck` when an import looks wrong.
+        .executableTarget(
+            name: "ImportCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/ImportCheck"
+        ),
         // macOS design tool: sidebar controls + tab bar mockup + code export.
         .executableTarget(
             name: "RingAnimator",

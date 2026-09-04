@@ -43,6 +43,16 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// `.steady` and 2.0.
     public var diodeShape: DiodeShape?
     public var diodeColorMode: DiodeColorMode?
+    /// See `RingConfig.smoothingEnabled`. Optional like its neighbours so a
+    /// preset saved before smoothing existed still decodes — and decodes to
+    /// the hardware-exact render it was saved as.
+    public var smoothingEnabled: Bool?
+    /// See `RingConfig.smoothingSpread`.
+    public var smoothingSpread: Double?
+    /// See `RingConfig.smoothingTrail`.
+    public var smoothingTrail: Double?
+    /// See `RingConfig.smoothingFluidTime`.
+    public var smoothingFluidTime: Bool?
     /// See `RingConfig.firmwareLevelField`. Optional like its neighbours so
     /// presets written before it decode unchanged.
     public var firmwareLevelField: FirmwareLevelField?
@@ -147,6 +157,10 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         diodeCount = config.diodeCount
         diodeShape = config.diodeShape
         diodeColorMode = config.diodeColorMode
+        smoothingEnabled = config.smoothingEnabled
+        smoothingSpread = config.smoothingSpread
+        smoothingTrail = config.smoothingTrail
+        smoothingFluidTime = config.smoothingFluidTime
         firmwareLevelField = config.firmwareLevelField
         firmwarePatternStream = config.firmwarePatternStream
         firmwarePatternStreamOffset = config.firmwarePatternStreamOffset
@@ -234,6 +248,10 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.diodeCount = diodeCount
         config.diodeShape = diodeShape ?? .round
         config.diodeColorMode = diodeColorMode ?? .perDiode
+        config.smoothingEnabled = smoothingEnabled ?? false
+        config.smoothingSpread = smoothingSpread ?? 1.1
+        config.smoothingTrail = smoothingTrail ?? 0.22
+        config.smoothingFluidTime = smoothingFluidTime ?? true
         config.firmwareLevelField = firmwareLevelField
         config.firmwarePatternStream = firmwarePatternStream
         config.firmwarePatternStreamOffset = firmwarePatternStreamOffset ?? 0
