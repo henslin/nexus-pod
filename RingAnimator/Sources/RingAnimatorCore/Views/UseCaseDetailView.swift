@@ -72,6 +72,13 @@ public struct UseCaseDetailView: View {
     /// export source — the same thing Nexus hands `PhoneMockupView`.
     public typealias StageBuilder = @MainActor (RingConfig, TimelinePlayback?, RingTimeline) -> AnyView
     private let stage: StageBuilder?
+    /// The Code pane. Injected for the same reason as the stage: the
+    /// exporters' UI is macOS-only and this type compiles for iOS.
+    public typealias CodeBuilder = @MainActor (RingConfig) -> AnyView
+    private let code: CodeBuilder?
+    /// Preview or Code, owned by the caller so it survives this view being
+    /// rebuilt when the selected use case changes.
+    @Binding private var tab: DetailTab
 
     #if os(macOS)
     /// Non-nil while a Blender import report is up — see
@@ -89,11 +96,15 @@ public struct UseCaseDetailView: View {
     public init(
         preset: RingPreset,
         store: RingPresetStore,
-        stage: StageBuilder? = nil
+        tab: Binding<DetailTab> = .constant(.preview),
+        stage: StageBuilder? = nil,
+        code: CodeBuilder? = nil
     ) {
         self.store = store
         self.presetID = preset.id
+        self._tab = tab
         self.stage = stage
+        self.code = code
         let config = RingConfig()
         preset.apply(to: config)
         _editingConfig = StateObject(wrappedValue: config)
@@ -189,9 +200,16 @@ public struct UseCaseDetailView: View {
                 if let stage {
                     // No header above the stage — same reasoning as the Cue
                     // Library's pane: it made this section's canvas shorter
-                    // than Nexus's for no visible reason. The name is in the
-                    // window title.
-                    stage(displayConfig, playback, player.timeline)
+                    // than Nexus's for no visible reason.
+                    if let code {
+                        DetailPane(tab: $tab) {
+                            stage(displayConfig, playback, player.timeline)
+                        } code: {
+                            code(editingConfig)
+                        }
+                    } else {
+                        stage(displayConfig, playback, player.timeline)
+                    }
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 24) {
@@ -207,13 +225,15 @@ public struct UseCaseDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                Divider()
-                TimelineStripView(
-                    player: player,
-                    config: editingConfig,
-                    playhead: now,
-                    onScrub: { player.scrub(to: $0) }
-                )
+                if tab == .preview {
+                    Divider()
+                    TimelineStripView(
+                        player: player,
+                        config: editingConfig,
+                        playhead: now,
+                        onScrub: { player.scrub(to: $0) }
+                    )
+                }
             }
         }
         .onAppear {

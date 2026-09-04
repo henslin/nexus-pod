@@ -340,6 +340,36 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   `xcodebuild`/`xcrun simctl` — use that instead of asking for manual
   screenshots when debugging UI issues here.
 
+## Preview and Code, in every section
+
+`DetailPane` is the Preview/Code control plus the two panes under it, and
+all three sections use it. The control used to be a
+`ToolbarItem(placement: .principal)` — the window's title bar, a different
+place from the appearance controls it sits directly above — and **only
+Nexus had it**. Exporting code was therefore something you could only do to
+the ring in Nexus, so importing a Blender animation into a use case, tuning
+it, and taking SwiftUI out the other end meant copying settings back to
+Nexus by hand.
+
+It's centered in the pane now, which lands it over the appearance controls
+floating at the top of the stage.
+
+Two things it has to keep doing:
+
+- **Both panes stay mounted**, toggled by opacity rather than swapped by a
+  `switch`, or the stage's pan/zoom is thrown away on every tab change —
+  `ZoomableCanvas` keeps that in an `NSScrollView` with nothing for SwiftUI
+  to restore.
+- **The tab state belongs to `ContentView`**, one per section, so it
+  survives the detail view being rebuilt when the selection changes and so
+  the three sections don't share one.
+
+The Cue Library's Code tab is `CueExportView`, not the generic one — a cue
+exports as a cue. Use Cases takes its Code pane through an injected
+builder, the same trick as the stage, because the exporters' UI is
+macOS-only and `UseCaseDetailView` compiles for iOS. Its timeline strip
+hides in Code, since a scrubber under exported source says nothing.
+
 ## Every section has the same anatomy
 
 Three columns, three detail panes, one shape each.

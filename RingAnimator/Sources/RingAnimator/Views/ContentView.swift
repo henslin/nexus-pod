@@ -31,8 +31,9 @@ struct ContentView: View {
     @StateObject private var stageState = StageState()
 
     @State private var section: AppSection? = .ringDesigner
-    @State private var designerTab: DesignerTab = .preview
-    @State private var cueTab: DesignerTab = .preview
+    @State private var designerTab: DetailTab = .preview
+    @State private var cueTab: DetailTab = .preview
+    @State private var useCaseTab: DetailTab = .preview
     @State private var selectedCueID: String? = LEDCueLibrary.all.first?.id
     @State private var cueSearchText: String = ""
     @State private var selectedUseCaseID: RingPreset.ID?
@@ -57,12 +58,6 @@ struct ContentView: View {
         }
     }
 
-    enum DesignerTab: String, CaseIterable, Identifiable {
-        case preview = "Preview"
-        case export = "Export Code"
-
-        var id: String { rawValue }
-    }
 
     var body: some View {
         NavigationSplitView {
@@ -146,64 +141,18 @@ struct ContentView: View {
 
     @ViewBuilder
     private var designerDetail: some View {
-        // Both tabs stay mounted the whole time instead of a `switch` that
-        // swaps one for the other — a `switch` gives each case a different
-        // branch identity, so SwiftUI tears down and rebuilds whichever
-        // view isn't showing from scratch. That silently reset every piece
-        // of `PreviewTab`'s own state on every trip back to Preview: the
-        // Large Preview card's corner/collapsed state, and — worse —
-        // `PhoneMockupView`'s `ZoomableCanvas`, whose pan/zoom lives in a
-        // wrapped `NSScrollView` that has no SwiftUI state to restore once
-        // its `NSViewRepresentable` itself gets recreated. Keeping both
-        // views alive and just toggling which one is visible/hit-testable
-        // preserves all of that across tab switches, matching what a
-        // person expects from "the two panes I keep flipping between."
-        ZStack {
+        DetailPane(tab: $designerTab) {
             PreviewTab(config: config, player: timelinePlayer, stageState: stageState)
-                .opacity(designerTab == .preview ? 1 : 0)
-                .allowsHitTesting(designerTab == .preview)
-                .accessibilityHidden(designerTab != .preview)
+        } code: {
             ExportView(config: config)
-                .opacity(designerTab == .export ? 1 : 0)
-                .allowsHitTesting(designerTab == .export)
-                .accessibilityHidden(designerTab != .export)
-        }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("View", selection: $designerTab) {
-                    ForEach(DesignerTab.allCases) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 220)
-            }
         }
     }
 
     @ViewBuilder
     private var cueDetail: some View {
         if let id = selectedCueID, let cue = LEDCueLibrary.cue(id: id) {
-            Group {
-                switch cueTab {
-                case .preview:
-                    CueDetailView(cue: cue, store: cueStore, stageState: stageState)
-                case .export:
-                    CueExportView(cue: cue, store: cueStore)
-                }
-            }
-            .id(cue.id)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("View", selection: $cueTab) {
-                        ForEach(DesignerTab.allCases) { tab in
-                            Text(tab.rawValue).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 220)
-                }
-            }
+            CueDetailView(cue: cue, store: cueStore, stageState: stageState, tab: $cueTab)
+                .id(cue.id)
         } else {
             ContentUnavailableView("Select a cue", systemImage: "sparkles")
         }
@@ -216,11 +165,17 @@ struct ContentView: View {
     @ViewBuilder
     private var useCaseDetail: some View {
         if let id = selectedUseCaseID, let preset = useCaseStore.presets.first(where: { $0.id == id }) {
-            UseCaseDetailView(preset: preset, store: useCaseStore) { config, playback, timeline in
-                AnyView(RingStage(
-                    config: config, playback: playback, timeline: timeline, state: stageState
-                ))
-            }
+            UseCaseDetailView(
+                preset: preset,
+                store: useCaseStore,
+                tab: $useCaseTab,
+                stage: { config, playback, timeline in
+                    AnyView(RingStage(
+                        config: config, playback: playback, timeline: timeline, state: stageState
+                    ))
+                },
+                code: { config in AnyView(ExportView(config: config)) }
+            )
             .id(preset.id)
         } else {
             ContentUnavailableView("Select or create a use case", systemImage: "target")

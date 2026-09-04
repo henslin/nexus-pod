@@ -240,15 +240,19 @@ struct CueDetailView: View {
     @ObservedObject var store: LEDCueStore
     /// Shared with every other section — see `StageState`.
     @ObservedObject var stageState: StageState
+    /// Preview or Code. Owned by `ContentView` so it survives this view
+    /// being rebuilt when the selected cue changes.
+    @Binding var tab: DetailTab
     @State private var params: LEDCueParameters
     @State private var expanded: [String: Bool]
     /// The cue, in the form every preview surface takes — see `previewPane`.
     @StateObject private var stageConfig = RingConfig()
 
-    init(cue: LEDCue, store: LEDCueStore, stageState: StageState) {
+    init(cue: LEDCue, store: LEDCueStore, stageState: StageState, tab: Binding<DetailTab>) {
         self.cue = cue
         self.store = store
         self.stageState = stageState
+        self._tab = tab
         let initialParams = store.parameters(for: cue)
         _params = State(initialValue: initialParams)
         // Same defaults as Nexus's own Controls panel (`ControlsView.init`):
@@ -281,8 +285,12 @@ struct CueDetailView: View {
     /// column above the controls.
     var body: some View {
         HSplitView {
-            previewPane
-                .frame(minWidth: 420, idealWidth: 640)
+            DetailPane(tab: $tab) {
+                previewPane
+            } code: {
+                CueExportView(cue: cue, store: store)
+            }
+            .frame(minWidth: 420, idealWidth: 640)
             controlsPanel
                 .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
         }
