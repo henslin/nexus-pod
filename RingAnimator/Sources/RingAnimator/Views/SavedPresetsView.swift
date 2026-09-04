@@ -92,13 +92,24 @@ struct SavedPresetsView: View {
                 Label("Save Current Animation", systemImage: "plus")
             }
             .help("Save the ring's current settings as a new saved animation")
+
+            ColumnActionDivider()
+
             Menu {
-                Button("Export Library…") { exportLibrary() }
-                    .disabled(store.presets.isEmpty)
-                Button("Import…") { importPresets() }
-                Divider()
-                Button("Import Blender Script…") { importBlenderScript() }
-                Button("Import Pattern Library → Use Cases…") { importPatternFolder() }
+                // Named for what they move, not for the verb alone.
+                // "Export Library…" sitting next to "Import…" left you to
+                // work out that they were two ends of the same JSON file,
+                // and that neither had anything to do with the two Blender
+                // items under them.
+                Section("Saved Animations") {
+                    Button("Export All as JSON…") { exportLibrary() }
+                        .disabled(store.presets.isEmpty)
+                    Button("Add from a JSON File…") { importPresets() }
+                }
+                Section("Bring in a Design") {
+                    Button("Read a Blender Script into the Ring…") { importBlenderScript() }
+                    Button("Add a Pattern Folder to Use Cases…") { importPatternFolder() }
+                }
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up.on.square")
             }

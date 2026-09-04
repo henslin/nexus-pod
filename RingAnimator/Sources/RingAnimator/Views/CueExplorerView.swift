@@ -27,6 +27,7 @@ struct CueListView: View {
     /// categories — keying on the bare name would tie unrelated groups in
     /// different categories together.
     @State private var expandedSubcategories: Set<String> = []
+    @State private var confirmingResetAll = false
 
     var body: some View {
         ListColumn(
@@ -133,13 +134,24 @@ struct CueListView: View {
             }
             .help("Export the full cue library, with your tweaks applied, as JSON")
 
+            ColumnActionDivider()
+
             Button(role: .destructive) {
-                store.resetAll()
+                confirmingResetAll = true
             } label: {
                 Label("Reset All", systemImage: "arrow.counterclockwise")
             }
             .help("Reset every cue back to its shipped default")
             .disabled(store.overrides.isEmpty)
+        }
+        .confirmationDialog(
+            "Reset every cue to its shipped default?",
+            isPresented: $confirmingResetAll,
+            titleVisibility: .visible
+        ) {
+            resetAllConfirmation
+        } message: {
+            Text("\(store.overrides.count) cue\(store.overrides.count == 1 ? "" : "s") you've tweaked will go back to the spec. This can't be undone.")
         }
     }
 
@@ -189,6 +201,16 @@ struct CueListView: View {
                 }
             }
         )
+    }
+
+    /// Reset All threw away every tweak on every cue on one click, with
+    /// nothing to undo it — the overrides are the only record that the
+    /// shipped defaults were ever changed.
+    private var resetAllConfirmation: some View {
+        Group {
+            Button("Reset All Cues", role: .destructive) { store.resetAll() }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     private var subtitle: String {

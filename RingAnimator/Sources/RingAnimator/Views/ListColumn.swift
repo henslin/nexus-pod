@@ -70,7 +70,7 @@ struct ListColumn<Content: View, Actions: View>: View {
     private var actionBar: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
-            HStack(spacing: 2) {
+            HStack(spacing: 4) {
                 actions()
             }
             .labelStyle(.iconOnly)
@@ -141,5 +141,20 @@ extension ListColumn where Actions == EmptyView {
         self.searchPrompt = searchPrompt
         self.content = content
         self.actions = { EmptyView() }
+    }
+}
+
+/// A hairline between two groups of controls inside a column's action
+/// capsule.
+///
+/// Mail's toolbar does this — reply/reply-all/forward share a capsule but
+/// are ruled off from archive/delete/junk. Without it a row of four icons
+/// is four icons, and which of them are related is left to be guessed from
+/// the order.
+struct ColumnActionDivider: View {
+    var body: some View {
+        Divider()
+            .frame(height: 15)
+            .padding(.horizontal, 3)
     }
 }

@@ -71,35 +71,40 @@ struct UseCaseListView: View {
             }
             .listStyle(.sidebar)
         } actions: {
-            importBlenderButton
+            // Grouped: make one, bring one in, hand them around. The
+            // dividers are what say so — four icons in a row otherwise
+            // leave the grouping to be guessed from the order.
             Button {
                 newUseCaseName = "Use Case \(store.presets.count + 1)"
                 showingNewDialog = true
             } label: {
                 Label("New Use Case", systemImage: "plus")
             }
-            .help("Create a new use-case animation, with its own full set of controls")
-        // Its own button rather than a third item inside the Share
-        // menu below. Taking delivery of a pattern library is the way
-        // most of this list gets populated, and it was sitting behind
-        // an upload-looking icon in a menu of JSON import/export —
-        // findable only if you already knew it was there.
+            .help("Create a new use case, with its own full set of controls")
+
+            ColumnActionDivider()
+
+            importBlenderButton
+
             Button {
                 importPatternFolder()
             } label: {
                 Label("Import Patterns", systemImage: "tray.and.arrow.down")
             }
-            .help("Import a folder of firmware pattern scripts (.py) — one use case per pattern")
+            .help("Import a folder of firmware pattern scripts — one use case per .py file")
+
+            ColumnActionDivider()
+
             Menu {
-                Button("Export Library…") { exportLibrary() }
-                    .disabled(store.presets.isEmpty)
-                Button("Import…") { importUseCases() }
-                Divider()
-                Button("Import Pattern Scripts…") { importPatternFolder() }
+                Section("Use Cases") {
+                    Button("Export All as JSON…") { exportLibrary() }
+                        .disabled(store.presets.isEmpty)
+                    Button("Add from a JSON File…") { importUseCases() }
+                }
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up.on.square")
             }
-            .help("Export use cases to share with your team, or import ones they've sent you")
+            .help("Export these use cases as a file, or add ones sent to you")
         }
         .sheet(isPresented: $showingNewDialog) { newDialog }
         .sheet(item: $renamingUseCase) { _ in renameDialog }
