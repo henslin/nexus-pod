@@ -118,13 +118,13 @@ struct ContentView: View {
                 EmptyView()
             }
         }
-        // The selection *is* the title. The section name is already the
-        // selected row in the sidebar, so repeating it in the title bar
-        // spent the most prominent text in the window on the one fact
-        // that's never in doubt. Falls back to the section name only when
-        // nothing is selected yet, and Nexus keeps its own name because its
-        // ring is the document — there's nothing else to name.
-        .navigationTitle(selectionName ?? section?.rawValue ?? "Nexus")
+        // No `.navigationTitle`. On this macOS it renders at the top of the
+        // *content column*, not just in the title bar — so whatever it said
+        // sat directly above the list, restating the row already
+        // highlighted an inch below it. The section name was redundant with
+        // the sidebar; the selection was redundant with the list. Neither
+        // earned the most prominent text in the window, and the column's
+        // own controls are better use of that space.
         .sheet(isPresented: $showingWhatsNew) {
             WhatsNewView {
                 WhatsNewPresenter.markSeen()
@@ -143,20 +143,6 @@ struct ContentView: View {
         }
     }
 
-    /// What's selected in the current section, for the window subtitle.
-    private var selectionName: String? {
-        switch section {
-        case .cueLibrary:
-            return selectedCueID.flatMap { LEDCueLibrary.cue(id: $0) }?.name
-        case .useCases:
-            return selectedUseCaseID.flatMap { id in
-                useCaseStore.presets.first(where: { $0.id == id })?.name
-            }
-        case .ringDesigner, .none:
-            // Nexus has no single selected thing — its ring is the document.
-            return nil
-        }
-    }
 
     @ViewBuilder
     private var designerDetail: some View {

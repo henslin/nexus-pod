@@ -359,11 +359,14 @@ controls on the right. Cue Library and Use Cases each used to put a header
 block *above* the stage, which made those two canvases shorter than
 Nexus's for no reason a person could see.
 
-**The selection is the window title.** Not the section — that's already the
-selected row in the sidebar, so putting it in the title bar too spent the
-most prominent text in the window on the one fact that is never in doubt.
-The section name is the fallback for "nothing selected yet", and Nexus
-keeps its own name because its ring *is* the document.
+**There is no `.navigationTitle`.** On this macOS it renders at the top of
+the *content column*, not only in the title bar — so whatever it said sat
+directly above the list, restating the row highlighted an inch below it.
+It was the section name first (redundant with the sidebar), then the
+selection (redundant with the list). Neither earned the most prominent
+text in the window, and the column's own search field and buttons are a
+better use of that space. If a title is ever wanted back, note that it
+will appear inside the column, not just in the title bar.
 
 What those headers also carried had to go somewhere, and "somewhere" is
 the panel whose contents the control acts on:

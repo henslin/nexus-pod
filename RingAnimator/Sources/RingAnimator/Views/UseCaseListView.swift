@@ -129,8 +129,7 @@ struct UseCaseListView: View {
             } label: {
                 Label("Import Blender…", systemImage: "curlybraces")
             }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
+            .ringGlassButtonStyle()
             .disabled(selectedUseCaseID == nil)
             .help("Read a Blender LED-ring script into the selected use case")
             Spacer(minLength: 0)
