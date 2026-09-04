@@ -1146,13 +1146,67 @@ public struct RingView: View {
                 )
             }
 
-        return glow(
-            diodeLayer(count: count, scale: scale) { i in
+        // Same states either way — the only question is whether they're
+        // drawn as twenty shapes or as one stroke sampled from all twenty.
+        let ring: AnyView = config.smoothingEnabled && config.smoothingGradientRing
+            ? AnyView(gradientRing(states: states, scale: scale))
+            : AnyView(diodeLayer(count: count, scale: scale) { i in
                 states.indices.contains(i) ? states[i] : DiodeState(color: all[0], opacity: 0)
-            },
-            color: all[0],
-            boost: voiceLevel,
-            scale: scale
+            })
+
+        return glow(ring, color: all[0], boost: voiceLevel, scale: scale)
+    }
+
+    /// The ring as one continuous stroke, colored by an `AngularGradient`
+    /// with a stop per diode.
+    ///
+    /// See `RingConfig.smoothingGradientRing` for why this exists. The field
+    /// is unchanged — this is purely how it's drawn — so every control above
+    /// still means what it meant, and turning it off returns the twenty
+    /// discrete diodes.
+    private func gradientRing(states: [DiodeState], scale: CGFloat) -> some View {
+        let band = bandWidth(scale: scale)
+        return GeometryReader { geo in
+            let radius = diodeRadius(in: geo.size, scale: scale)
+            Circle()
+                .stroke(ringGradient(states), style: StrokeStyle(lineWidth: band))
+                .frame(width: radius * 2, height: radius * 2)
+                .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
+    }
+
+    /// Builds the gradient the ring is stroked with.
+    ///
+    /// `startAngle` is -90° because diode 0 sits at twelve o'clock (see
+    /// `diodeLayer`, which places it at `-.pi / 2`) while an
+    /// `AngularGradient` would otherwise start at three. Getting this wrong
+    /// rotates every pattern a quarter turn, which looks like a timing bug
+    /// rather than a geometry one.
+    ///
+    /// The last stop repeats the *first* diode's color at location 1. Without
+    /// it the gradient runs from diode 19 straight back to diode 0 across a
+    /// zero-width span, which draws as a hard seam at twelve o'clock — most
+    /// visible on exactly the patterns this mode is for, where neighbouring
+    /// colors differ.
+    private func ringGradient(_ states: [DiodeState]) -> AngularGradient {
+        let count = max(states.count, 1)
+        var stops = states.enumerated().map { index, state in
+            Gradient.Stop(
+                color: state.color.opacity(min(max(state.opacity, 0), 1)),
+                location: Double(index) / Double(count)
+            )
+        }
+        if let first = states.first {
+            stops.append(Gradient.Stop(
+                color: first.color.opacity(min(max(first.opacity, 0), 1)),
+                location: 1
+            ))
+        }
+        return AngularGradient(
+            stops: stops,
+            center: .center,
+            startAngle: .degrees(-90),
+            endAngle: .degrees(270)
         )
     }
 

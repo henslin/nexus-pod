@@ -874,6 +874,8 @@ public struct SmoothingSection: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Toggle("Gradient ring", isOn: $config.smoothingGradientRing)
+                .help("Draw one continuous stroke instead of twenty separate diodes")
             LabeledSlider(
                 title: "Bleed",
                 value: $config.smoothingSpread,

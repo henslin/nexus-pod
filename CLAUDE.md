@@ -957,6 +957,30 @@ Three things worth not rediscovering:
 - **It costs 0.45 ms/frame** (release, 20 diodes, 9 taps, measured against
   1.38 ms for the hardware path). No optimization needed; don't add a cache.
 
+### Gradient ring
+
+Smoothing the *field* wasn't enough on its own. Each diode got a soft,
+blended level and color — and was then drawn as one of twenty separate
+circles with gaps between them, so a gradient computed across dots still
+read as dots with halos. The maths went fluid and the picture didn't.
+
+`smoothingGradientRing` strokes the ring as a single `AngularGradient` with
+a stop per diode instead, letting SwiftUI interpolate between them. Same
+field, same controls, continuous ring. On by default, because "Smooth"
+without it is the half of the effect that doesn't show; off returns the
+twenty diodes.
+
+Two things that are load-bearing:
+
+- **`startAngle` is -90°.** Diode 0 sits at twelve o'clock (`diodeLayer`
+  places it at `-.pi / 2`) while an `AngularGradient` starts at three. Get
+  it wrong and every pattern is rotated a quarter turn, which reads as a
+  timing bug rather than a geometry one.
+- **The last stop repeats the first diode's color at location 1.** Without
+  it the gradient runs from diode 19 back to diode 0 across a zero-width
+  span and draws a hard seam at twelve o'clock — most visible on exactly
+  the patterns this mode is for.
+
 Preview only — the code generators still emit the hardware render, and the
 Smooth card's footer says so.
 

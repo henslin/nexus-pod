@@ -47,6 +47,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// preset saved before smoothing existed still decodes — and decodes to
     /// the hardware-exact render it was saved as.
     public var smoothingEnabled: Bool?
+    /// See `RingConfig.smoothingGradientRing`.
+    public var smoothingGradientRing: Bool?
     /// See `RingConfig.smoothingSpread`.
     public var smoothingSpread: Double?
     /// See `RingConfig.smoothingTrail`.
@@ -158,6 +160,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         diodeShape = config.diodeShape
         diodeColorMode = config.diodeColorMode
         smoothingEnabled = config.smoothingEnabled
+        smoothingGradientRing = config.smoothingGradientRing
         smoothingSpread = config.smoothingSpread
         smoothingTrail = config.smoothingTrail
         smoothingFluidTime = config.smoothingFluidTime
@@ -249,8 +252,9 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.diodeShape = diodeShape ?? .round
         config.diodeColorMode = diodeColorMode ?? .perDiode
         config.smoothingEnabled = smoothingEnabled ?? false
-        config.smoothingSpread = smoothingSpread ?? 1.1
-        config.smoothingTrail = smoothingTrail ?? 0.22
+        config.smoothingGradientRing = smoothingGradientRing ?? true
+        config.smoothingSpread = smoothingSpread ?? 1.4
+        config.smoothingTrail = smoothingTrail ?? 0.3
         config.smoothingFluidTime = smoothingFluidTime ?? true
         config.firmwareLevelField = firmwareLevelField
         config.firmwarePatternStream = firmwarePatternStream

@@ -145,10 +145,26 @@ public final class RingConfig: ObservableObject {
     /// Master switch. Off = the ring renders exactly what the device would.
     @Published public var smoothingEnabled: Bool = false
 
+    /// Draw the ring as one continuous gradient instead of twenty diodes.
+    ///
+    /// The smoothing above computes a soft, blended level and color for each
+    /// diode — and then, without this, hands them to twenty separate circles
+    /// with gaps between them. A gradient computed *across* dots still reads
+    /// as dots with halos: the maths goes fluid and the picture doesn't. So
+    /// this takes the same per-diode field and strokes it as a single
+    /// `AngularGradient` with a stop per diode, letting SwiftUI interpolate
+    /// the rest. Same field, same controls, continuous ring.
+    ///
+    /// On by default, because "Smooth" without it is the half of the effect
+    /// that doesn't show.
+    @Published public var smoothingGradientRing: Bool = true
+
     /// How far a lit diode bleeds into its neighbours, in diodes.
     ///
-    /// The single knob that turns twenty discrete points into a gradient.
-    @Published public var smoothingSpread: Double = 1.1
+    /// With the gradient ring on this also controls how much a lit diode
+    /// spills into the interpolated stretch either side of it — the
+    /// difference between a tight bright band and a soft wash.
+    @Published public var smoothingSpread: Double = 1.4
 
     /// Seconds of persistence after a diode goes dark.
     ///
@@ -156,7 +172,7 @@ public final class RingConfig: ObservableObject {
     /// see `RingView.smoothedStates`. A pattern on a 312 ms tick pops on
     /// hard without it, and the pop is more of a giveaway than the gap
     /// between steps.
-    @Published public var smoothingTrail: Double = 0.22
+    @Published public var smoothingTrail: Double = 0.3
 
     /// Sample the animation on the display's clock rather than the device's.
     ///
