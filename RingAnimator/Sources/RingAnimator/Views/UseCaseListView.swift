@@ -28,11 +28,7 @@ struct UseCaseListView: View {
     @State private var importSuccessMessage: String?
 
     var body: some View {
-        ListColumn(
-            title: title,
-            subtitle: subtitle,
-            header: AnyView(importBlenderButton)
-        ) {
+        ListColumn(title: title, subtitle: subtitle) {
             List(selection: $selectedUseCaseID) {
                 Section {
                     if store.presets.isEmpty {
@@ -75,6 +71,7 @@ struct UseCaseListView: View {
             }
             .listStyle(.sidebar)
         } actions: {
+            importBlenderButton
             Button {
                 newUseCaseName = "Use Case \(store.presets.count + 1)"
                 showingNewDialog = true
@@ -139,17 +136,15 @@ struct UseCaseListView: View {
     /// reference to; only the selected use case's detail view is mounted,
     /// so exactly one listener answers.
     private var importBlenderButton: some View {
-        Group {
-            Button {
-                NotificationCenter.default.post(name: .importBlenderIntoUseCase, object: nil)
-            } label: {
-                Label("Import Blender…", systemImage: "curlybraces")
-            }
-            // No style here — `ListColumn`'s action bar applies the glass to
-            // everything in the row, so a second one would nest them.
-            .disabled(selectedUseCaseID == nil)
-            .help("Read a Blender LED-ring script into the selected use case")
+        Button {
+            NotificationCenter.default.post(name: .importBlenderIntoUseCase, object: nil)
+        } label: {
+            Label("Import Blender…", systemImage: "curlybraces")
         }
+        // Icon-only, like its neighbours — see `ListColumn.actionBar`. The
+        // label survives as the tooltip and the accessibility name.
+        .disabled(selectedUseCaseID == nil)
+        .help("Read a Blender LED-ring script into the selected use case")
     }
 
     // MARK: - Bulk pattern import

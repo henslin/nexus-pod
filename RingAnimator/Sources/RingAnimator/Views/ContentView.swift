@@ -204,13 +204,13 @@ struct ContentView: View {
                 EmptyView()
             }
         }
-        // No `.navigationTitle`. On this macOS it renders at the top of the
-        // *content column*, not just in the title bar — so whatever it said
-        // sat directly above the list, restating the row already
-        // highlighted an inch below it. The section name was redundant with
-        // the sidebar; the selection was redundant with the list. Neither
-        // earned the most prominent text in the window, and the column's
-        // own controls are better use of that space.
+        // Removed outright, not set to "". Leaving `.navigationTitle` off
+        // doesn't clear the title — the window falls back to the app's own
+        // name, and on this macOS that renders at the top of the *content
+        // column*, so every section was headed "Nexus Pod" directly above
+        // its real name. `ListColumn` draws the heading that means
+        // something; this takes away the one that doesn't.
+        .toolbar(removing: .title)
         .sheet(isPresented: $showingWhatsNew) {
             WhatsNewView {
                 WhatsNewPresenter.markSeen()

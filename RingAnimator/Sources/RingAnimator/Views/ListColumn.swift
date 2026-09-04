@@ -26,9 +26,6 @@ struct ListColumn<Content: View, Actions: View>: View {
     /// Omit for a column with nothing to search.
     var search: Binding<String>?
     var searchPrompt: String = "Search"
-    /// The one labelled action a column may have, shown at the leading
-    /// edge of the action bar. Everything in `actions` is icon-only.
-    var header: AnyView?
     @ViewBuilder var content: () -> Content
     @ViewBuilder var actions: () -> Actions
 
@@ -62,20 +59,30 @@ struct ListColumn<Content: View, Actions: View>: View {
         }
     }
 
-    /// One capsule per group of actions, the way Mail's toolbar puts
-    /// reply/reply-all/forward in one and archive/delete/junk in another.
-    /// The labelled action is its own group, so it reads as a distinct
-    /// thing rather than as the first of four icons.
+    /// One capsule, all icons, all the same size — Mail's toolbar shape.
+    ///
+    /// A labelled button used to sit alongside these in its own capsule.
+    /// At a 220pt column that label had nowhere to go and wrapped one
+    /// character per line into a capsule taller than the header above it.
+    /// Everything is an icon with a tooltip now, which is also what makes
+    /// the row read as one set of controls rather than a big thing and
+    /// three small ones.
     private var actionBar: some View {
         HStack(spacing: 8) {
-            if let header {
-                header.glassActionGroup()
-            }
             Spacer(minLength: 0)
-            actions()
-                .labelStyle(.iconOnly)
-                .menuIndicator(.hidden)
-                .glassActionGroup()
+            HStack(spacing: 2) {
+                actions()
+            }
+            .labelStyle(.iconOnly)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            // A fixed square per control, so a heavier or wider symbol
+            // can't make its button bigger than its neighbours.
+            .font(.system(size: 13, weight: .medium))
+            .frame(height: 22)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .glassBackground(in: Capsule())
         }
         .padding(.horizontal, 10)
         .padding(.bottom, search == nil ? 10 : 8)
@@ -126,32 +133,13 @@ extension ListColumn where Actions == EmptyView {
         subtitle: String? = nil,
         search: Binding<String>? = nil,
         searchPrompt: String = "Search",
-        header: AnyView? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
         self.subtitle = subtitle
         self.search = search
         self.searchPrompt = searchPrompt
-        self.header = header
         self.content = content
         self.actions = { EmptyView() }
-    }
-}
-
-
-private extension View {
-    /// A group of controls sharing one glass capsule.
-    ///
-    /// Buttons inside are `.plain` on purpose: the capsule is the glass, and
-    /// styling each button as glass too would nest one inside the other.
-    func glassActionGroup() -> some View {
-        self
-            .buttonStyle(.plain)
-            .controlSize(.small)
-            .font(.body)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .glassBackground(in: Capsule())
     }
 }
