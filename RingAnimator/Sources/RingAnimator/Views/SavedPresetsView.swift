@@ -51,7 +51,7 @@ struct SavedPresetsView: View {
     @State private var importSuccessMessage: String?
 
     var body: some View {
-        ListColumn {
+        ListColumn(title: "Nexus", subtitle: subtitle) {
             List(selection: $selectedPresetID) {
                 Section("Saved Animations") {
                     if store.presets.isEmpty {
@@ -186,6 +186,12 @@ struct SavedPresetsView: View {
     }
 
     // MARK: - Export / Import
+
+    private var subtitle: String {
+        let count = store.presets.count
+        guard count > 0 else { return "The live ring · nothing saved yet" }
+        return count == 1 ? "The live ring · 1 saved" : "The live ring · \(count) saved"
+    }
 
     private func exportSingle(_ preset: RingPreset) {
         let panel = NSSavePanel()

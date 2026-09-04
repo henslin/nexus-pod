@@ -16,6 +16,13 @@ import SwiftUI
 /// a source list, and it makes the association structural rather than
 /// something you have to learn.
 struct ListColumn<Content: View, Actions: View>: View {
+    /// Names the column, with a line under it saying what's in it — the
+    /// arrangement Mail uses for "Inbox — iCloud / All Mail · 628,761
+    /// messages". The window title showed the app's name here, which every
+    /// section already shares, and before that the selected row's name,
+    /// which the highlighted row already said.
+    var title: String
+    var subtitle: String?
     /// Omit for a column with nothing to search.
     var search: Binding<String>?
     var searchPrompt: String = "Search"
@@ -26,7 +33,21 @@ struct ListColumn<Content: View, Actions: View>: View {
     @ViewBuilder var actions: () -> Actions
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             // Actions at the *top*, above the search field. They were along
             // the bottom, which is the Finder/Xcode convention for a source
             // list — but those bars sit at the bottom of a window, and this
@@ -41,30 +62,22 @@ struct ListColumn<Content: View, Actions: View>: View {
         }
     }
 
+    /// One capsule per group of actions, the way Mail's toolbar puts
+    /// reply/reply-all/forward in one and archive/delete/junk in another.
+    /// The labelled action is its own group, so it reads as a distinct
+    /// thing rather than as the first of four icons.
     private var actionBar: some View {
-        HStack(spacing: 6) {
-            // The labelled action first, then the icons, so the row reads
-            // left to right from "the thing you'd look for" to "the things
-            // you already know".
+        HStack(spacing: 8) {
             if let header {
-                header
-                Spacer(minLength: 6)
-            } else {
-                Spacer(minLength: 0)
+                header.glassActionGroup()
             }
+            Spacer(minLength: 0)
             actions()
                 .labelStyle(.iconOnly)
                 .menuIndicator(.hidden)
-                .fixedSize(horizontal: false, vertical: true)
+                .glassActionGroup()
         }
-        // Real Liquid Glass, not `.plain`. These sat in the window toolbar
-        // originally, where the system applies it for free; moving them
-        // into the column is what lost it — the same trade-off
-        // `ControlsView` notes about moving its cards off `Form`.
-        .ringGlassButtonStyle()
-        .controlSize(.small)
         .padding(.horizontal, 10)
-        .padding(.top, 10)
         .padding(.bottom, search == nil ? 10 : 8)
     }
 
@@ -109,15 +122,36 @@ struct ListColumn<Content: View, Actions: View>: View {
 
 extension ListColumn where Actions == EmptyView {
     init(
+        title: String,
+        subtitle: String? = nil,
         search: Binding<String>? = nil,
         searchPrompt: String = "Search",
         header: AnyView? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
+        self.title = title
+        self.subtitle = subtitle
         self.search = search
         self.searchPrompt = searchPrompt
         self.header = header
         self.content = content
         self.actions = { EmptyView() }
+    }
+}
+
+
+private extension View {
+    /// A group of controls sharing one glass capsule.
+    ///
+    /// Buttons inside are `.plain` on purpose: the capsule is the glass, and
+    /// styling each button as glass too would nest one inside the other.
+    func glassActionGroup() -> some View {
+        self
+            .buttonStyle(.plain)
+            .controlSize(.small)
+            .font(.body)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .glassBackground(in: Capsule())
     }
 }

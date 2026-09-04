@@ -431,14 +431,25 @@ controls on the right. Cue Library and Use Cases each used to put a header
 block *above* the stage, which made those two canvases shorter than
 Nexus's for no reason a person could see.
 
-**There is no `.navigationTitle`.** On this macOS it renders at the top of
-the *content column*, not only in the title bar — so whatever it said sat
-directly above the list, restating the row highlighted an inch below it.
-It was the section name first (redundant with the sidebar), then the
-selection (redundant with the list). Neither earned the most prominent
-text in the window, and the column's own search field and buttons are a
-better use of that space. If a title is ever wanted back, note that it
-will appear inside the column, not just in the title bar.
+**The column names itself, and says what's in it.** `ListColumn` draws its
+own title and a descriptive subtitle — "Cue Library / 148 cues from the
+hardware spec · 3 tweaked", "Use Cases / 69 animations" — which is Mail's
+"Inbox — iCloud / All Mail · 628,761 messages, 270 unread" arrangement.
+
+This took two wrong turns to arrive at, both worth remembering. There is
+no `.navigationTitle`: on this macOS it renders at the top of the *content
+column*, not only in the title bar, so it was never the neutral place it
+looks like in the API. Pointed at the selection it restated the row
+highlighted an inch below; removed entirely, the window's own name ("Nexus
+Pod") took its place, which every section shares and so says nothing. The
+section's name plus a count is the version that earns the space.
+
+**Controls are grouped into glass capsules**, one per group, the way
+Mail's toolbar keeps reply/reply-all/forward in one capsule and
+archive/delete/junk in another. The labelled action gets its own capsule
+so it reads as a distinct thing rather than the first of four icons.
+Buttons *inside* a capsule are `.plain` — the capsule is the glass, and
+styling the buttons too nests one inside the other.
 
 What those headers also carried had to go somewhere, and "somewhere" is
 the panel whose contents the control acts on:

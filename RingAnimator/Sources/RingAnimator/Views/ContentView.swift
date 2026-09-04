@@ -170,7 +170,8 @@ struct ContentView: View {
                 // against the new store rather than keeping the old one.
                 UseCaseListView(
                     store: store(forSection: id),
-                    selectedUseCaseID: binding(forSection: id)
+                    selectedUseCaseID: binding(forSection: id),
+                    title: userSections.sections.first(where: { $0.id == id })?.name ?? "Section"
                 )
                 .id(id)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)

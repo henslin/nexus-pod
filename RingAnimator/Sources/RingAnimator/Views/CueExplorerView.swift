@@ -29,7 +29,12 @@ struct CueListView: View {
     @State private var expandedSubcategories: Set<String> = []
 
     var body: some View {
-        ListColumn(search: $searchText, searchPrompt: "Search cues") {
+        ListColumn(
+            title: "Cue Library",
+            subtitle: subtitle,
+            search: $searchText,
+            searchPrompt: "Search cues"
+        ) {
             List(selection: $selectedCueID) {
                 ForEach(LEDCueLibrary.categories, id: \.self) { category in
                     let groups = LEDCueLibrary.groupedBySubcategory(in: category)
@@ -184,6 +189,13 @@ struct CueListView: View {
                 }
             }
         )
+    }
+
+    private var subtitle: String {
+        let total = LEDCueLibrary.all.count
+        let tweaked = store.overrides.count
+        let base = "\(total) cues from the hardware spec"
+        return tweaked == 0 ? base : base + " · \(tweaked) tweaked"
     }
 
     private func matches(_ cue: LEDCue) -> Bool {
