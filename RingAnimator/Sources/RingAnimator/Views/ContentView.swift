@@ -210,7 +210,10 @@ struct ContentView: View {
         // down the column left that band empty and said the name twice.
         // The section, and what the section is for.
         .navigationTitle(sectionTitle)
-        .navigationSubtitle(sectionSubtitle)
+        // Not `.navigationSubtitle`: it's system-drawn on a single line and
+        // can only truncate, so the longest description ran off the edge of
+        // the column. `ListColumn` draws it instead, where it wraps.
+        .environment(\.columnSubtitle, sectionSubtitle)
         .sheet(isPresented: $showingWhatsNew) {
             WhatsNewView {
                 WhatsNewPresenter.markSeen()

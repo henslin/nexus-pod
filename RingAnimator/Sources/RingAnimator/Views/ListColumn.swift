@@ -1,5 +1,22 @@
 import SwiftUI
 
+/// What this column holds, in a sentence.
+///
+/// Passed through the environment rather than as a parameter on each list
+/// view: `ContentView` computes it (that's where every store is) and only
+/// `ListColumn` draws it, so threading it through three view types in
+/// between would be three signatures that exist to forward one string.
+private struct ColumnSubtitleKey: EnvironmentKey {
+    static let defaultValue: String = ""
+}
+
+extension EnvironmentValues {
+    var columnSubtitle: String {
+        get { self[ColumnSubtitleKey.self] }
+        set { self[ColumnSubtitleKey.self] = newValue }
+    }
+}
+
 /// The shared anatomy of the three source-list columns: an optional search
 /// field at the top, the list, and the column's own actions along the
 /// bottom.
@@ -16,6 +33,7 @@ import SwiftUI
 /// a source list, and it makes the association structural rather than
 /// something you have to learn.
 struct ListColumn<Content: View, Actions: View>: View {
+    @Environment(\.columnSubtitle) private var subtitle
     /// Omit for a column with nothing to search.
     var search: Binding<String>?
     var searchPrompt: String = "Search"
@@ -23,12 +41,23 @@ struct ListColumn<Content: View, Actions: View>: View {
     @ViewBuilder var actions: () -> Actions
 
     var body: some View {
-        // No hand-drawn heading. macOS reserves a band above this column
-        // and renders `navigationTitle`/`navigationSubtitle` into it — see
-        // `ContentView.sectionTitle`. Drawing our own left that band empty
-        // and repeated the name below it, smaller, which is what made the
-        // header look like it had been pushed down the column.
         VStack(alignment: .leading, spacing: 0) {
+            // The *name* is in the band macOS reserves above this column
+            // (`ContentView.sectionTitle` → `navigationTitle`). The
+            // description is here instead, because `navigationSubtitle` is
+            // system-drawn on one line and can only truncate — "Discovery
+            // design for the agentic tab · 2 saved" ran off the edge of the
+            // column. Drawn here it wraps.
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 2)
+                    .padding(.bottom, 8)
+            }
             // Actions at the *top*, above the search field. They were along
             // the bottom, which is the Finder/Xcode convention for a source
             // list — but those bars sit at the bottom of a window, and this

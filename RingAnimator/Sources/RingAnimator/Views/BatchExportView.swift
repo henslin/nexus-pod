@@ -29,6 +29,28 @@ struct BatchExportView: View {
     @State private var failures: [String] = []
     @State private var finishedURL: URL?
     @State private var isCancelled = false
+    @State private var items: [ExportItem] = []
+
+    /// Past this many, one bar and a name stops being useful — you can't
+    /// tell what's left, what already failed, or whether the one taking a
+    /// while is the one you cared about. Below it, a queue of sixty-nine
+    /// rows for a job of three would be the opposite problem.
+    private static let queueThreshold = 20
+
+    private var showsQueue: Bool { presets.count > Self.queueThreshold }
+
+    struct ExportItem: Identifiable {
+        let id: UUID
+        let name: String
+        var state: State = .waiting
+
+        enum State: Equatable {
+            case waiting
+            case rendering(Double)
+            case done
+            case failed
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -70,7 +92,7 @@ struct BatchExportView: View {
             }
         }
         .padding(20)
-        .frame(width: 420)
+        .frame(width: showsQueue ? 460 : 420)
     }
 
     private var optionsSection: some View {
@@ -87,17 +109,81 @@ struct BatchExportView: View {
         }
     }
 
+    @ViewBuilder
     private var progressSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Whole-run progress: finished items, plus how far into the
             // current one. A bar that only moved once per animation would
             // sit still for a long time on the slow ones.
             ProgressView(value: overallProgress)
-            Text("\(completed + 1) of \(presets.count) · \(currentName)")
+            Text("\(min(completed + 1, presets.count)) of \(presets.count) · \(currentName)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+
+            if showsQueue {
+                Divider()
+                queue
+            }
         }
+    }
+
+    /// A row per animation, for runs long enough that the summary line
+    /// isn't enough to know what's happening.
+    private var queue: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    ForEach(items) { item in
+                        queueRow(item).id(item.id)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .frame(height: 240)
+            // Follow the one being rendered, so the queue doesn't sit at
+            // the top while work happens forty rows down.
+            .onChange(of: completed) { _, _ in
+                guard let active = items.first(where: {
+                    if case .rendering = $0.state { return true }
+                    return false
+                }) else { return }
+                withAnimation { proxy.scrollTo(active.id, anchor: .center) }
+            }
+        }
+    }
+
+    private func queueRow(_ item: ExportItem) -> some View {
+        HStack(spacing: 10) {
+            switch item.state {
+            case .waiting:
+                Image(systemName: "circle.dotted")
+                    .foregroundStyle(.tertiary)
+            case .rendering:
+                Image(systemName: "circle.dashed")
+                    .foregroundStyle(Color.accentColor)
+            case .done:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.green)
+            case .failed:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Color.orange)
+            }
+
+            Text(item.name)
+                .font(.caption)
+                .lineLimit(1)
+                .foregroundStyle(item.state == .waiting ? .secondary : .primary)
+
+            Spacer(minLength: 8)
+
+            if case .rendering(let value) = item.state {
+                ProgressView(value: value)
+                    .progressViewStyle(.linear)
+                    .frame(width: 90)
+            }
+        }
+        .frame(minHeight: 18)
     }
 
     private func doneSection(_ url: URL) -> some View {
@@ -143,12 +229,14 @@ struct BatchExportView: View {
         completed = 0
         failures = []
         isCancelled = false
+        items = presets.map { ExportItem(id: $0.id, name: $0.name) }
 
         Task { @MainActor in
-            for preset in presets {
+            for (index, preset) in presets.enumerated() {
                 if isCancelled { break }
                 currentName = preset.name
                 frameProgress = 0
+                items[index].state = .rendering(0)
 
                 // A fresh config per preset rather than one reused: these
                 // carry a recorded stream and a firmware field, and leaving
@@ -163,10 +251,12 @@ struct BatchExportView: View {
                     loopCount: loopCount
                 ) { value in
                     frameProgress = value * 0.9
+                    items[index].state = .rendering(value)
                 }
 
                 guard !frames.isEmpty else {
                     failures.append(preset.name)
+                    items[index].state = .failed
                     completed += 1
                     continue
                 }
@@ -186,8 +276,10 @@ struct BatchExportView: View {
                         try? FileManager.default.removeItem(at: movie)
                         try await AnimationExporter.writeMovie(frames: frames, to: movie)
                     }
+                    items[index].state = .done
                 } catch {
                     failures.append(preset.name)
+                    items[index].state = .failed
                 }
                 completed += 1
                 frameProgress = 0

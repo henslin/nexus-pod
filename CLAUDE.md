@@ -403,6 +403,11 @@ Four things it has to do, each for a reason:
   looks asymmetric and isn't.
 - **Collect failures, don't abort.** One animation that renders nothing
   shouldn't abandon the other sixty-eight; the summary names what failed.
+- **Past 20 animations it becomes a queue** — a row each, showing waiting /
+  rendering with its own bar / done / failed, auto-scrolling to whatever is
+  rendering. One bar and a name can't say what's left, what already failed,
+  or whether the slow one is the one you cared about. Below the threshold
+  the queue would be more chrome than job.
 
 ## Preview and Code, in every section
 
@@ -462,9 +467,15 @@ controls on the right. Cue Library and Use Cases each used to put a header
 block *above* the stage, which made those two canvases shorter than
 Nexus's for no reason a person could see.
 
-**The window names the section, and says what it's for.**
-`ContentView.sectionTitle`/`sectionSubtitle` feed `navigationTitle` and
-`navigationSubtitle` — "Cue Library / 148 cues from the
+**The window names the section; the column says what it's for.**
+`ContentView.sectionTitle` feeds `navigationTitle`, and the description
+goes through `\.columnSubtitle` in the environment for `ListColumn` to
+draw. It was `navigationSubtitle` first, which is system-drawn on a single
+line and can only truncate — "Discovery design for the agentic tab · 2
+saved" ran off the edge of the column. Drawn in the column it wraps. Via
+the environment because `ContentView` computes it and only `ListColumn`
+draws it; a parameter would be three view signatures forwarding one
+string — "Cue Library / 148 cues from the
 hardware spec · 3 tweaked", "Use Cases / 69 animations" — which is Mail's
 "Inbox — iCloud / All Mail · 628,761 messages, 270 unread" arrangement.
 
