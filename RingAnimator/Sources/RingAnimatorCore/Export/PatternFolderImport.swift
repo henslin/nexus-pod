@@ -113,6 +113,12 @@ public enum PatternFolderImport {
     @MainActor
     public static func run(_ urls: [URL], into store: RingPresetStore) -> Result {
         var result = Result()
+        // Collected and appended together at the end rather than added one
+        // at a time. `store.add` puts a new animation at the *top* — right
+        // for saving one you just made, backwards for a folder: the walk is
+        // alphabetical, so inserting each at the top landed the library in
+        // reverse, W at the top and A at the bottom.
+        var imported: [RingPreset] = []
 
         for file in urls {
             let fileName = file.lastPathComponent
@@ -140,14 +146,23 @@ public enum PatternFolderImport {
 
             let name = displayName(for: file)
             let preset: RingPreset
-            if let existing = store.presets.first(where: { $0.name == name }) {
+            // Checked against what's already staged as well as what's in
+            // the store: two scripts can share a display name, and the
+            // second one no longer finds the first in the store, because
+            // the first hasn't been appended yet.
+            if let existing = (store.presets + imported).first(where: { $0.name == name }) {
                 var updated = RingPreset(name: name, config: config)
                 updated.id = existing.id
-                store.update(updated)
+                if store.presets.contains(where: { $0.id == existing.id }) {
+                    store.update(updated)
+                } else if let index = imported.firstIndex(where: { $0.id == existing.id }) {
+                    imported[index] = updated
+                }
                 preset = updated
                 result.replaced += 1
             } else {
-                preset = store.add(RingPreset(name: name, config: config))
+                preset = RingPreset(name: name, config: config)
+                imported.append(preset)
                 result.added += 1
             }
             if config.firmwarePatternStream != nil { result.exact += 1 }
@@ -163,6 +178,12 @@ public enum PatternFolderImport {
             if outcome.timeline != nil { result.phased += 1 }
         }
 
+        // Alphabetical, and by the name on the row rather than by filename
+        // — `listen_blue_teal.py` and `Listen Blue Teal` sort the same way
+        // here, but nothing guarantees that in general.
+        store.append(contentsOf: imported.sorted {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        })
         return result
     }
 
@@ -197,8 +218,12 @@ public enum PatternFolderImport {
             summary += " \(result.phased) came in as multi-step timelines."
         }
         if !result.skipped.isEmpty {
-            summary += "\n\nSkipped \(result.skipped.count) file\(result.skipped.count == 1 ? "" : "s")"
-                + " that aren't patterns: \(result.skipped.joined(separator: ", "))"
+            // The verb has to agree with the count too — "1 file that
+            // aren't patterns" was on screen every time a folder held a
+            // single support module, which is most of them.
+            let one = result.skipped.count == 1
+            summary += "\n\nSkipped \(result.skipped.count) file\(one ? "" : "s")"
+                + " that \(one ? "isn't a pattern" : "aren't patterns"): \(result.skipped.joined(separator: ", "))"
         }
         if !result.unreadable.isEmpty {
             summary += "\n\nCouldn't read \(result.unreadable.joined(separator: ", "))"
