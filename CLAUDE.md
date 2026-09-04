@@ -1217,6 +1217,14 @@ target directly a minute later succeeded, which is the tell.
   `RingPresetStore` has no seed data, `SavedPresetsView`/`UseCaseListView`
   have correct empty states), it's purely local state. A recipient opens the
   app empty and runs Import Pattern Folder themselves.
+- **Drawing diodes changed the `.bar` shape's look.** `diodeLayer` draws
+  into one `Canvas` now instead of building twenty positioned views. Round,
+  square and segment are identical to within antialiasing (0.6-1.8% mean
+  pixel difference); `.bar` measured 6% and is visibly *cleaner* — at 1.9
+  aspect twenty bars overlap heavily, and as separate views their
+  antialiased edges accumulated into a bright patch and an inward wash that
+  a single fill doesn't produce. Better, but a change; worth an eye on if
+  anyone was fond of the old look.
 - **Two stale copies in `/Applications`** share the bundle id
   `ringanimator.RingAnimator`: `Nexus Pod.app` (2.0) and `RingAnimator.app`
   (1.0, the old name). LaunchServices can resolve `open` to the wrong one —
@@ -1232,8 +1240,12 @@ target directly a minute later succeeded, which is the tell.
 
 ## Git
 
-Local repo only — **no remote configured**. Safe to rewrite local history
-(amend, rebase) if needed. Latest commits, most recent first:
+**There is a remote now**: `git@github.com:henslin/nexus-pod.git`. This
+section used to say there wasn't, and that rewriting local history was
+safe — it isn't any more for anything that has been pushed. `origin/master`
+was last seen at `2b0eb8b`, a long way behind, so most local commits are
+still unpushed and still safe to amend; check `git log origin/master..HEAD`
+before rewriting anything. Latest commits, most recent first:
 ```
 9fd225d Fix RootView background/tab bar safe-area layout bug
 48d88ef Simplify app icon to isolated ring, no glass squircle background

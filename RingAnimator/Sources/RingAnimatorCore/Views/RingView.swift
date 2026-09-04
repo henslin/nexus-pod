@@ -1025,33 +1025,101 @@ public struct RingView: View {
         let size = diodeSize(scale: scale)
         let isSegmented = config.diodeShape.dividesTheRing
 
-        return GeometryReader { geo in
-            let radius = diodeRadius(in: geo.size, scale: scale)
-            ZStack {
-                if let backingTrack {
-                    Circle()
-                        .stroke(backingTrack.color.opacity(backingTrack.opacity), lineWidth: band * 0.4)
-                        .frame(width: radius * 2, height: radius * 2)
-                }
-                ForEach(0..<count, id: \.self) { i in
-                    let lit = state(i)
-                    if isSegmented {
-                        segmentDiode(index: i, count: count, radius: radius, band: band, state: lit)
-                    } else {
-                        let angle = (Double(i) / Double(count)) * 2 * Double.pi - .pi / 2
-                        diode(color: lit.color, size: size * lit.sizeScale, angle: angle)
-                            .opacity(lit.opacity)
-                            .position(
-                                x: geo.size.width / 2 + cos(angle) * radius,
-                                y: geo.size.height / 2 + sin(angle) * radius
-                            )
-                    }
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
+        // One `Canvas` rather than a `ForEach` of positioned shapes.
+        //
+        // Every diode used to be its own SwiftUI view, and building twenty
+        // of them cost 1.41 ms a frame at 200 points — against 0.72 for the
+        // gradient ring, which draws the same field as a single stroke. The
+        // cost is view-graph construction, so it barely moved with size: a
+        // 22pt thumbnail measured the same as the 200pt stage ring. Drawing
+        // straight into a `GraphicsContext` skips all of it, and a diode is
+        // a filled circle, square, capsule or arc — nothing that needed to
+        // be a view in the first place.
+        //
+        // `Canvas` is opaque to hit-testing and accessibility, which costs
+        // nothing here: these are non-interactive and already redrawn from
+        // `elapsed` every frame rather than animated by SwiftUI.
+        return Canvas { context, canvasSize in
+            let radius = diodeRadius(in: canvasSize, scale: scale)
+            let center = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+
             // Segments are already exactly the band — clipping them would
             // only risk shaving their edges through antialiasing.
-            .clipShape(isSegmented ? AnyShape(Rectangle()) : AnyShape(RingBand(radius: radius, width: band)))
+            if !isSegmented {
+                context.clip(to: RingBand(radius: radius, width: band).path(in: CGRect(origin: .zero, size: canvasSize)))
+            }
+
+            if let backingTrack {
+                let track = Path(ellipseIn: CGRect(
+                    x: center.x - radius, y: center.y - radius,
+                    width: radius * 2, height: radius * 2
+                ))
+                context.stroke(
+                    track,
+                    with: .color(backingTrack.color.opacity(backingTrack.opacity)),
+                    lineWidth: band * 0.4
+                )
+            }
+
+            for i in 0..<count {
+                let lit = state(i)
+                guard lit.opacity > 0.001 else { continue }
+                let shading = GraphicsContext.Shading.color(lit.color.opacity(lit.opacity))
+
+                if isSegmented {
+                    let slice = 1.0 / Double(count)
+                    let gap = min(max(config.diodeGap, 0), 0.9)
+                    let filled = slice * (1 - gap)
+                    let start = Double(i) * slice + (slice - filled) / 2
+                    // `.butt` caps and the -90° origin, matching what the
+                    // trimmed-and-rotated `Circle` did: a clean radial edge
+                    // each side, and index 0 at twelve o'clock.
+                    var wedge = Path()
+                    wedge.addArc(
+                        center: center,
+                        radius: radius,
+                        startAngle: .degrees(start * 360 - 90),
+                        endAngle: .degrees((start + filled) * 360 - 90),
+                        clockwise: false
+                    )
+                    context.stroke(wedge, with: shading, style: StrokeStyle(lineWidth: band, lineCap: .butt))
+                    continue
+                }
+
+                let angle = (Double(i) / Double(count)) * 2 * Double.pi - .pi / 2
+                let side = size * lit.sizeScale
+                let position = CGPoint(
+                    x: center.x + cos(angle) * radius,
+                    y: center.y + sin(angle) * radius
+                )
+
+                switch config.diodeShape {
+                case .round, .segment:
+                    // `.segment` is unreachable — handled above — and drawn
+                    // as a dot rather than skipped so a future caller that
+                    // bypasses the branch degrades visibly.
+                    context.fill(
+                        Path(ellipseIn: CGRect(
+                            x: position.x - side / 2, y: position.y - side / 2,
+                            width: side, height: side
+                        )),
+                        with: shading
+                    )
+                case .square, .bar:
+                    // Rotated to sit tangent to the ring (the `+ .pi / 2`
+                    // turns the radial angle into a tangential one), so they
+                    // read as components mounted on a circular board rather
+                    // than a scatter of rotated dots.
+                    let width = config.diodeShape == .bar ? side * DiodeShape.bar.aspect : side
+                    let rect = CGRect(x: -width / 2, y: -side / 2, width: width, height: side)
+                    let shape = config.diodeShape == .bar
+                        ? Path(roundedRect: rect, cornerRadius: side * 0.28)
+                        : Path(rect)
+                    var transform = CGAffineTransform(translationX: position.x, y: position.y)
+                    transform = transform.rotated(by: angle + .pi / 2)
+                    context.fill(shape.applying(transform), with: shading)
+                }
+            }
         }
     }
 
