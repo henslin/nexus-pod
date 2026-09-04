@@ -14,9 +14,6 @@ import RingAnimatorCore
 struct UseCaseListView: View {
     @ObservedObject var store: RingPresetStore
     @Binding var selectedUseCaseID: RingPreset.ID?
-    /// Passed in because this same list is also every user-made section —
-    /// see `UserSectionStore` — and each one names itself.
-    var title: String = "Use Cases"
 
     @State private var showingNewDialog = false
     @State private var newUseCaseName = ""
@@ -28,7 +25,7 @@ struct UseCaseListView: View {
     @State private var importSuccessMessage: String?
 
     var body: some View {
-        ListColumn(title: title, subtitle: subtitle) {
+        ListColumn {
             List(selection: $selectedUseCaseID) {
                 Section {
                     if store.presets.isEmpty {
@@ -128,17 +125,6 @@ struct UseCaseListView: View {
         }
     }
 
-    /// The built-in section says what it's for; a user-made one is named
-    /// by whoever made it, so a purpose line here would be putting words
-    /// in their mouth.
-    var purpose: String = "Hardware animations, in app"
-
-    private var subtitle: String {
-        let count = store.presets.count
-        guard count > 0 else { return purpose.isEmpty ? "Nothing here yet" : purpose }
-        let tally = count == 1 ? "1 animation" : "\(count) animations"
-        return purpose.isEmpty ? tally : "\(purpose) · \(count)"
-    }
 
     /// Reads a Blender script into whichever use case is selected.
     ///

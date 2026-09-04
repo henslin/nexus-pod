@@ -30,12 +30,7 @@ struct CueListView: View {
     @State private var confirmingResetAll = false
 
     var body: some View {
-        ListColumn(
-            title: "Cue Library",
-            subtitle: subtitle,
-            search: $searchText,
-            searchPrompt: "Search cues"
-        ) {
+        ListColumn(search: $searchText, searchPrompt: "Search cues") {
             List(selection: $selectedCueID) {
                 ForEach(LEDCueLibrary.categories, id: \.self) { category in
                     let groups = LEDCueLibrary.groupedBySubcategory(in: category)
@@ -218,12 +213,6 @@ struct CueListView: View {
         }
     }
 
-    private var subtitle: String {
-        let total = LEDCueLibrary.all.count
-        let tweaked = store.overrides.count
-        let base = "The hardware spec, cue by cue · \(total)"
-        return tweaked == 0 ? base : base + " · \(tweaked) tweaked"
-    }
 
     private func matches(_ cue: LEDCue) -> Bool {
         searchText.isEmpty

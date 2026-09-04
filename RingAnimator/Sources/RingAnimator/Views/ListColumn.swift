@@ -16,13 +16,6 @@ import SwiftUI
 /// a source list, and it makes the association structural rather than
 /// something you have to learn.
 struct ListColumn<Content: View, Actions: View>: View {
-    /// Names the column, with a line under it saying what's in it — the
-    /// arrangement Mail uses for "Inbox — iCloud / All Mail · 628,761
-    /// messages". The window title showed the app's name here, which every
-    /// section already shares, and before that the selected row's name,
-    /// which the highlighted row already said.
-    var title: String
-    var subtitle: String?
     /// Omit for a column with nothing to search.
     var search: Binding<String>?
     var searchPrompt: String = "Search"
@@ -30,21 +23,12 @@ struct ListColumn<Content: View, Actions: View>: View {
     @ViewBuilder var actions: () -> Actions
 
     var body: some View {
+        // No hand-drawn heading. macOS reserves a band above this column
+        // and renders `navigationTitle`/`navigationSubtitle` into it — see
+        // `ContentView.sectionTitle`. Drawing our own left that band empty
+        // and repeated the name below it, smaller, which is what made the
+        // header look like it had been pushed down the column.
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.title3.weight(.bold))
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-            .padding(.bottom, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
             // Actions at the *top*, above the search field. They were along
             // the bottom, which is the Finder/Xcode convention for a source
             // list — but those bars sit at the bottom of a window, and this
@@ -116,14 +100,10 @@ struct ListColumn<Content: View, Actions: View>: View {
 
 extension ListColumn where Actions == EmptyView {
     init(
-        title: String,
-        subtitle: String? = nil,
         search: Binding<String>? = nil,
         searchPrompt: String = "Search",
         @ViewBuilder content: @escaping () -> Content
     ) {
-        self.title = title
-        self.subtitle = subtitle
         self.search = search
         self.searchPrompt = searchPrompt
         self.content = content

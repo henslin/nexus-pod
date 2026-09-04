@@ -170,9 +170,7 @@ struct ContentView: View {
                 // against the new store rather than keeping the old one.
                 UseCaseListView(
                     store: store(forSection: id),
-                    selectedUseCaseID: binding(forSection: id),
-                    title: userSections.sections.first(where: { $0.id == id })?.name ?? "Section",
-                    purpose: ""
+                    selectedUseCaseID: binding(forSection: id)
                 )
                 .id(id)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
@@ -205,13 +203,14 @@ struct ContentView: View {
                 EmptyView()
             }
         }
-        // Removed outright, not set to "". Leaving `.navigationTitle` off
-        // doesn't clear the title — the window falls back to the app's own
-        // name, and on this macOS that renders at the top of the *content
-        // column*, so every section was headed "Nexus Pod" directly above
-        // its real name. `ListColumn` draws the heading that means
-        // something; this takes away the one that doesn't.
-        .toolbar(removing: .title)
+        // macOS reserves a band above the content column and renders these
+        // into it, at its own size. Leaving them off doesn't leave it empty
+        // — the window falls back to the app's own name, which every
+        // section shares and so says nothing; a hand-drawn heading further
+        // down the column left that band empty and said the name twice.
+        // The section, and what the section is for.
+        .navigationTitle(sectionTitle)
+        .navigationSubtitle(sectionSubtitle)
         .sheet(isPresented: $showingWhatsNew) {
             WhatsNewView {
                 WhatsNewPresenter.markSeen()
@@ -247,6 +246,51 @@ struct ContentView: View {
         }
     }
 
+
+    private var sectionTitle: String {
+        switch section {
+        case .ringDesigner: return "Nexus"
+        case .cueLibrary: return "Cue Library"
+        case .useCases: return "Use Cases"
+        case .user(let id):
+            return userSections.sections.first(where: { $0.id == id })?.name ?? "Section"
+        case .none: return ""
+        }
+    }
+
+    /// What the section is *for*, then how much is in it — Mail's
+    /// "All Mail · 628,761 messages" shape. A count alone doesn't say why
+    /// you'd come here; a purpose alone goes stale the moment you want to
+    /// know whether you've saved anything.
+    ///
+    /// Computed here rather than in each column because the title band
+    /// belongs to the window, not to the list — and this is where every
+    /// store already is.
+    private var sectionSubtitle: String {
+        func tally(_ count: Int, _ noun: String) -> String {
+            count == 1 ? "1 \(noun)" : "\(count) \(noun)s"
+        }
+        switch section {
+        case .ringDesigner:
+            let count = presetStore.presets.count
+            let purpose = "Discovery design for the agentic tab"
+            return count == 0 ? purpose : "\(purpose) · \(count) saved"
+        case .cueLibrary:
+            let tweaked = cueStore.overrides.count
+            let base = "The hardware spec, cue by cue · \(LEDCueLibrary.all.count)"
+            return tweaked == 0 ? base : "\(base) · \(tweaked) tweaked"
+        case .useCases:
+            let count = useCaseStore.presets.count
+            let purpose = "Hardware animations, in app"
+            return count == 0 ? purpose : "\(purpose) · \(count)"
+        case .user(let id):
+            // No purpose line: whoever made it named it, so writing one
+            // would be putting words in their mouth.
+            return tally(store(forSection: id).presets.count, "animation")
+        case .none:
+            return ""
+        }
+    }
 
     /// One `RingPresetStore` per user section, made on demand and kept for
     /// the window's lifetime. Rebuilding it on every redraw would drop the

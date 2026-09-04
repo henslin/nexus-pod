@@ -431,19 +431,29 @@ controls on the right. Cue Library and Use Cases each used to put a header
 block *above* the stage, which made those two canvases shorter than
 Nexus's for no reason a person could see.
 
-**The column names itself, and says what's in it.** `ListColumn` draws its
-own title and a descriptive subtitle — "Cue Library / 148 cues from the
+**The window names the section, and says what it's for.**
+`ContentView.sectionTitle`/`sectionSubtitle` feed `navigationTitle` and
+`navigationSubtitle` — "Cue Library / 148 cues from the
 hardware spec · 3 tweaked", "Use Cases / 69 animations" — which is Mail's
 "Inbox — iCloud / All Mail · 628,761 messages, 270 unread" arrangement.
 
-This took three wrong turns, all worth remembering. On this macOS a
-`.navigationTitle` renders at the top of the *content column*, not only in
-the title bar, so it was never the neutral place the API makes it look.
-Pointed at the selection it restated the row highlighted an inch below.
-**Leaving it off doesn't clear it** — the window falls back to the app's
-own name, so every section was headed "Nexus Pod" above its real one. The
-fix is `.toolbar(removing: .title)`, and the heading that means something
-is drawn by `ListColumn`.
+This took four wrong turns and the ending is where it started, so the
+whole loop is worth keeping.
+
+On this macOS a `.navigationTitle` renders in a band above the *content
+column*, not only in the title bar. Pointed at the **selection** it
+restated the row highlighted an inch below it. **Leaving it off doesn't
+clear it** — the window falls back to the app's own name, so every section
+was headed "Nexus Pod". `.toolbar(removing: .title)` does clear it, but
+then that band sits empty and a hand-drawn heading below it looks pushed
+down the column, at whatever size we picked rather than the system's.
+
+What was wrong the first time was the *content*, never the mechanism.
+Pointed at the **section**, with `navigationSubtitle` saying what the
+section is for, that band is exactly the right place — which is what Mail
+does. The subtitles are computed in `ContentView` rather than in each
+column, because the band belongs to the window and that's where every
+store already is.
 
 **A control that stands alone gets its own circle; controls that genuinely
 belong together share a capsule** — `ColumnActionGroup`, ruled apart inside

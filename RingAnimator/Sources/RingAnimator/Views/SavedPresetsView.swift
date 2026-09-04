@@ -51,7 +51,7 @@ struct SavedPresetsView: View {
     @State private var importSuccessMessage: String?
 
     var body: some View {
-        ListColumn(title: "Nexus", subtitle: subtitle) {
+        ListColumn {
             List(selection: $selectedPresetID) {
                 Section("Saved Animations") {
                     if store.presets.isEmpty {
@@ -204,12 +204,6 @@ struct SavedPresetsView: View {
     /// "All Mail · 628,761 messages" shape. A count on its own doesn't say
     /// why you'd come here, and the purpose on its own goes stale the
     /// moment you want to know whether you've saved anything.
-    private var subtitle: String {
-        let count = store.presets.count
-        let purpose = "Discovery design for the agentic tab"
-        guard count > 0 else { return purpose }
-        return count == 1 ? "\(purpose) · 1 saved" : "\(purpose) · \(count) saved"
-    }
 
     private func exportSingle(_ preset: RingPreset) {
         let panel = NSSavePanel()
