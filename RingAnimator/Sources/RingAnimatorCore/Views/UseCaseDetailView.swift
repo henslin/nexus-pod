@@ -55,6 +55,21 @@ public struct UseCaseDetailView: View {
     /// same arrangement as the Mac app's Preview tab.
     @State private var pausedPlayhead: Double = 0
 
+    /// Builds the canvas this pane previews on, given the config to render
+    /// and the current playback frame.
+    ///
+    /// Injected rather than built here because the good canvas — the
+    /// zoomable phone mockup with the floating Large Preview, `RingStage` —
+    /// is AppKit all the way down (`ZoomableCanvas` wraps a real
+    /// `NSScrollView`), and this type lives in the shared core so it can
+    /// reach `ControlsSections.swift`'s internal section structs. The macOS
+    /// app passes the stage in; anything that can't falls back to
+    /// `centeredPreview` below, which is what this pane had before.
+    /// The timeline comes along so the stage can offer the sequence as an
+    /// export source — the same thing Nexus hands `PhoneMockupView`.
+    public typealias StageBuilder = @MainActor (RingConfig, TimelinePlayback?, RingTimeline) -> AnyView
+    private let stage: StageBuilder?
+
     #if os(macOS)
     /// Non-nil while a Blender import report is up — see
     /// `BlenderImportReportView`. Guarded because the type it holds is
@@ -68,9 +83,14 @@ public struct UseCaseDetailView: View {
     /// initial-value closure once per view *identity*, so without that,
     /// switching which use case is selected would keep editing the first
     /// one's `editingConfig` instead of loading the newly selected preset.
-    public init(preset: RingPreset, store: RingPresetStore) {
+    public init(
+        preset: RingPreset,
+        store: RingPresetStore,
+        stage: StageBuilder? = nil
+    ) {
         self.store = store
         self.presetID = preset.id
+        self.stage = stage
         let config = RingConfig()
         preset.apply(to: config)
         _editingConfig = StateObject(wrappedValue: config)
@@ -154,13 +174,22 @@ public struct UseCaseDetailView: View {
             let playback = player.playback(at: context.date)
 
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        header
-                        centeredPreview(playback: playback)
+                if let stage {
+                    header
+                        .padding(.horizontal, 24)
+                        .padding(.top, 20)
+                        .padding(.bottom, 14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    stage(displayConfig, playback, player.timeline)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            header
+                            centeredPreview(playback: playback)
+                        }
+                        .padding(24)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(24)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Divider()
                 TimelineStripView(

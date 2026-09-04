@@ -72,77 +72,7 @@ public struct LEDCuePreviewView: View {
     /// every other style already — stay meaningful for this one too,
     /// instead of silently doing nothing.
     private func syncAnimationConfig() {
-        animationConfig.animationType = parameters.animationType
-        animationConfig.speed = parameters.speed
-        animationConfig.lineWidth = parameters.lineWidth
-        animationConfig.trailFraction = parameters.trailFraction
-        animationConfig.chasingFillStyle = parameters.chasingFillStyle
-        animationConfig.diodeCount = parameters.diodeCount
-        // The parameters added alongside Diode Mode, Multi Chase and Bloom.
-        // They were carried on `LEDCueParameters` for storage but never
-        // copied here, so a cue set to any of those rendered with the
-        // defaults instead — silently, since nothing errors when a field
-        // simply isn't read. Optional on the parameters (they postdate the
-        // saved cue JSON), so each falls back to `RingConfig`'s own default.
-        animationConfig.diodeShape = parameters.diodeShape ?? .round
-        animationConfig.diodeColorMode = parameters.diodeColorMode ?? .perDiode
-        animationConfig.rippleDropCount = parameters.rippleDropCount ?? 3
-        animationConfig.rippleDecay = parameters.rippleDecay ?? 0.65
-        animationConfig.rippleLife = parameters.rippleLife ?? 5.5
-        animationConfig.rippleSeed = parameters.rippleSeed ?? 42
-        animationConfig.loopSeconds = parameters.loopSeconds ?? 12
-        animationConfig.diodeFloor = parameters.diodeFloor ?? 0
-        animationConfig.firmwareTickMs = parameters.firmwareTickMs ?? 0
-        animationConfig.diodeModeEnabled = parameters.diodeModeEnabled ?? false
-        animationConfig.diodeScale = parameters.diodeScale ?? 1.0
-        animationConfig.diodeGap = parameters.diodeGap ?? 0.12
-        animationConfig.blinkPattern = parameters.blinkPattern ?? .steady
-        animationConfig.blinkRate = parameters.blinkRate ?? 2.0
-        animationConfig.bloomCount = parameters.bloomCount ?? 6
-        animationConfig.bloomBase = parameters.bloomBase ?? 0.6
-        animationConfig.bloomSoftness = parameters.bloomSoftness ?? 0.15
-        animationConfig.primaryColor = Color(hex: parameters.primaryColorHex)
-        animationConfig.secondaryColor = Color(hex: parameters.secondaryColorHex)
-        animationConfig.glowEnabled = parameters.glowEnabled
-        animationConfig.glowRadius = parameters.glowRadius
-        animationConfig.vibrancyEnabled = parameters.vibrancyEnabled
-        animationConfig.vibrancyAmount = parameters.vibrancyAmount
-        animationConfig.easingStyle = parameters.easingStyle
-        animationConfig.springBounce = parameters.springBounce
-        animationConfig.scalePulseEnabled = parameters.scalePulseEnabled
-        animationConfig.scalePulseAmount = parameters.scalePulseAmount
-        animationConfig.scalePulseSpeed = parameters.scalePulseSpeed
-        animationConfig.hueShiftEnabled = parameters.hueShiftEnabled
-        animationConfig.hueShiftSpeed = parameters.hueShiftSpeed
-        animationConfig.blurRadius = parameters.blurRadius
-        animationConfig.blendMode = parameters.blendMode
-        animationConfig.chromaticAberrationEnabled = parameters.chromaticAberrationEnabled
-        animationConfig.chromaticAberrationAmount = parameters.chromaticAberrationAmount
-        animationConfig.particlesEnabled = parameters.particlesEnabled
-        animationConfig.particleEmitterShape = parameters.particleEmitterShape
-        animationConfig.particleEmitterMode = parameters.particleEmitterMode
-        animationConfig.particleEmitterSizeMultiplier = parameters.particleEmitterSizeMultiplier
-        animationConfig.particleRenderMode = parameters.particleRenderMode
-        animationConfig.particleBirthRate = parameters.particleBirthRate
-        animationConfig.particleLifetime = parameters.particleLifetime
-        animationConfig.particleLifetimeRange = parameters.particleLifetimeRange
-        animationConfig.particleVelocity = parameters.particleVelocity
-        animationConfig.particleVelocityRange = parameters.particleVelocityRange
-        animationConfig.particleEmissionLongitude = parameters.particleEmissionLongitude
-        animationConfig.particleEmissionSpread = parameters.particleEmissionSpread
-        animationConfig.particleXAcceleration = parameters.particleXAcceleration
-        animationConfig.particleYAcceleration = parameters.particleYAcceleration
-        animationConfig.particleSpin = parameters.particleSpin
-        animationConfig.particleSpinRange = parameters.particleSpinRange
-        animationConfig.particleScale = parameters.particleScale
-        animationConfig.particleScaleRange = parameters.particleScaleRange
-        animationConfig.particlePulseEnabled = parameters.particlePulseEnabled
-        animationConfig.particlePulsePeriod = parameters.particlePulsePeriod
-        animationConfig.particleBlurRadius = parameters.particleBlurRadius
-        animationConfig.sequencePlaybackEnabled = true
-        animationConfig.holdSeconds = parameters.holdSeconds
-        animationConfig.fadeOutSeconds = parameters.fadeOutSeconds
-        animationConfig.loops = parameters.loops
+        parameters.apply(to: animationConfig)
     }
 
     /// Every `LEDPatternStyle` case *except* `.continuousAnimation` — the

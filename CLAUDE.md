@@ -829,6 +829,54 @@ count to become the app's laps-per-second and ring fractions. Without a
 recognized LED count those get dropped rather than misread — a raw 5.5
 into `speed` would be wildly wrong.
 
+## One stage, three sections
+
+`RingStage` (macOS target) is the canvas every section previews on: the
+pannable, zoomable phone mockup filling the pane, with Large Preview
+floating over it as a draggable card, plus the light/dark toggle. It was
+Nexus's and only Nexus's — the Cue Library and Use Cases each had a ring in
+a scrolling column, so the app had one good preview and two approximations,
+and which you got depended on which list you'd clicked.
+
+The timeline strip deliberately stays *out* of the stage. The Cue Library
+has no player, and an empty scrubber would invent a concept that section
+doesn't have.
+
+Two seams worth knowing:
+
+- **Use Cases injects the stage.** `UseCaseDetailView` lives in the core
+  (it needs `ControlsSections.swift`'s internal section structs) and so
+  compiles for iOS, while the stage is AppKit all the way down —
+  `ZoomableCanvas` wraps a real `NSScrollView`. So it takes a
+  `StageBuilder` closure; the macOS app passes `RingStage` in, and anything
+  that can't falls back to the centered ring it had before.
+- **The Cue Library converts to a `RingConfig`.** The stage speaks
+  `RingConfig`, so `LEDCueParameters.apply(to:)` — which used to be private
+  to `LEDCuePreviewView`, for handing continuous cues to `RingView` — is
+  public and does the whole job. Not a second conversion written to look
+  like the first.
+
+`apply(to:)` copies `lineWidth` **only for `.continuousAnimation`**. That's
+the one style whose stroke is really the cue's own; every other style takes
+`lineWidth` as a separate `LEDCuePreviewView` init parameter because it's
+meant to vary with the chrome, not the cue. Copying it regardless made the
+pattern styles about three times too thick: `RingView` reads
+`config.lineWidth` as *pod-relative* and multiplies by `size /
+referenceDiameter`, so a cue's 12 — authored against a ~160pt preview —
+became a 39pt stroke on a 190pt ring. Measured, not guessed: a render
+harness put `solid` at 34% mean pixel difference from the old preview
+before the fix and 21% after, with the remainder being the app's house ring
+proportion, which is the point of sharing a stage.
+
+**Known, and the reason to do part B.** Sections swap through a `switch` in
+`ContentView`, and a `switch` gives each branch its own identity — so
+SwiftUI tears the stage down and rebuilds it on every section change, and
+pan/zoom resets. `ZoomableCanvas`'s state lives in AppKit with nothing for
+SwiftUI to restore; `designerDetail` already keeps Preview and Export both
+mounted behind an opacity toggle for exactly this reason. Part B hoists a
+single stage into `ContentView` and feeds it whichever config is selected,
+at which point the `StageBuilder` seam above disappears.
+
 ## Taking delivery of a whole library
 
 `PatternFolderImport` (in the core, not in a view) is the folder importer
@@ -965,6 +1013,16 @@ build, and clear Application Support before an import test. A harness
 compiled against `out/Products/{Debug,Release}` answers "what does the code
 do?" without any of this ambiguity, and disagreeing with the app is a signal
 about the *app's* state, not the code's.
+
+### Don't run two preflights at once
+
+Every step writes into `$SCRATCH`. The swift builds take SwiftPM's own lock
+and merely wait; `xcodebuild` has no such protection, and two of them into
+one `SYMROOT` fail whichever loses — which prints `✗ RingAnimatoriOS` and
+reads as a broken iOS target. It happened once here, and building the same
+target directly a minute later succeeded, which is the tell.
+
+`preflight.sh` now takes a `mkdir` lock and refuses to start a second run.
 
 ## Open items (not yet done)
 

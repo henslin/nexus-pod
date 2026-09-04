@@ -22,6 +22,25 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRATCH="${NEXUS_BUILD_DIR:-$HOME/Developer/NexusPod-Build}"
 PATTERNS_DIR="${PATTERNS_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/Claude/patterns}"
 
+# One at a time. Every step writes into $SCRATCH, and two concurrent runs
+# share it: the swift builds take SwiftPM's own lock and merely wait, but
+# the xcodebuild step has no such protection, and two of them into one
+# SYMROOT fail whichever loses. That reads as "the iOS target is broken"
+# when the target is fine — exactly the kind of false signal this script
+# exists to remove. (It has already happened once.)
+#
+# `mkdir` rather than flock(1), which macOS doesn't ship: creating a
+# directory is atomic on every filesystem that matters, which is all this
+# needs.
+LOCK_DIR="$SCRATCH/preflight.lock"
+mkdir -p "$SCRATCH"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    printf '\033[31mAnother preflight is already running.\033[0m\n'
+    printf 'Wait for it, or remove %s if nothing is.\n' "$LOCK_DIR"
+    exit 1
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+
 failed=0
 step() {
     printf '\n\033[1m→ %s\033[0m\n' "$1"

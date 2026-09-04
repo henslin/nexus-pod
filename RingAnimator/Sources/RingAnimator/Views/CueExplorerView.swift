@@ -242,6 +242,8 @@ struct CueDetailView: View {
     @ObservedObject var store: LEDCueStore
     @State private var params: LEDCueParameters
     @State private var expanded: [String: Bool]
+    /// The cue, in the form every preview surface takes — see `previewPane`.
+    @StateObject private var stageConfig = RingConfig()
 
     init(cue: LEDCue, store: LEDCueStore) {
         self.cue = cue
@@ -288,19 +290,40 @@ struct CueDetailView: View {
         }
     }
 
-    /// Left/center pane: cue name, the live preview (now the pane's own
-    /// centerpiece rather than a small thumbnail squeezed above the
-    /// controls), and the spec-sheet reference text.
+    /// Left/center pane: cue name, the shared `RingStage`, and the
+    /// spec-sheet reference text.
+    ///
+    /// The preview used to be a 200pt ring in a scrolling column — the
+    /// Cue Library's own smaller version of what Nexus had. It's the same
+    /// canvas now: phone mockup, pinch to zoom, floating Large Preview,
+    /// light/dark toggle. The spec sheet moves to a fixed strip along the
+    /// bottom, where Nexus puts its timeline, rather than scrolling with a
+    /// preview that no longer scrolls.
     private var previewPane: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                header
-                centeredPreview
+        VStack(spacing: 0) {
+            header
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            RingStage(config: stageConfig)
+            Divider()
+            ScrollView {
                 specReference
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 150)
         }
+        // The stage speaks `RingConfig`, so the cue is converted into one —
+        // by the same `apply(to:)` `LEDCuePreviewView` has always used, not
+        // a second conversion written to look like it. Held as a
+        // `@StateObject` and re-synced rather than rebuilt per change:
+        // `RingConfig.init()` does a synchronous Keychain read and spins up
+        // a `VoiceConversationController`, both wasted work if repeated
+        // every time a slider moves.
+        .onAppear { params.apply(to: stageConfig) }
+        .onChange(of: params) { _, newValue in newValue.apply(to: stageConfig) }
     }
 
     /// Right pane: every `GlassSectionCard` from `controls`, in its own
@@ -335,26 +358,6 @@ struct CueDetailView: View {
                 }
             }
         }
-    }
-
-    /// Bigger and horizontally centered now that it has a whole pane to
-    /// itself instead of sharing a row with the style/color caption —
-    /// same "the animation gets to be the centerpiece" reasoning as
-    /// Nexus's phone mockup/large preview.
-    private var centeredPreview: some View {
-        VStack(spacing: 12) {
-            LargePreviewCard(diameter: 200) {
-                LEDCuePreviewView(parameters: params, diameter: 200, lineWidth: 14)
-            }
-            VStack(spacing: 4) {
-                Text(params.style.displayName).font(.headline)
-                Text("Primary \(params.primaryColorHex) · Secondary \(params.secondaryColorHex)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
     }
 
     private var specReference: some View {
