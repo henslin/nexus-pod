@@ -28,6 +28,9 @@ struct CueListView: View {
     /// different categories together.
     @State private var expandedSubcategories: Set<String> = []
     @State private var confirmingResetAll = false
+    /// Non-empty only while the GIF/movie export sheet is up — the sheet is
+    /// presented from this being set, the same way Use Cases does it.
+    @State private var renderTargets: [RingPreset] = []
 
     var body: some View {
         ListColumn(search: $searchText, searchPrompt: "Search cues") {
@@ -123,12 +126,27 @@ struct CueListView: View {
 
         } actions: {
             ColumnActionGroup {
-            Button {
-                exportLibrary()
+            // Same scope-labelled shape as Use Cases' own Share menu:
+            // section headers say whether an item means this one cue or
+            // the whole library, so "Export All" already has a count
+            // attached and the two scopes can't be confused for each other.
+            Menu {
+                Section(selectedCue.map { "“\($0.name)”" } ?? "Selected Cue") {
+                    Button("Export This as GIF or Movie…") {
+                        renderTargets = selectedCue.map { [preset(for: $0)] } ?? []
+                    }
+                    .disabled(selectedCue == nil)
+                }
+                Section("All \(LEDCueLibrary.all.count) Cues") {
+                    Button("Export Library…") { exportLibrary() }
+                    Button("Export All as GIF or Movie…") {
+                        renderTargets = LEDCueLibrary.all.map { preset(for: $0) }
+                    }
+                }
             } label: {
-                Label("Export Library…", systemImage: "square.and.arrow.up")
+                Label("Share", systemImage: "square.and.arrow.up.on.square")
             }
-            .help("Export the full cue library, with your tweaks applied, as JSON")
+            .help("Export the cue library as a file, or render cues as GIFs or movies")
             }
 
             // Its own control, not ruled off inside Export's. Sharing a
@@ -143,6 +161,16 @@ struct CueListView: View {
             .help("Reset every cue back to its shipped default")
             .disabled(store.overrides.isEmpty)
             }
+        }
+        .sheet(isPresented: Binding(
+            get: { !renderTargets.isEmpty },
+            set: { if !$0 { renderTargets = [] } }
+        )) {
+            BatchExportView(
+                presets: renderTargets,
+                sectionName: renderTargets.count == 1 ? renderTargets[0].name : "Cue Library",
+                colorScheme: .dark
+            ) { renderTargets = [] }
         }
         .confirmationDialog(
             "Reset every cue to its shipped default?",
@@ -219,6 +247,25 @@ struct CueListView: View {
             || cue.name.localizedCaseInsensitiveContains(searchText)
             || cue.specText.localizedCaseInsensitiveContains(searchText)
             || (cue.subcategory ?? "").localizedCaseInsensitiveContains(searchText)
+    }
+
+    private var selectedCue: LEDCue? {
+        selectedCueID.flatMap { LEDCueLibrary.cue(id: $0) }
+    }
+
+    /// A cue in the form the exporter speaks. Conversion goes through the
+    /// same `LEDCueParameters.apply(to:)` every preview surface uses, and
+    /// reads the *store's* parameters, so an exported clip has your tweaks
+    /// in it rather than the shipped defaults.
+    ///
+    /// A fresh `RingConfig` per cue rather than one reused, for the reason
+    /// `BatchExportView` gives for doing the same: `apply(to:)` doesn't
+    /// necessarily set every field, and a reused config would carry the
+    /// previous cue's settings into whatever this one leaves alone.
+    private func preset(for cue: LEDCue) -> RingPreset {
+        let config = RingConfig()
+        store.parameters(for: cue).apply(to: config)
+        return RingPreset(name: cue.name, config: config)
     }
 
     private func exportLibrary() {
