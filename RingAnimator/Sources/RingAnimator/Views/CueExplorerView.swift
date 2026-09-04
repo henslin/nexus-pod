@@ -138,7 +138,7 @@ struct CueListView: View {
                     .disabled(selectedCue == nil)
                 }
                 Section("All \(LEDCueLibrary.all.count) Cues") {
-                    Button("Export Library…") { exportLibrary() }
+                    Button("Share Library…") { exportLibrary() }
                     Button("Export All as GIF or Movie…") {
                         renderTargets = LEDCueLibrary.all.map { preset(for: $0) }
                     }
@@ -146,7 +146,7 @@ struct CueListView: View {
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up.on.square")
             }
-            .help("Export the cue library as a file, or render cues as GIFs or movies")
+            .help("Share the cue library with your team, or export cues as GIFs or movies")
             }
 
             // Its own control, not ruled off inside Export's. Sharing a

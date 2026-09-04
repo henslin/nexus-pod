@@ -104,7 +104,7 @@ struct UseCaseListView: View {
                     // already has a number attached and doesn't need "Them"
                     // to carry the contrast.
                     Section(selectedPreset.map { "“\($0.name)”" } ?? "Selected Use Case") {
-                        Button("Export This Use Case…") {
+                        Button("Share This Use Case…") {
                             if let selectedPreset { exportSingle(selectedPreset) }
                         }
                         .disabled(selectedPreset == nil)
@@ -116,7 +116,7 @@ struct UseCaseListView: View {
                     Section(store.presets.count == 1
                             ? "All 1 Use Case"
                             : "All \(store.presets.count) Use Cases") {
-                        Button("Export All…") { exportLibrary() }
+                        Button("Share All…") { exportLibrary() }
                             .disabled(store.presets.isEmpty)
                         Button("Export All as GIF or Movie…") {
                             renderTargets = store.presets
@@ -127,7 +127,7 @@ struct UseCaseListView: View {
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up.on.square")
                 }
-                .help("Export these use cases as a file, or add ones sent to you")
+                .help("Share these use cases with your team, export them as GIFs or movies, or add ones sent to you")
             }
         }
         .sheet(isPresented: Binding(
@@ -346,7 +346,7 @@ private struct UseCaseRow: View {
         }
         .contextMenu {
             Button("Rename…", action: onRename)
-            Button("Export…", action: onExport)
+            Button("Share…", action: onExport)
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
         }

@@ -102,9 +102,16 @@ struct SavedPresetsView: View {
             Menu {
                 // Named for what they move, not for the verb alone.
                 // "Export Library…" sitting next to "Import…" left you to
-                // work out that they were two ends of the same JSON file,
-                // and that neither had anything to do with the two Blender
+                // work out that they were two ends of the same file, and
+                // that neither had anything to do with the two Blender
                 // items under them.
+                //
+                // "Share" against "Export" carries the other distinction
+                // in this menu: Share writes the animation itself, for a
+                // teammate to open in this app. Export renders it to a
+                // picture — a GIF or a movie, which nothing here can read
+                // back. Both were called Export, which left the file items
+                // sounding like a second way to render.
                 // Grouped by *scope*, and each item says which scope it
                 // means — "This" against "All". Mixing the two under one
                 // heading is what made this confusing; the section headers
@@ -112,7 +119,7 @@ struct SavedPresetsView: View {
                 // has a number attached and doesn't need "Them" to carry
                 // the contrast.
                 Section(selectedPreset.map { "“\($0.name)”" } ?? "Selected Animation") {
-                    Button("Export This Animation…") {
+                    Button("Share This Animation…") {
                         if let selectedPreset { exportSingle(selectedPreset) }
                     }
                     .disabled(selectedPreset == nil)
@@ -124,7 +131,7 @@ struct SavedPresetsView: View {
                 Section(store.presets.count == 1
                         ? "All 1 Animation"
                         : "All \(store.presets.count) Animations") {
-                    Button("Export All…") { exportLibrary() }
+                    Button("Share All…") { exportLibrary() }
                         .disabled(store.presets.isEmpty)
                     Button("Export All as GIF or Movie…") {
                         renderTargets = store.presets
@@ -135,7 +142,7 @@ struct SavedPresetsView: View {
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up.on.square")
             }
-            .help("Export saved animations to share with your team, or import ones they've sent you")
+            .help("Share saved animations with your team, export them as GIFs or movies, or add ones sent to you")
             }
         }
         // Custom sheets instead of `.alert(...)` with an embedded
@@ -411,7 +418,7 @@ private struct SavedAnimationRow: View {
         .contextMenu {
             Button("Load", action: onLoad)
             Button("Rename…", action: onRename)
-            Button("Export…", action: onExport)
+            Button("Share…", action: onExport)
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
         }
