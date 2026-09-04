@@ -412,8 +412,12 @@ hides in Code, since a scrubber under exported source says nothing.
 
 Three columns, three detail panes, one shape each.
 
-**Columns** are `ListColumn`: an optional search field at the top, the
-list, and that column's own actions along the bottom. All of it used to
+**Columns** are `ListColumn`: that column's own actions in a bar at the
+top, then an optional search field, then the list. The actions were along
+the *bottom* first, which is the Finder/Xcode convention for a source list
+— but those bars sit at the bottom of a window, and this one sat mid-screen
+hard against the timeline strip, reading as part of it rather than as part
+of the column. All of it used to
 live in the *window* toolbar, because on macOS a `NavigationSplitView`
 hoists both `.searchable` and a column's `ToolbarItem`s up there — where
 they render right-aligned above the *detail* pane. The Cue Library's search
@@ -450,6 +454,21 @@ the panel whose contents the control acts on:
   directly: the config it writes into is `UseCaseDetailView`'s own
   `@StateObject`, which the column has no reference to. Only the selected
   use case's detail view is mounted, so exactly one listener answers.
+
+### Chrome that leaves the toolbar loses its glass
+
+Both of these regressed the same way and had to be given it back
+explicitly: the column action buttons (`ListColumn.actionBar`, now
+`.ringGlassButtonStyle()`) and the Preview/Code picker (`DetailPane`, now
+`.glassBackground(in: Capsule())`). The system applies Liquid Glass to
+toolbar items for free, so anything moved *out* of the toolbar into an
+ordinary view silently flattens — the same trade-off `ControlsView` already
+notes about moving its cards off `Form`. Worth checking whenever chrome
+moves: it doesn't error, it just stops looking like the rest of the app.
+
+Watch for double-glassing too: `ListColumn` styles everything in its
+action bar, so a button handed to it must not carry its own
+`.ringGlassButtonStyle()` or the effects nest.
 
 ### The text-input bug is fixed
 

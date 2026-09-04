@@ -19,43 +19,53 @@ struct ListColumn<Content: View, Actions: View>: View {
     /// Omit for a column with nothing to search.
     var search: Binding<String>?
     var searchPrompt: String = "Search"
-    /// Sits above the search field, where a list's section title would
-    /// otherwise be. For actions that belong to the column as a whole
-    /// rather than to a row in it.
+    /// The one labelled action a column may have, shown at the leading
+    /// edge of the action bar. Everything in `actions` is icon-only.
     var header: AnyView?
     @ViewBuilder var content: () -> Content
     @ViewBuilder var actions: () -> Actions
 
     var body: some View {
         VStack(spacing: 0) {
-            if let header {
-                header
-                    .padding(.horizontal, 10)
-                    .padding(.top, 10)
-                    .padding(.bottom, search == nil ? 8 : 0)
-                if search == nil { Divider() }
-            }
+            // Actions at the *top*, above the search field. They were along
+            // the bottom, which is the Finder/Xcode convention for a source
+            // list — but those bars sit at the bottom of a window, and this
+            // one sat mid-screen against the timeline strip, reading as
+            // part of it rather than as part of the column.
+            actionBar
             if let search {
                 searchField(search)
-                Divider()
             }
-            content()
             Divider()
-            HStack(spacing: 4) {
-                actions()
+            content()
+        }
+    }
+
+    private var actionBar: some View {
+        HStack(spacing: 6) {
+            // The labelled action first, then the icons, so the row reads
+            // left to right from "the thing you'd look for" to "the things
+            // you already know".
+            if let header {
+                header
+                Spacer(minLength: 6)
+            } else {
                 Spacer(minLength: 0)
             }
-            .buttonStyle(.borderless)
-            .labelStyle(.iconOnly)
-            // A `Menu` in here would otherwise draw its own chevron and
-            // stretch to fill the bar, which is not what the other buttons
-            // in the row do.
-            .menuIndicator(.hidden)
-            .menuStyle(.borderlessButton)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            actions()
+                .labelStyle(.iconOnly)
+                .menuIndicator(.hidden)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        // Real Liquid Glass, not `.plain`. These sat in the window toolbar
+        // originally, where the system applies it for free; moving them
+        // into the column is what lost it — the same trade-off
+        // `ControlsView` notes about moving its cards off `Form`.
+        .ringGlassButtonStyle()
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, search == nil ? 10 : 8)
     }
 
     private func searchField(_ text: Binding<String>) -> some View {

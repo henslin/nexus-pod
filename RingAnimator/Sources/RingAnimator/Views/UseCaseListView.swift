@@ -126,16 +126,16 @@ struct UseCaseListView: View {
     /// reference to; only the selected use case's detail view is mounted,
     /// so exactly one listener answers.
     private var importBlenderButton: some View {
-        HStack {
+        Group {
             Button {
                 NotificationCenter.default.post(name: .importBlenderIntoUseCase, object: nil)
             } label: {
                 Label("Import Blender…", systemImage: "curlybraces")
             }
-            .ringGlassButtonStyle()
+            // No style here — `ListColumn`'s action bar applies the glass to
+            // everything in the row, so a second one would nest them.
             .disabled(selectedUseCaseID == nil)
             .help("Read a Blender LED-ring script into the selected use case")
-            Spacer(minLength: 0)
         }
     }
 

@@ -48,6 +48,14 @@ public struct DetailPane<Preview: View, Code: View>: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(width: 220)
+            // Liquid Glass, explicitly. As a `ToolbarItem` this got it from
+            // the system for free; a picker sitting in an ordinary view
+            // does not, and it regressed to flat chrome the moment it moved
+            // out of the toolbar. Same treatment, and same reason, as
+            // `PhoneMockupView`'s controls pill directly below it.
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .glassBackground(in: Capsule())
             .padding(.top, 12)
             .padding(.bottom, 10)
             // Centered in the pane, which puts it directly over the
