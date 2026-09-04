@@ -419,13 +419,26 @@ none of them should be picked up piecemeal while feature work continues.
   lesson is the ordinary one: a check that has never failed correctly is
   not yet evidence of anything, and "the tool found a bug" deserves the
   same scepticism as any other claim until the bug is read in the source.
-  What's still missing is compile-time enforcement. The chains are string
-  literals inside the Python heredoc, hand-mirrored from the Swift enums;
-  generating them from an exhaustive `switch` with no `default` would turn
-  "you forgot a case" from a check failure into a build failure. The
-  bodies are pure Python — no Swift interpolation, no backslashes, no
-  triple quotes — so they can be relocated verbatim, and `BlenderCheck`'s
-  dump gives a before/after diff to prove the move changed nothing.
+  **Compile-time enforcement is in.** The chains are now generated from
+  exhaustive `switch`es in `BlenderDispatch.swift`, so adding a case to
+  `RingAnimationType` or `LEDPatternStyle` fails the build (`switch must be
+  exhaustive`) until someone writes its Blender body — verified by adding
+  a case and watching it break. The bodies moved verbatim: they're pure
+  Python with no Swift interpolation, no backslashes and no triple quotes.
+  Two deliberate output changes, both verified by diffing the full
+  30-script dump before and after:
+  - Branch order now follows the enums' declaration order rather than the
+    old hand-written order. Safe because every condition is an equality on
+    a distinct value, so no branch can shadow another; confirmed by
+    comparing the chains as {condition: body} maps.
+  - `off` and `notApplicable` used to share one `style in (...)` branch and
+    are now two branches with identical bodies. The chain builder merges
+    *consecutive* identical bodies and those two aren't adjacent in
+    `allCases`. Same output for both, just written twice.
+  One trap worth knowing if you touch this again: the emitted Python has
+  **two** chains that dispatch on a variable called `style` — the cue
+  styles, and easing (`Ease In`/`Ease Out`/`Spring`) up in the helpers. A
+  regex looking for `if style ==` finds the wrong one first.
 - **Nine concurrency warnings, deliberately left.** Five in
   `ZoomableCanvas` (a KVO observer on `magnification` touching
   main-actor state from a closure the compiler treats as `@Sendable`) and
