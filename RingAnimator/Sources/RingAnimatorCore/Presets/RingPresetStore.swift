@@ -64,6 +64,28 @@ public final class RingPresetStore: ObservableObject {
         save()
     }
 
+    /// Puts the same field changes onto every preset but one — what the
+    /// "Apply to All" bar does.
+    ///
+    /// A bulk method rather than a loop of `update(_:)` at the call site
+    /// for two reasons: it saves once instead of once per preset (that
+    /// loop wrote the whole library to disk sixty-eight times for one
+    /// button press), and it puts the operation somewhere it can be
+    /// tested without standing up a view.
+    ///
+    /// Returns how many presets actually changed.
+    @discardableResult
+    public func applyToAll(_ diff: PresetDiff, excluding id: RingPreset.ID) -> Int {
+        var changed = 0
+        for index in presets.indices where presets[index].id != id {
+            guard let updated = diff.applied(to: presets[index]) else { continue }
+            presets[index] = updated
+            changed += 1
+        }
+        if changed > 0 { save() }
+        return changed
+    }
+
     // MARK: - Export
     //
     // The app has no macOS share sheet or file-import UI anywhere yet — the

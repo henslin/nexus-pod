@@ -60,7 +60,11 @@ public struct UseCaseDetailView: View {
     /// turning on Smooth and then Particles is one button at the end, not
     /// one per section as you go.
     @State private var baseline: RingPreset?
-    @State private var confirmingApplyToAll = false
+    /// The diff captured when Apply to All was pressed, held for as long
+    /// as the confirmation is up. Held rather than recomputed because the
+    /// bar that offers it is conditional: if `pendingDiff` went nil for a
+    /// moment the bar would unmount and take an attached dialog with it.
+    @State private var confirmingApply: PresetDiff?
     @State private var appliedCount: Int?
     /// Same tip as Nexus — see `AddStepTip`. Shown once ever, so whichever
     /// pane you first change a parameter in gets it.
@@ -221,32 +225,15 @@ public struct UseCaseDetailView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Button("Apply to All") { confirmingApplyToAll = true }
+            Button("Apply to All") { confirmingApply = diff }
                 .controlSize(.small)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .confirmationDialog(
-            "Apply \(diff.changedKeyCount == 1 ? "this change" : "these \(diff.changedKeyCount) changes") to all \(store.presets.count)?",
-            isPresented: $confirmingApplyToAll,
-            titleVisibility: .visible
-        ) {
-            Button("Apply to All \(store.presets.count)", role: .destructive) {
-                applyToAll(diff)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Every other animation in this list gets the same settings. This can't be undone.")
-        }
     }
 
     private func applyToAll(_ diff: PresetDiff) {
-        var count = 0
-        for preset in store.presets where preset.id != presetID {
-            guard let updated = diff.applied(to: preset) else { continue }
-            store.update(updated)
-            count += 1
-        }
+        let count = store.applyToAll(diff, excluding: presetID)
         // The new state becomes the baseline: the changes have landed, so
         // offering to apply them again would be offering to do nothing.
         baseline = currentPreset
@@ -342,6 +329,26 @@ public struct UseCaseDetailView: View {
                 controls
                     .padding(16)
             }
+        }
+        // On the panel, not on the bar: the bar is conditional, and a
+        // dialog attached to a view that unmounts goes with it.
+        .confirmationDialog(
+            confirmingApply.map {
+                "Apply \($0.changedKeyCount == 1 ? "this change" : "these \($0.changedKeyCount) changes") to all \(store.presets.count)?"
+            } ?? "",
+            isPresented: Binding(
+                get: { confirmingApply != nil },
+                set: { if !$0 { confirmingApply = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Apply to All \(store.presets.count)", role: .destructive) {
+                if let diff = confirmingApply { applyToAll(diff) }
+                confirmingApply = nil
+            }
+            Button("Cancel", role: .cancel) { confirmingApply = nil }
+        } message: {
+            Text("Every other animation in this list gets the same settings. This can't be undone.")
         }
     }
 
