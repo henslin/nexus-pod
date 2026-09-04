@@ -23,6 +23,8 @@ struct AnimationExportView: View {
     @State private var exportGIF = true
     @State private var exportMovie = true
     @State private var loopCount = 2
+    @State private var transparent = false
+    @State private var captureParticles = false
     @State private var isExporting = false
     @State private var progress: Double = 0
     @State private var errorMessage: String?
@@ -66,6 +68,37 @@ struct AnimationExportView: View {
             : config.particlesEnabled
     }
 
+    /// The two formats behave differently enough here to be worth saying
+    /// before the export rather than after: HEVC carries real partial
+    /// alpha, GIF has one transparent colour and nothing in between, so a
+    /// GIF's glow and anti-aliased edges get a hard cut.
+    private var transparencyNote: String {
+        if exportGIF && exportMovie {
+            return "The movie keeps soft edges and glow. GIF transparency is 1-bit, so its edges will be harder."
+        } else if exportGIF {
+            return "GIF transparency is 1-bit — the glow drops out and edges will be harder than on screen."
+        } else {
+            return "Written as HEVC with alpha — plays transparent in QuickTime, Keynote, and AVPlayer."
+        }
+    }
+
+    /// Recording drives a live preview window, so it follows one config
+    /// playing in real time — a multi-step timeline has no such window to
+    /// point a capture at.
+    private var canCaptureParticles: Bool {
+        !isTimelineExport
+    }
+
+    private var particleNote: String {
+        if !canCaptureParticles {
+            return "Particles can't be rendered frame by frame and will be off in this export."
+        }
+        if captureParticles {
+            return "Records the preview as it plays, so this takes the full \(String(format: "%.1f", totalDuration))s and needs Screen Recording permission. A preview window appears while it records."
+        }
+        return "Particles can't be rendered frame by frame, so they'll be off unless you record them."
+    }
+
     private var totalDuration: TimeInterval {
         loopDuration * Double(loopCount)
     }
@@ -94,8 +127,16 @@ struct AnimationExportView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Animated GIF", isOn: $exportGIF)
                 Toggle("Movie (.mov)", isOn: $exportMovie)
+                Toggle("Transparent background", isOn: $transparent)
             }
             .toggleStyle(.checkbox)
+
+            if transparent {
+                Label(transparencyNote, systemImage: "square.on.square.dashed")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Stepper(value: $loopCount, in: 1...8) {
                 HStack {
@@ -107,9 +148,16 @@ struct AnimationExportView: View {
             }
 
             if particlesWillBeDropped {
-                Label("Particles can't be captured deterministically and will be off in the export.", systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    if canCaptureParticles {
+                        Toggle("Record particles from the live preview", isOn: $captureParticles)
+                            .toggleStyle(.checkbox)
+                    }
+                    Label(particleNote, systemImage: captureParticles ? "record.circle" : "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             if let errorMessage {
@@ -138,6 +186,26 @@ struct AnimationExportView: View {
         }
         .padding(20)
         .frame(width: 360)
+    }
+
+
+    /// The deterministic path: every frame rendered from a time value.
+    private func renderedFrames(onProgress: @escaping @MainActor (Double) -> Void) async -> [CGImage] {
+        isTimelineExport
+                ? await AnimationExporter.renderFrames(
+                    timeline: timeline,
+                    colorScheme: colorScheme,
+                    loopCount: loopCount,
+                    transparent: transparent,
+                    onProgress: onProgress
+                )
+                : await AnimationExporter.renderFrames(
+                    config: config,
+                    colorScheme: colorScheme,
+                    loopCount: loopCount,
+                    transparent: transparent,
+                    onProgress: onProgress
+                )
     }
 
     private func beginExport() {
@@ -169,19 +237,24 @@ struct AnimationExportView: View {
                 progress = value * 0.8
             }
 
-            let frames = isTimelineExport
-                ? await AnimationExporter.renderFrames(
-                    timeline: timeline,
-                    colorScheme: colorScheme,
-                    loopCount: loopCount,
-                    onProgress: onProgress
-                )
-                : await AnimationExporter.renderFrames(
-                    config: config,
-                    colorScheme: colorScheme,
-                    loopCount: loopCount,
-                    onProgress: onProgress
-                )
+            let frames: [CGImage]
+            if captureParticles && canCaptureParticles {
+                do {
+                    frames = try await LivePreviewRecorder.record(
+                        config: config,
+                        colorScheme: colorScheme,
+                        duration: totalDuration,
+                        transparent: transparent,
+                        onProgress: onProgress
+                    )
+                } catch {
+                    errorMessage = error.localizedDescription
+                    isExporting = false
+                    return
+                }
+            } else {
+                frames = await renderedFrames(onProgress: onProgress)
+            }
 
             guard !frames.isEmpty else {
                 errorMessage = "Nothing to export — check the animation is running."
@@ -195,7 +268,7 @@ struct AnimationExportView: View {
                     progress = exportMovie ? 0.9 : 1
                 }
                 if exportMovie {
-                    try await AnimationExporter.writeMovie(frames: frames, to: baseURL.appendingPathExtension("mov"))
+                    try await AnimationExporter.writeMovie(frames: frames, to: baseURL.appendingPathExtension("mov"), transparent: transparent)
                     progress = 1
                 }
                 isExporting = false

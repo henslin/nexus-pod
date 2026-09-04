@@ -110,6 +110,14 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/PerfCheck"
         ),
+        // Proves a transparent export really carries alpha all the way to
+        // the file — see the header comment in Sources/AlphaCheck/main.swift.
+        // Not part of the app; `swift run AlphaCheck` before a release.
+        .executableTarget(
+            name: "AlphaCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/AlphaCheck"
+        ),
         // macOS design tool: sidebar controls + tab bar mockup + code export.
         .executableTarget(
             name: "RingAnimator",

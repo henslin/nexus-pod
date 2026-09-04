@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import VideoToolbox
 import ImageIO
 import UniformTypeIdentifiers
 #if os(macOS)
@@ -120,6 +121,7 @@ public enum AnimationExporter {
         config: RingConfig,
         colorScheme: ColorScheme,
         loopCount: Int,
+        transparent: Bool = false,
         onProgress: @MainActor (Double) -> Void = { _ in }
     ) async -> [CGImage] {
         let export = exportConfig(from: config)
@@ -128,7 +130,9 @@ public enum AnimationExporter {
         let frameCount = max(Int((totalDuration * fps).rounded()), 1)
         let outerDiameter = canvasDiameter
         let ringDiameter = outerDiameter * (podDiameter / podFrameDiameter)
-        let background: Color = colorScheme == .dark ? .black : .white
+        // `colorScheme` still applies when transparent — it's what the
+        // ring's own colors are resolved against. Only the backdrop goes.
+        let background: Color = transparent ? .clear : (colorScheme == .dark ? .black : .white)
 
         var frames: [CGImage] = []
         frames.reserveCapacity(frameCount)
@@ -145,13 +149,7 @@ public enum AnimationExporter {
 
             let renderer = ImageRenderer(content: frameView)
             renderer.scale = renderScale
-            // Opaque on purpose (see `background` above baked into the
-            // view tree) — GIF's transparency is 1-bit and movie codecs
-            // typically have no alpha channel at all, so partial-alpha
-            // edges would look wrong either way. `isOpaque` here just
-            // tells ImageRenderer it doesn't need to preserve an alpha
-            // channel it wouldn't get a good result from regardless.
-            renderer.isOpaque = true
+            renderer.isOpaque = !transparent
             if let cgImage = renderer.cgImage {
                 frames.append(cgImage)
             }
@@ -183,6 +181,7 @@ public enum AnimationExporter {
         timeline: RingTimeline,
         colorScheme: ColorScheme,
         loopCount: Int,
+        transparent: Bool = false,
         onProgress: @MainActor (Double) -> Void = { _ in }
     ) async -> [CGImage] {
         guard !timeline.isEmpty, timeline.duration > 0 else { return [] }
@@ -209,7 +208,7 @@ public enum AnimationExporter {
         let frameCount = max(Int((totalDuration * fps).rounded()), 1)
         let outerDiameter = canvasDiameter
         let ringDiameter = outerDiameter * (podDiameter / podFrameDiameter)
-        let background: Color = colorScheme == .dark ? .black : .white
+        let background: Color = transparent ? .clear : (colorScheme == .dark ? .black : .white)
 
         var frames: [CGImage] = []
         frames.reserveCapacity(frameCount)
@@ -225,10 +224,11 @@ public enum AnimationExporter {
                 background
                 RingView(config: config, diameter: ringDiameter, overrideElapsed: resolved.phaseTime)
                     .frame(width: outerDiameter, height: outerDiameter)
-                    // Composited against the opaque background above, so a
-                    // fade reads as "dissolving into the backdrop" rather
-                    // than producing partial alpha that GIF's 1-bit
-                    // transparency and most movie codecs can't carry.
+                    // Against an opaque backdrop a fade reads as
+                    // "dissolving into the background". Transparent, it
+                    // becomes real partial alpha — which HEVC carries
+                    // faithfully and GIF, being 1-bit, rounds to
+                    // fully-on until the step disappears outright.
                     .opacity(resolved.opacity)
             }
             .frame(width: outerDiameter, height: outerDiameter)
@@ -236,7 +236,7 @@ public enum AnimationExporter {
 
             let renderer = ImageRenderer(content: frameView)
             renderer.scale = renderScale
-            renderer.isOpaque = true
+            renderer.isOpaque = !transparent
             if let cgImage = renderer.cgImage {
                 frames.append(cgImage)
             }
@@ -275,7 +275,16 @@ public enum AnimationExporter {
 
     // MARK: - Movie
 
-    public static func writeMovie(frames: [CGImage], to url: URL) async throws {
+    /// `transparent` switches the codec, not just a flag: H.264 has no
+    /// alpha channel at all, so a transparent export is written as HEVC
+    /// with alpha (`hvc1` carrying `ContainsAlphaChannel`) instead. That
+    /// plays with transparency in QuickTime, Keynote, and `AVPlayer` — so
+    /// a clip can be dropped into a real build as a video layer with no
+    /// black box around the ring — at roughly H.264-like file sizes,
+    /// where ProRes 4444 would be the same picture an order of magnitude
+    /// larger. Premultiplied alpha, matching what `ImageRenderer` hands
+    /// back.
+    public static func writeMovie(frames: [CGImage], to url: URL, transparent: Bool = false) async throws {
         guard let firstFrame = frames.first else { throw ExportError.noFrames }
         let width = firstFrame.width
         let height = firstFrame.height
@@ -291,16 +300,26 @@ public enum AnimationExporter {
             throw ExportError.movieSetupFailed
         }
 
-        let outputSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
+        var outputSettings: [String: Any] = [
+            AVVideoCodecKey: transparent ? AVVideoCodecType.hevcWithAlpha : AVVideoCodecType.h264,
             AVVideoWidthKey: width,
             AVVideoHeightKey: height
         ]
+        if transparent {
+            outputSettings[AVVideoCompressionPropertiesKey] = [
+                kVTCompressionPropertyKey_AlphaChannelMode as String:
+                    kVTAlphaChannelMode_PremultipliedAlpha as String
+            ]
+        }
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: outputSettings)
         input.expectsMediaDataInRealTime = false
 
+        // BGRA for the alpha path: it's the format the HEVC-with-alpha
+        // encoder actually accepts. ARGB stays for the opaque path,
+        // where it has always worked.
+        let pixelFormat = transparent ? kCVPixelFormatType_32BGRA : kCVPixelFormatType_32ARGB
         let pixelBufferAttributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
+            kCVPixelBufferPixelFormatTypeKey as String: pixelFormat,
             kCVPixelBufferWidthKey as String: width,
             kCVPixelBufferHeightKey as String: height
         ]
@@ -340,7 +359,7 @@ public enum AnimationExporter {
                         return
                     }
 
-                    guard let pixelBuffer = pixelBuffer(from: frames[frameIndex], width: width, height: height) else {
+                    guard let pixelBuffer = pixelBuffer(from: frames[frameIndex], width: width, height: height, transparent: transparent) else {
                         continuation.resume(throwing: ExportError.pixelBufferCreationFailed)
                         return
                     }
@@ -355,18 +374,24 @@ public enum AnimationExporter {
         }
     }
 
-    nonisolated private static func pixelBuffer(from cgImage: CGImage, width: Int, height: Int) -> CVPixelBuffer? {
+    nonisolated private static func pixelBuffer(from cgImage: CGImage, width: Int, height: Int, transparent: Bool) -> CVPixelBuffer? {
         var pixelBufferOut: CVPixelBuffer?
         let attributes: [String: Any] = [
             kCVPixelBufferCGImageCompatibilityKey as String: true,
             kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
         ]
-        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32ARGB, attributes as CFDictionary, &pixelBufferOut)
+        let format = transparent ? kCVPixelFormatType_32BGRA : kCVPixelFormatType_32ARGB
+        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, format, attributes as CFDictionary, &pixelBufferOut)
         guard status == kCVReturnSuccess, let pixelBuffer = pixelBufferOut else { return nil }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
 
+        // `noneSkipFirst` discards alpha, which is right for the opaque
+        // path and would silently flatten the transparent one.
+        let bitmapInfo = transparent
+            ? CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+            : CGImageAlphaInfo.noneSkipFirst.rawValue
         guard let context = CGContext(
             data: CVPixelBufferGetBaseAddress(pixelBuffer),
             width: width,
@@ -374,9 +399,15 @@ public enum AnimationExporter {
             bitsPerComponent: 8,
             bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
             space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
+            bitmapInfo: bitmapInfo
         ) else { return nil }
 
+        // Clearing matters only when transparent: the buffer comes back
+        // with whatever was in it, and an untouched pixel must be
+        // transparent rather than garbage.
+        if transparent {
+            context.clear(CGRect(x: 0, y: 0, width: width, height: height))
+        }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
         return pixelBuffer
     }

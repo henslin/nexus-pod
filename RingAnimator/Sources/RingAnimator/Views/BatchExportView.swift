@@ -21,6 +21,7 @@ struct BatchExportView: View {
 
     @State private var exportGIF = true
     @State private var exportMovie = false
+    @State private var transparent = false
     @State private var loopCount = 2
     @State private var isExporting = false
     @State private var completed = 0
@@ -99,10 +100,13 @@ struct BatchExportView: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("GIF", isOn: $exportGIF)
             Toggle("Movie (.mov)", isOn: $exportMovie)
+            Toggle("Transparent background", isOn: $transparent)
             Stepper(value: $loopCount, in: 1...8) {
                 Text("Loops per file: \(loopCount)")
             }
-            Text("Files are named after each animation. Existing files with the same name are replaced.")
+            Text(transparent
+                 ? "Files are named after each animation. Existing files with the same name are replaced. Movies are written as HEVC with alpha; GIF transparency is 1-bit, so its edges will be harder."
+                 : "Files are named after each animation. Existing files with the same name are replaced.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -248,7 +252,8 @@ struct BatchExportView: View {
                 let frames = await AnimationExporter.renderFrames(
                     config: config,
                     colorScheme: colorScheme,
-                    loopCount: loopCount
+                    loopCount: loopCount,
+                    transparent: transparent
                 ) { value in
                     frameProgress = value * 0.9
                     items[index].state = .rendering(value)
@@ -274,7 +279,7 @@ struct BatchExportView: View {
                         // already at the destination, which on a re-run of
                         // the same folder is every file.
                         try? FileManager.default.removeItem(at: movie)
-                        try await AnimationExporter.writeMovie(frames: frames, to: movie)
+                        try await AnimationExporter.writeMovie(frames: frames, to: movie, transparent: transparent)
                     }
                     items[index].state = .done
                 } catch {

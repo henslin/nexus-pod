@@ -79,6 +79,13 @@ step "Generated exports still compile"
 swift run --scratch-path "$SCRATCH" ExportCheck 2>&1 | tail -2
 result "${PIPESTATUS[0]}" "ExportCheck"
 
+# A transparent export that quietly bakes in a black backdrop looks
+# perfectly fine everywhere except the one place it's for — dropped onto a
+# light background in Figma — so it needs a gate rather than an eyeball.
+step "Transparent export really carries alpha"
+swift run --scratch-path "$SCRATCH" AlphaCheck 2>&1 | grep -E '^(transparent|  )'
+result "${PIPESTATUS[0]}" "AlphaCheck"
+
 step "Every animation and cue style has a Blender branch"
 swift run --scratch-path "$SCRATCH" BlenderCheck "$SCRATCH/blender-scripts" 2>&1 | tail -2
 result "${PIPESTATUS[0]}" "BlenderCheck"
