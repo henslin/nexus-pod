@@ -103,6 +103,16 @@ struct SavedPresetsView: View {
                 // work out that they were two ends of the same JSON file,
                 // and that neither had anything to do with the two Blender
                 // items under them.
+                // First, because sending one animation to a teammate is
+                // the common errand and exporting the whole library is the
+                // occasional one. It was only on the row's right-click
+                // menu, which is a thing you have to already know about.
+                Section("Selected Animation") {
+                    Button(selectedPreset.map { "Export “\($0.name)”…" } ?? "Export Selected…") {
+                        if let selectedPreset { exportSingle(selectedPreset) }
+                    }
+                    .disabled(selectedPreset == nil)
+                }
                 Section("Saved Animations") {
                     Button("Export All as JSON…") { exportLibrary() }
                         .disabled(store.presets.isEmpty)
@@ -216,6 +226,10 @@ struct SavedPresetsView: View {
     /// "All Mail · 628,761 messages" shape. A count on its own doesn't say
     /// why you'd come here, and the purpose on its own goes stale the
     /// moment you want to know whether you've saved anything.
+
+    private var selectedPreset: RingPreset? {
+        selectedPresetID.flatMap { id in store.presets.first(where: { $0.id == id }) }
+    }
 
     private func exportSingle(_ preset: RingPreset) {
         let panel = NSSavePanel()

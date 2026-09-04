@@ -95,6 +95,12 @@ struct UseCaseListView: View {
 
             ColumnActionGroup {
                 Menu {
+                    Section("Selected Use Case") {
+                        Button(selectedPreset.map { "Export “\($0.name)”…" } ?? "Export Selected…") {
+                            if let selectedPreset { exportSingle(selectedPreset) }
+                        }
+                        .disabled(selectedPreset == nil)
+                    }
                     Section("Use Cases") {
                         Button("Export All as JSON…") { exportLibrary() }
                             .disabled(store.presets.isEmpty)
@@ -248,6 +254,10 @@ struct UseCaseListView: View {
     }
 
     // MARK: - Export / Import
+
+    private var selectedPreset: RingPreset? {
+        selectedUseCaseID.flatMap { id in store.presets.first(where: { $0.id == id }) }
+    }
 
     private func exportSingle(_ preset: RingPreset) {
         let panel = NSSavePanel()

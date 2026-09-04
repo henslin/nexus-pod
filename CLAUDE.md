@@ -1525,6 +1525,19 @@ compiled against `out/Products/{Debug,Release}` answers "what does the code
 do?" without any of this ambiguity, and disagreeing with the app is a signal
 about the *app's* state, not the code's.
 
+### Green did not mean "it builds", until it did
+
+`preflight.sh` had six gates and **none of them built the macOS app
+target**. The checks link `RingAnimatorCore` plus their own executable; the
+iOS gate builds Core for iOS. A file only the Mac app compiles could break
+and every gate stayed green — which is how a `static let` on the generic
+`ListColumn` (Swift has no static stored properties on generic types) got
+committed in `a7ab543`.
+
+The first gate is now `swift build` across all targets. If a check ever
+passes while the app doesn't run, ask what that check actually compiled
+before believing it.
+
 ### Don't run two preflights at once
 
 Every step writes into `$SCRATCH`. The swift builds take SwiftPM's own lock

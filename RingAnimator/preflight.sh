@@ -54,6 +54,15 @@ result() {
     fi
 }
 
+# First, because everything below builds only what it needs. The checks
+# link RingAnimatorCore and their own target; the iOS gate builds Core for
+# iOS. *Nothing* here built the macOS app target, so a file that only it
+# compiles could break and preflight would stay green — which is exactly
+# what happened to ListColumn.swift once.
+step "Both apps compile"
+swift build --scratch-path "$SCRATCH" 2>&1 | tail -2
+result "${PIPESTATUS[0]}" "swift build (all targets)"
+
 step "Firmware fidelity — ported fields and recorded streams"
 swift run --scratch-path "$SCRATCH" FirmwareFieldCheck 2>&1 | tail -3
 result "${PIPESTATUS[0]}" "FirmwareFieldCheck"
