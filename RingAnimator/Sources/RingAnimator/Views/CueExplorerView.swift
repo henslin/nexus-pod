@@ -222,7 +222,7 @@ private struct CueRow: View {
             // `lineWidth` has to be given explicitly: it defaults to 12,
             // which is most of a 22pt ring's radius and renders as a solid
             // blob at this size.
-            LEDCuePreviewView(parameters: parameters, diameter: 22, lineWidth: 3)
+            LEDCuePreviewView(parameters: parameters, diameter: 22, lineWidth: 3, frameRate: RingView.thumbnailFrameRate)
                 .frame(width: 28, height: 28)
             Text(cue.name)
             Spacer()

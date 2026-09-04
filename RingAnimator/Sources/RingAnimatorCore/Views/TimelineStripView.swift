@@ -608,7 +608,7 @@ private struct StepPreview: View {
     @StateObject private var previewConfig = RingConfig()
 
     var body: some View {
-        RingView(config: previewConfig, diameter: 15)
+        RingView(config: previewConfig, diameter: 15, frameRate: RingView.thumbnailFrameRate)
             .frame(width: 19, height: 19)
             .onAppear { snapshot.apply(to: previewConfig) }
             .onChange(of: snapshot) { _, newValue in newValue.apply(to: previewConfig) }

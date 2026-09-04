@@ -262,7 +262,7 @@ private struct UseCaseRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            RingView(config: previewConfig, diameter: 22)
+            RingView(config: previewConfig, diameter: 22, frameRate: RingView.thumbnailFrameRate)
                 .frame(width: 28, height: 28)
                 .onAppear { preset.apply(to: previewConfig) }
                 .onChange(of: preset) { _, newValue in newValue.apply(to: previewConfig) }

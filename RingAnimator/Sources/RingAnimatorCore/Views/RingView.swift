@@ -26,7 +26,21 @@ public struct RingView: View {
     /// time (unlike the particle layer, which is real `CAEmitterLayer`
     /// physics `AnimationExporter` disables rather than trying to seek).
     var overrideElapsed: Double? = nil
+    /// Updates per second, when this ring is small enough that nobody can
+    /// tell. `nil` means the display's own refresh rate.
+    ///
+    /// Exists because the list rows render a live ring each — Saved
+    /// Animations, Use Cases, and every step in the timeline strip — and
+    /// each one was driving its own `TimelineView(.animation)` at full
+    /// refresh. With a pattern library imported that is seventy animation
+    /// loops running the whole diode pipeline, at 22 points across, to
+    /// produce a thumbnail. See `RingView.thumbnailFrameRate`.
+    var frameRate: Double? = nil
     @StateObject private var audioMonitor = AudioLevelMonitor()
+
+    /// What the list rows and timeline steps use. Twelve is indistinguishable
+    /// from sixty at 22 points and a fifth of the work.
+    public static let thumbnailFrameRate: Double = 12
 
     // The size every absolute value on `RingConfig` (line width, glow
     // radius, particle size, ...) was tuned against — the tab bar's ring
@@ -37,11 +51,19 @@ public struct RingView: View {
     // width stroke stretched around a wider circle.
     private let referenceDiameter: CGFloat = 34
 
-    public init(config: RingConfig, diameter: CGFloat? = nil, overrideElapsed: Double? = nil) {
+    public init(
+        config: RingConfig,
+        diameter: CGFloat? = nil,
+        overrideElapsed: Double? = nil,
+        frameRate: Double? = nil
+    ) {
         self.config = config
         self.diameter = diameter
         self.overrideElapsed = overrideElapsed
+        self.frameRate = frameRate
     }
+
+
 
     public var body: some View {
         Group {
@@ -114,7 +136,7 @@ public struct RingView: View {
         GeometryReader { geo in
             let size = diameter ?? min(geo.size.width, geo.size.height)
             let scale = size / referenceDiameter
-            LEDCuePreviewView(parameters: cueParameters(style: style, scale: scale), diameter: size, lineWidth: lw(scale), overrideElapsed: overrideElapsed)
+            LEDCuePreviewView(parameters: cueParameters(style: style, scale: scale), diameter: size, lineWidth: lw(scale), overrideElapsed: overrideElapsed, frameRate: frameRate)
                 .frame(width: geo.size.width, height: geo.size.height)
                 // Same reasoning as the `.clipShape(Circle())` on the
                 // continuous-animation path below — keeps glow/particles/
@@ -187,9 +209,19 @@ public struct RingView: View {
     /// The original continuous-animation rendering path — `animationType`'s
     /// 11 variants, unchanged in substance from before `patternStyle`
     /// existed.
+    /// Branched rather than handed a type-erased schedule: SwiftUI has no
+    /// `AnyTimelineSchedule`, and `.animation` and `.periodic` are different
+    /// concrete types.
+    @ViewBuilder
     private var continuousAnimationBody: some View {
-        TimelineView(.animation) { timeline in
-            continuousAnimationContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+        if let frameRate, frameRate > 0 {
+            TimelineView(.periodic(from: .now, by: 1 / frameRate)) { timeline in
+                continuousAnimationContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+            }
+        } else {
+            TimelineView(.animation) { timeline in
+                continuousAnimationContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+            }
         }
     }
 
@@ -1581,16 +1613,61 @@ public struct RingView: View {
     /// other "random" here is: the exporter has to reproduce identical
     /// frames. Paging through `rippleSeed` reshuffles the arrangement,
     /// which is how these are authored.
+    /// Identifies a drop arrangement — everything `drops()` reads.
+    private struct DropsKey: Hashable {
+        var count: Int
+        var loop: Double
+        var seed: Int
+    }
+
+    /// Identifies a normalization sweep — everything `rippleLevel` reads on
+    /// top of the arrangement.
+    private struct NormalizationKey: Hashable {
+        var drops: DropsKey
+        var life: Double
+        var width: Double
+        var speed: Double
+        var decay: Double
+    }
+
+    /// Memo tables for the two ripple values that depend only on config.
+    ///
+    /// Both were recomputed every frame, and between them they were about
+    /// 38% of the main thread on a profile of the app sitting idle on a
+    /// ripple pattern: `rippleNormalization` is a 512-point sweep, each
+    /// point of which called `rippleLevel`, which built the drop list from
+    /// scratch every time. None of it varies with elapsed time.
+    ///
+    /// Static because `RingView` is a struct rebuilt every frame — there is
+    /// no instance to hang a cache on. Main-actor, like everything else that
+    /// touches these views. Cleared wholesale rather than evicted: the keys
+    /// are parameter combinations, so the table only grows while someone is
+    /// dragging a slider, and a bound of a few hundred is far more than any
+    /// session reaches.
+    @MainActor private static var dropsCache: [DropsKey: [Drop]] = [:]
+    @MainActor private static var normalizationCache: [NormalizationKey: Double] = [:]
+    private static let cacheLimit = 512
+
+    private var dropsKey: DropsKey {
+        DropsKey(
+            count: max(Int(config.rippleDropCount.rounded()), 1),
+            loop: max(config.loopSeconds, 0.1),
+            seed: Int(config.rippleSeed.rounded())
+        )
+    }
+
     private func drops() -> [Drop] {
-        let count = max(Int(config.rippleDropCount.rounded()), 1)
-        let loop = max(config.loopSeconds, 0.1)
-        let seed = Int(config.rippleSeed.rounded())
-        return (0..<count).map { i in
+        let key = dropsKey
+        if let cached = RingView.dropsCache[key] { return cached }
+        let made = (0..<key.count).map { i in
             Drop(
-                landedAt: pseudoRandom(seed, i) * loop,
-                center: pseudoRandom(seed, i + 5000)
+                landedAt: pseudoRandom(key.seed, i) * key.loop,
+                center: pseudoRandom(key.seed, i + 5000)
             )
         }
+        if RingView.dropsCache.count >= RingView.cacheLimit { RingView.dropsCache.removeAll() }
+        RingView.dropsCache[key] = made
+        return made
     }
 
     /// Accumulated ripple brightness at a point on the ring.
@@ -1645,7 +1722,16 @@ public struct RingView: View {
     /// into `diodeFieldRing` and passing the result down makes it one sweep
     /// a frame, and only when Ripple is the active type.
     private func rippleNormalization() -> Double {
-        let loop = max(config.loopSeconds, 0.1)
+        let key = NormalizationKey(
+            drops: dropsKey,
+            life: max(config.rippleLife, 0.05),
+            width: max(config.trailFraction, 0.01),
+            speed: config.speed,
+            decay: config.rippleDecay
+        )
+        if let cached = RingView.normalizationCache[key] { return cached }
+
+        let loop = key.drops.loop
         var peak = 0.0001
         for step in 0..<32 {
             let t = loop * Double(step) / 32
@@ -1653,6 +1739,10 @@ public struct RingView: View {
                 peak = max(peak, rippleLevel(at: Double(p) / 16, elapsed: t))
             }
         }
+        if RingView.normalizationCache.count >= RingView.cacheLimit {
+            RingView.normalizationCache.removeAll()
+        }
+        RingView.normalizationCache[key] = peak
         return peak
     }
 

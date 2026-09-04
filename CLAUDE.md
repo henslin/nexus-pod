@@ -340,6 +340,43 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   `xcodebuild`/`xcrun simctl` — use that instead of asking for manual
   screenshots when debugging UI issues here.
 
+## Performance: profile it, don't reason about it
+
+The app sat at **100% of a core while idle** on an M2. Two causes, both
+found in about five minutes with `sample <pid>` against the running release
+build, and neither one guessable:
+
+- **Every list row runs its own animation loop.** Saved Animations, Use
+  Cases and every step in the timeline strip render a live `RingView` each,
+  and each was driving `TimelineView(.animation)` at full display refresh —
+  the whole diode pipeline, sixty times a second, to fill 22 points. With a
+  pattern library imported that's seventy of them. They take
+  `RingView.thumbnailFrameRate` (12fps) now; at that size it is
+  indistinguishable and a fifth of the work.
+- **The ripple normalization ran every frame.** `rippleNormalization` is a
+  512-point sweep, and each point called `rippleLevel`, which rebuilt the
+  drop list from scratch. Together they were ~38% of the main thread on a
+  ripple pattern. Both depend only on config, never on elapsed time, so
+  both are memoized — static tables, because `RingView` is a struct rebuilt
+  every frame with no instance to hang a cache on.
+
+Result: **100% → ~29%**, and no RingAnimator symbol appears meaningfully in
+the profile any more. What's left is SwiftUI's own view-graph work
+(`SwiftUICore`, `AppKit`, `AttributeGraph`), which is the next lever if it
+ever needs one — fewer nested `GeometryReader`s and less view churn per
+frame, not faster maths.
+
+Two things deliberately not done:
+
+- `RingConfig.init()` does a synchronous Keychain read and builds a
+  `VoiceConversationController`, and every list row makes one. That's a
+  launch and scroll cost rather than steady-state CPU, and making it lazy
+  means touching the voice pipeline — wrong trade during a pass whose
+  measured problem was elsewhere.
+- Nothing was changed on the strength of looking clever. The p-norm episode
+  in the smoothing section is the cautionary example: measure first, keep
+  the number.
+
 ## Earmarked: "Snow Leopard" pass
 
 Named for the release that shipped no new features and just made the

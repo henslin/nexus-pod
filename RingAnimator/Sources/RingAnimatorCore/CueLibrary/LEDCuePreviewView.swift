@@ -24,6 +24,8 @@ public struct LEDCuePreviewView: View {
     /// `.continuousAnimation`; used directly (bypassing `TimelineView`) for
     /// every other style via `legacyStyleContent(elapsed:)`.
     public var overrideElapsed: Double? = nil
+    /// See `RingView.frameRate` — the cue list's rows are thumbnails too.
+    public var frameRate: Double? = nil
 
     /// Backs `.continuousAnimation` only — see the type doc comment. Held
     /// as `@StateObject` (created once, kept across `parameters` changes)
@@ -35,11 +37,18 @@ public struct LEDCuePreviewView: View {
     /// `parameters` changes.
     @StateObject private var animationConfig = RingConfig()
 
-    public init(parameters: LEDCueParameters, diameter: CGFloat = 160, lineWidth: CGFloat = 12, overrideElapsed: Double? = nil) {
+    public init(
+        parameters: LEDCueParameters,
+        diameter: CGFloat = 160,
+        lineWidth: CGFloat = 12,
+        overrideElapsed: Double? = nil,
+        frameRate: Double? = nil
+    ) {
         self.parameters = parameters
         self.diameter = diameter
         self.lineWidth = lineWidth
         self.overrideElapsed = overrideElapsed
+        self.frameRate = frameRate
     }
 
     /// The particle layer's own field is a bit bigger than the ring itself,
@@ -49,7 +58,7 @@ public struct LEDCuePreviewView: View {
 
     public var body: some View {
         if parameters.style == .continuousAnimation {
-            RingView(config: animationConfig, diameter: diameter, overrideElapsed: overrideElapsed)
+            RingView(config: animationConfig, diameter: diameter, overrideElapsed: overrideElapsed, frameRate: frameRate)
                 .frame(width: diameter, height: diameter)
                 .onAppear { syncAnimationConfig() }
                 .onChange(of: parameters) { _, _ in syncAnimationConfig() }
@@ -78,9 +87,16 @@ public struct LEDCuePreviewView: View {
     /// Every `LEDPatternStyle` case *except* `.continuousAnimation` — the
     /// original hand-rolled renderer, unchanged in substance from before
     /// that case existed.
+    @ViewBuilder
     private var legacyStyleBody: some View {
-        TimelineView(.animation) { timeline in
-            legacyStyleContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+        if let frameRate, frameRate > 0 {
+            TimelineView(.periodic(from: .now, by: 1 / frameRate)) { timeline in
+                legacyStyleContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+            }
+        } else {
+            TimelineView(.animation) { timeline in
+                legacyStyleContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+            }
         }
     }
 
