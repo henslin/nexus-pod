@@ -852,6 +852,37 @@ view expressions only.** `var`, `for`, and deferred-initialization
 template emits — `brightestComet` in the SwiftUI template is there for
 exactly that reason.
 
+## Verifying you're testing what you think you are
+
+Three times now this project has produced a "bug" that was really a stale
+artifact, each costing more than the real fix would have. The setup makes it
+easy, so check these first when the running app contradicts a check that
+passes against the module:
+
+- **Duplicate bundle ids.** `/Applications/Nexus Pod.app` and
+  `/Applications/RingAnimator.app` both claim `ringanimator.RingAnimator`, and
+  so does any dev bundle you assemble. `open` can resolve to one you didn't
+  mean.
+- **`open` reactivates rather than relaunches.** If the old process is still
+  alive, `open` on a freshly built bundle just brings the old one forward,
+  still running its old code. And `pkill -f "Nexus Pod (dev)"` does *not*
+  kill it: `-f` takes an extended regex, so `(dev)` is a capture group
+  matching bare `dev`, which the command line doesn't contain. Match on a
+  path fragment instead — `pkill -f 'Developer/Nexus'` — and confirm with
+  `pgrep`.
+- **Local state outlives the build that wrote it.**
+  `~/Library/Application Support/RingAnimator/` holds `use-cases.json` and a
+  timeline file per use case. One written by an older binary is
+  indistinguishable from a current one, and reading it produced a convincing
+  but entirely false conclusion that the importer had stopped setting a field
+  — the importer was fine; the file predated the fix.
+
+So: `ps aux | grep` the executable path, compare its mtime to your last
+build, and clear Application Support before an import test. A harness
+compiled against `out/Products/{Debug,Release}` answers "what does the code
+do?" without any of this ambiguity, and disagreeing with the app is a signal
+about the *app's* state, not the code's.
+
 ## Open items (not yet done)
 
 - **TestFlight app name**: TestFlight was still showing an old app name to
