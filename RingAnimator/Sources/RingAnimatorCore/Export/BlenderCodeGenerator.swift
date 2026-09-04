@@ -559,21 +559,6 @@ public extension CodeGenerators {
             # speaker icon.
             _ring_curve("Nexus_Ring", RADIUS, TUBE * 0.6, (1, 1, 1), 0.15)
 
-        elif style == "off":
-            # The ring is still there, it just isn't lit — which is what
-            # "off" means on the hardware, and why this can't fall through
-            # to the generic stand-in the way it used to. That built a
-            # *lit* solid ring, so exporting an off cue to Blender gave you
-            # the one thing it definitely isn't.
-            _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, 0.0)
-
-        elif style == "notApplicable":
-            # A spec placeholder rather than a cue — the entry exists so the
-            # sheet can say "no LED behavior here". Same unlit ring as
-            # "off", named separately so the console line below tells you
-            # which of the two you exported.
-            _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, 0.0)
-
         elif style == "custom":
             _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength * 0.5)
 

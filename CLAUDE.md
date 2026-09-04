@@ -403,21 +403,29 @@ none of them should be picked up piecemeal while feature work continues.
 - **Timeline depth.** Interpolation between steps, per-property
   keyframes, and parallel tracks were all deliberately left out of the
   first cut. Interpolation is the one that changes the data model.
-- **Blender's string dispatch.** Half done. `swift run BlenderCheck` now
+- **Blender's string dispatch.** Half done. `swift run BlenderCheck`
   asserts that every `RingAnimationType` and every `LEDPatternStyle`
   reaches its own branch in the emitted Python rather than the fallback,
   and it's a preflight gate — so a new case can no longer reach a release
-  unnoticed. It found two on its first run: `off` and `notApplicable` had
-  no branch, which meant an *off* cue exported to Blender as a lit solid
-  ring. Both now build an unlit ring.
+  unnoticed. Nothing checked this output before it existed; `ExportCheck`
+  covers the SwiftUI exports only.
+  It currently reports no gaps, which is the truth. **Its first run
+  reported two, and that was the check being wrong, not the generator.**
+  A case can dispatch either as `style == "off"` or by sharing a branch
+  with its neighbours as `style in ("off", "notApplicable")`, and the
+  first matcher only knew the equality form — so it flagged two cases that
+  were handled all along, and two unreachable duplicate branches got
+  committed on the strength of it. Both forms are recognized now. The
+  lesson is the ordinary one: a check that has never failed correctly is
+  not yet evidence of anything, and "the tool found a bug" deserves the
+  same scepticism as any other claim until the bug is read in the source.
   What's still missing is compile-time enforcement. The chains are string
   literals inside the Python heredoc, hand-mirrored from the Swift enums;
   generating them from an exhaustive `switch` with no `default` would turn
   "you forgot a case" from a check failure into a build failure. The
   bodies are pure Python — no Swift interpolation, no backslashes, no
   triple quotes — so they can be relocated verbatim, and `BlenderCheck`'s
-  dump gives a byte-exact before/after diff to prove the move changed
-  nothing.
+  dump gives a before/after diff to prove the move changed nothing.
 - **Nine concurrency warnings, deliberately left.** Five in
   `ZoomableCanvas` (a KVO observer on `magnification` touching
   main-actor state from a closure the compiler treats as `@Sendable`) and

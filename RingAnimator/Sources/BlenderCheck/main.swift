@@ -15,6 +15,28 @@ import RingAnimatorCore
 // rather than the fallback. As a *dump* it writes the scripts out so a
 // refactor of the generator can be shown to change nothing.
 
+/// Whether the emitted chain actually dispatches on `value`.
+///
+/// Two forms, and missing the second one cost a false positive and two
+/// unreachable branches committed on the strength of it: a case can have
+/// its own `x == "value"` test, or share one with its neighbours as
+/// `x in ("a", "b")`. Both are branches; only the first is an equality.
+///
+/// Deliberately not a check that the params dict *mentions* the value —
+/// every script names its own style at the top, so that would pass for
+/// every case whether or not the chain handles it.
+func hasBranch(for value: String, variable: String, in code: String) -> Bool {
+    if code.contains("\(variable) == \"\(value)\"") { return true }
+    // A shared branch: `style in ("off", "notApplicable"):`
+    for line in code.split(separator: "\n") {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("if \(variable) in (")
+            || trimmed.hasPrefix("elif \(variable) in (") else { continue }
+        if trimmed.contains("\"\(value)\"") { return true }
+    }
+    return false
+}
+
 @MainActor
 func main() -> Int32 {
     let out = CommandLine.arguments.count > 1
@@ -30,9 +52,7 @@ func main() -> Int32 {
         let code = CodeGenerators.blenderCode(config: config)
         let name = "anim-" + type.rawValue.replacingOccurrences(of: " ", with: "-")
         try? code.write(to: out.appendingPathComponent(name + ".py"), atomically: true, encoding: .utf8)
-        // The branch has to exist in the emitted chain, not merely be named
-        // in the params dict at the top.
-        if !code.contains("anim == \"\(type.rawValue)\"") {
+        if !hasBranch(for: type.rawValue, variable: "anim", in: code) {
             missing.append("animation type '\(type.rawValue)'")
         }
     }
@@ -47,7 +67,7 @@ func main() -> Int32 {
         let code = CodeGenerators.blenderCueCode(cue: sampleCue, parameters: parameters)
         let name = "style-" + style.rawValue.replacingOccurrences(of: " ", with: "-")
         try? code.write(to: out.appendingPathComponent(name + ".py"), atomically: true, encoding: .utf8)
-        if !code.contains("style == \"\(style.rawValue)\"") {
+        if !hasBranch(for: style.rawValue, variable: "style", in: code) {
             missing.append("pattern style '\(style.rawValue)'")
         }
     }
