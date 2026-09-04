@@ -120,12 +120,13 @@ struct ContentView: View {
                 EmptyView()
             }
         }
-        // The section, then whatever is selected inside it. The name used
-        // to sit in a header block above each pane's stage, which made two
-        // of the three canvases shorter than Nexus's; the title bar is
-        // where macOS puts "which document am I looking at" anyway.
-        .navigationTitle(section?.rawValue ?? "Nexus")
-        .navigationSubtitle(selectionName ?? "")
+        // The selection *is* the title. The section name is already the
+        // selected row in the sidebar, so repeating it in the title bar
+        // spent the most prominent text in the window on the one fact
+        // that's never in doubt. Falls back to the section name only when
+        // nothing is selected yet, and Nexus keeps its own name because its
+        // ring is the document — there's nothing else to name.
+        .navigationTitle(selectionName ?? section?.rawValue ?? "Nexus")
         .sheet(isPresented: $showingWhatsNew) {
             WhatsNewView {
                 WhatsNewPresenter.markSeen()

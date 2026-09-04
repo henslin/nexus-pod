@@ -119,6 +119,15 @@ public struct UseCaseDetailView: View {
 
     public var body: some View {
         platformLayout
+            #if os(macOS)
+            // Run from the Use Cases column's own button — see
+            // `UseCaseListView.importBlenderButton` for why it's posted
+            // rather than called. Only the selected use case's detail view
+            // is mounted, so this fires once, on the right one.
+            .onReceive(NotificationCenter.default.publisher(for: .importBlenderIntoUseCase)) { _ in
+                importBlenderScript()
+            }
+            #endif
             .onReceive(editingConfig.objectWillChange.debounce(for: .seconds(0.3), scheduler: RunLoop.main)) { _ in
                 persist()
             }
@@ -221,28 +230,12 @@ public struct UseCaseDetailView: View {
     }
 
     private var controlsPanel: some View {
-        VStack(spacing: 0) {
-            #if os(macOS)
-            // What used to be the header above the stage. This import reads
-            // a Blender script *into the use case you're editing* — unlike
-            // the column's Import Patterns, which creates new ones — so it
-            // belongs with this use case's own controls rather than in the
-            // list's action bar next to something that does the opposite.
-            HStack {
-                Button("Import Blender…") { importBlenderScript() }
-                    .ringGlassButtonStyle()
-                    .controlSize(.small)
-                    .help("Read a Blender LED-ring script and interpret it into this use case")
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            Divider()
-            #endif
-            ScrollView {
-                controls
-                    .padding(16)
-            }
+        // Just the controls. Import Blender used to sit above them, and
+        // moved to the top of the Use Cases column: it isn't *about* these
+        // parameters, it replaces most of them.
+        ScrollView {
+            controls
+                .padding(16)
         }
     }
 

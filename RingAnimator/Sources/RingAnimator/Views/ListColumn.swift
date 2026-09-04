@@ -19,11 +19,22 @@ struct ListColumn<Content: View, Actions: View>: View {
     /// Omit for a column with nothing to search.
     var search: Binding<String>?
     var searchPrompt: String = "Search"
+    /// Sits above the search field, where a list's section title would
+    /// otherwise be. For actions that belong to the column as a whole
+    /// rather than to a row in it.
+    var header: AnyView?
     @ViewBuilder var content: () -> Content
     @ViewBuilder var actions: () -> Actions
 
     var body: some View {
         VStack(spacing: 0) {
+            if let header {
+                header
+                    .padding(.horizontal, 10)
+                    .padding(.top, 10)
+                    .padding(.bottom, search == nil ? 8 : 0)
+                if search == nil { Divider() }
+            }
             if let search {
                 searchField(search)
                 Divider()
@@ -90,10 +101,12 @@ extension ListColumn where Actions == EmptyView {
     init(
         search: Binding<String>? = nil,
         searchPrompt: String = "Search",
+        header: AnyView? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.search = search
         self.searchPrompt = searchPrompt
+        self.header = header
         self.content = content
         self.actions = { EmptyView() }
     }

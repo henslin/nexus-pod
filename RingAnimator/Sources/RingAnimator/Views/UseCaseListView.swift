@@ -25,9 +25,9 @@ struct UseCaseListView: View {
     @State private var importSuccessMessage: String?
 
     var body: some View {
-        ListColumn {
+        ListColumn(header: AnyView(importBlenderButton)) {
             List(selection: $selectedUseCaseID) {
-                Section("Use Cases") {
+                Section {
                     if store.presets.isEmpty {
                         Text("Click + to create a new use-case animation.")
                             .font(.caption)
@@ -111,6 +111,29 @@ struct UseCaseListView: View {
             Button("OK") {}
         } message: {
             Text(importSuccessMessage ?? "")
+        }
+    }
+
+    /// Reads a Blender script into whichever use case is selected.
+    ///
+    /// Lives here rather than in the detail view's controls panel because
+    /// it isn't about the parameters on the right — it replaces most of
+    /// them. Posted as a notification because the config it writes into is
+    /// `UseCaseDetailView`'s own `@StateObject`, which this column has no
+    /// reference to; only the selected use case's detail view is mounted,
+    /// so exactly one listener answers.
+    private var importBlenderButton: some View {
+        HStack {
+            Button {
+                NotificationCenter.default.post(name: .importBlenderIntoUseCase, object: nil)
+            } label: {
+                Label("Import Blender…", systemImage: "curlybraces")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .disabled(selectedUseCaseID == nil)
+            .help("Read a Blender LED-ring script into the selected use case")
+            Spacer(minLength: 0)
         }
     }
 

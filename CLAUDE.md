@@ -357,8 +357,13 @@ Finder/Xcode/Mail convention and makes the association structural.
 **Detail panes** are the stage filling the pane, one strip under it,
 controls on the right. Cue Library and Use Cases each used to put a header
 block *above* the stage, which made those two canvases shorter than
-Nexus's for no reason a person could see. The selected item's name is in
-the window subtitle now.
+Nexus's for no reason a person could see.
+
+**The selection is the window title.** Not the section — that's already the
+selected row in the sidebar, so putting it in the title bar too spent the
+most prominent text in the window on the one fact that is never in doubt.
+The section name is the fallback for "nothing selected yet", and Nexus
+keeps its own name because its ring *is* the document.
 
 What those headers also carried had to go somewhere, and "somewhere" is
 the panel whose contents the control acts on:
@@ -366,13 +371,25 @@ the panel whose contents the control acts on:
 - The cue's breadcrumb, its **Tweaked** badge and **Reset to Default** are
   at the top of the Cue Library's controls panel — they're about the
   parameters below them.
-- **Import Blender…** is at the top of a use case's controls panel, not in
-  the list's action bar. It reads a script *into the use case you're
-  editing*, while the column's Import Patterns *creates* use cases; sitting
-  them next to each other would put two buttons that do opposite things in
-  one row.
+- **Import Blender…** is at the top of the Use Cases *column*. It was
+  briefly in that use case's controls panel, on the reasoning that it acts
+  on the selected use case — but it isn't *about* those parameters, it
+  replaces most of them, and the top of the column is where an import
+  belongs. It posts `.importBlenderIntoUseCase` rather than calling
+  directly: the config it writes into is `UseCaseDetailView`'s own
+  `@StateObject`, which the column has no reference to. Only the selected
+  use case's detail view is mounted, so exactly one listener answers.
 
-### The search field may not accept typing
+### The text-input bug is fixed
+
+The in-column search field is a plain `TextField` and **typing into it
+works** — confirmed in the running app. That's the first confirmation that
+`Package.swift`'s linker-embedded Info.plist actually cured the standing
+text-input bug on this Xcode beta, which means `PasteableTextField`'s own
+doc comment is now actionable: every call site can go back to a plain
+`TextField` and that file can be deleted. Not done yet.
+
+### The old note, kept for the next time it looks broken
 
 `ListColumn`'s search box is a plain `TextField`, and this app has a
 standing text-input bug on this Xcode beta where typing never reaches a
