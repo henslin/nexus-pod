@@ -15,6 +15,9 @@ struct AnimationExportView: View {
     /// the feature.
     var timeline: RingTimeline = RingTimeline()
     let colorScheme: ColorScheme
+    /// The finish the canvas is wearing, so the sheet opens on the phone
+    /// you were just looking at.
+    var deviceFinish: AnimationExporter.DeviceFinish = .deepBlue
     /// Dismisses the sheet — passed in rather than using `@Environment(\.dismiss)`
     /// so the Cancel button can be disabled (not hidden) while exporting,
     /// matching the "Exporting…" progress state below.
@@ -38,14 +41,22 @@ struct AnimationExportView: View {
     /// Defaults to the timeline when there is one. If you've built a
     /// sequence and hit Export, the sequence is what you meant — falling
     /// back to the single live ring would quietly export something else.
-    init(config: RingConfig, timeline: RingTimeline = RingTimeline(), colorScheme: ColorScheme, onDismiss: @escaping () -> Void) {
+    init(
+        config: RingConfig,
+        timeline: RingTimeline = RingTimeline(),
+        colorScheme: ColorScheme,
+        deviceFinish: AnimationExporter.DeviceFinish = .deepBlue,
+        onDismiss: @escaping () -> Void
+    ) {
         self.config = config
         self.timeline = timeline
         self.colorScheme = colorScheme
+        self.deviceFinish = deviceFinish
         self.onDismiss = onDismiss
         _source = State(initialValue: timeline.isEmpty ? .live : .timeline)
         var settings = ExportCanvasSettings()
         settings.appearance = colorScheme
+        settings.finish = deviceFinish
         _canvasSettings = State(initialValue: settings)
     }
 

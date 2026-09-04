@@ -80,6 +80,7 @@ struct RingStage: View {
                 PhoneMockupView(
                     config: config,
                     isDarkMode: $state.isDarkMode,
+                    deviceFinish: $state.deviceFinish,
                     playback: playback,
                     timeline: timeline,
                     stageState: state

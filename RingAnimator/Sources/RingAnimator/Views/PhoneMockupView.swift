@@ -92,6 +92,7 @@ struct PhoneMockupView: View {
     init(
         config: RingConfig,
         isDarkMode: Binding<Bool>,
+        deviceFinish: Binding<AnimationExporter.DeviceFinish>,
         playback: TimelinePlayback? = nil,
         timeline: RingTimeline = RingTimeline(),
         stageState: StageState? = nil
@@ -100,12 +101,17 @@ struct PhoneMockupView: View {
         self.timeline = timeline
         self.voiceConversation = config.voiceConversation
         self._isDarkMode = isDarkMode
+        self._deviceFinish = deviceFinish
         self.playback = playback
         self.stageState = stageState
     }
 
     /// Shared with `PreviewTab`'s large preview — see the type doc comment.
     @Binding var isDarkMode: Bool
+    /// Which iPhone the mockup wears. A binding for the same reason
+    /// `isDarkMode` is one: it lives in `StageState`, so the choice
+    /// survives switching sections.
+    @Binding var deviceFinish: AnimationExporter.DeviceFinish
     /// When on, real app-UI screenshots (`Resources/DemoScreens.xcassets`)
     /// render behind the tab bar instead of a flat page background —
     /// matched to the selected tab and to `isDarkMode`.
@@ -116,11 +122,14 @@ struct PhoneMockupView: View {
     // mockup can't drift apart.
     private let screenWidth = AnimationExporter.phoneScreenSize.width
     private let screenHeight = AnimationExporter.phoneScreenSize.height
-    private let cornerRadius = AnimationExporter.phoneScreenCornerRadius
+    /// The frame artwork is opaque outside its aperture, so it masks the
+    /// screen's own corners — nothing here needs a corner radius any more.
+    private let frameWidth = AnimationExporter.phoneFrameSize.width
+    private let frameHeight = AnimationExporter.phoneFrameSize.height
 
     var body: some View {
         ZoomableCanvas(
-            contentSize: CGSize(width: screenWidth + 24, height: screenHeight + 24),
+            contentSize: AnimationExporter.phoneFrameSize,
             minMagnification: 0.25,
             maxMagnification: 4,
             restMagnification: 1,
@@ -152,6 +161,7 @@ struct PhoneMockupView: View {
                 config: config,
                 timeline: timeline,
                 colorScheme: isDarkMode ? .dark : .light,
+                deviceFinish: deviceFinish,
                 onDismiss: { isExportingAnimation = false }
             )
         }
@@ -160,6 +170,7 @@ struct PhoneMockupView: View {
     private var controlsBar: some View {
         HStack(spacing: 28) {
             appearancePicker
+            finishPicker
             Toggle("App UI", isOn: $showAppUI)
                 .toggleStyle(.switch)
                 .fixedSize()
@@ -185,25 +196,42 @@ struct PhoneMockupView: View {
         .frame(width: 180)
     }
 
-    private var deviceFrame: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius + 14, style: .continuous)
-                .fill(Color.black)
-                .frame(width: screenWidth + 24, height: screenHeight + 24)
-
-            screen
-                .frame(width: screenWidth, height: screenHeight)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-
-            dynamicIsland
-                .offset(y: -screenHeight / 2 + 26)
+    /// Apple's own iPhone 17 Pro artwork, with the screen behind it.
+    ///
+    /// This used to be a drawn rounded rectangle with a capsule for the
+    /// Dynamic Island. The real frame needs no such approximating: its
+    /// aperture is exactly `phoneScreenSize` at 3x and exactly centred
+    /// (measured, not assumed — see `AnimationExporter.phoneFrameSize`),
+    /// so the screen just sits behind it and the artwork masks the
+    /// corners and supplies the island.
+    /// Which iPhone the mockup wears. Menu rather than a segmented control
+    /// — three finish names don't fit the bar legibly, and this is a
+    /// choice made once rather than toggled back and forth the way
+    /// light/dark is.
+    private var finishPicker: some View {
+        Picker("Finish", selection: $deviceFinish) {
+            ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
+                Text(finish.rawValue).tag(finish)
+            }
         }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .frame(width: 150)
     }
 
-    private var dynamicIsland: some View {
-        Capsule()
-            .fill(Color.black)
-            .frame(width: 126, height: 36)
+    private var deviceFrame: some View {
+        ZStack {
+            screen
+                .frame(width: screenWidth, height: screenHeight)
+
+            deviceFinish.image
+                .resizable()
+                .frame(width: frameWidth, height: frameHeight)
+                // The frame is a picture of a phone, not a control — taps
+                // belong to the tab bar and pod behind it.
+                .allowsHitTesting(false)
+        }
+        .frame(width: frameWidth, height: frameHeight)
     }
 
     /// Custom background image (manually picked, from the Controls panel)

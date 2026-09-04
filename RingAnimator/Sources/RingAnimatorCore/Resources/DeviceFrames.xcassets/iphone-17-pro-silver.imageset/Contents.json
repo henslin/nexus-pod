@@ -1,0 +1,13 @@
+{
+  "images" : [
+    {
+      "filename" : "iphone-17-pro-silver.png",
+      "idiom" : "universal",
+      "scale" : "1x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

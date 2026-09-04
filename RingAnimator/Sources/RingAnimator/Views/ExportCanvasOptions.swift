@@ -14,7 +14,7 @@ struct ExportCanvasSettings: Equatable {
     var includeAppUI = false
     var tab: DemoTab = .dashboard
     var includeDeviceFrame = false
-    var finish: AnimationExporter.DeviceFinish = .blackTitanium
+    var finish: AnimationExporter.DeviceFinish = .deepBlue
 
     var canvas: AnimationExporter.Canvas {
         guard includeAppUI else { return .ring }

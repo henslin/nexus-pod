@@ -1,4 +1,5 @@
 import SwiftUI
+import RingAnimatorCore
 
 /// Everything about the stage that belongs to *you* rather than to what
 /// you're looking at: how far you've zoomed in, where you've panned to,
@@ -31,6 +32,9 @@ final class StageState: ObservableObject {
 
     /// These do drive rendering, so they publish.
     @Published var isDarkMode = true
+    /// Which iPhone the canvas mockup wears. Lives here, with the rest of
+    /// the shared stage state, so switching sections doesn't switch phones.
+    @Published var deviceFinish: AnimationExporter.DeviceFinish = .deepBlue
     @Published var previewCorner: PreviewCorner = .topTrailing
     @Published var isPreviewCollapsed = false
     /// Measured off the card (its size varies with the "Preview size"

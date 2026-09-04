@@ -43,26 +43,30 @@ public enum AnimationExporter {
         case appUI(tab: DemoTab, device: DeviceFinish? = nil)
     }
 
-    /// The phone body's colour. Named after the iPhone 16 Pro finishes
-    /// because that's what someone building a deck is matching, and
-    /// approximated as flat colours — the body here is the same drawn
-    /// rounded rectangle `PhoneMockupView` shows on the canvas, not a
-    /// photographic render.
+    /// Which iPhone 17 Pro the screen sits in.
+    ///
+    /// These are Apple's own device frames from Apple Design Resources
+    /// (the licence ships alongside the package), not a drawn
+    /// approximation — the body used to be a rounded rectangle with a
+    /// capsule for the Dynamic Island, which read as a phone at a glance
+    /// and as a diagram in a deck.
     public enum DeviceFinish: String, CaseIterable, Identifiable, Sendable {
-        case blackTitanium = "Black Titanium"
-        case naturalTitanium = "Natural Titanium"
-        case whiteTitanium = "White Titanium"
-        case desertTitanium = "Desert Titanium"
+        case cosmicOrange = "Cosmic Orange"
+        case deepBlue = "Deep Blue"
+        case silver = "Silver"
 
         public var id: String { rawValue }
 
-        public var bodyColor: Color {
+        var imageName: String {
             switch self {
-            case .blackTitanium: return Color(red: 0.24, green: 0.24, blue: 0.25)
-            case .naturalTitanium: return Color(red: 0.76, green: 0.74, blue: 0.71)
-            case .whiteTitanium: return Color(red: 0.95, green: 0.94, blue: 0.93)
-            case .desertTitanium: return Color(red: 0.76, green: 0.66, blue: 0.57)
+            case .cosmicOrange: return "iphone-17-pro-cosmic-orange"
+            case .deepBlue: return "iphone-17-pro-deep-blue"
+            case .silver: return "iphone-17-pro-silver"
             }
+        }
+
+        public var image: Image {
+            Image(imageName, bundle: .module)
         }
     }
 
@@ -77,24 +81,21 @@ public enum AnimationExporter {
         case .ring:
             return CGSize(width: canvasDiameter, height: canvasDiameter)
         case .appUI(_, let device):
-            guard device != nil else { return phoneScreenSize }
-            return CGSize(
-                width: phoneScreenSize.width + phoneBezel * 2,
-                height: phoneScreenSize.height + phoneBezel * 2
-            )
+            return device == nil ? phoneScreenSize : phoneFrameSize
         }
     }
     /// Matches `PhoneMockupView.screen`: the bar is inset 21pt on each
     /// side and sits 21pt off the bottom.
     private static let tabBarInset: CGFloat = 42
     private static let tabBarBottomPadding: CGFloat = 21
-    /// The phone body's bezel, corner radii and Dynamic Island — shared
-    /// with `PhoneMockupView.deviceFrame` for the same reason the screen
-    /// size is: two definitions of the same phone would drift.
-    public static let phoneBezel: CGFloat = 12
-    public static let phoneScreenCornerRadius: CGFloat = 44
-    public static let phoneBodyCornerRadius: CGFloat = 58
-    private static let dynamicIslandSize = CGSize(width: 126, height: 36)
+    /// The device frame artwork's own size, in points.
+    ///
+    /// Measured from the assets rather than assumed: the PNGs are
+    /// 1350×2760 at 3x, and flood-filling the transparent interior gives
+    /// an aperture of 1206×2622 inset 72/72/69/69 — that is, exactly
+    /// `phoneScreenSize` at 3x, exactly centred. So the screen needs no
+    /// scaling or offset, just a `ZStack` with the frame on top.
+    public static let phoneFrameSize = CGSize(width: 450, height: 920)
 
     public enum ExportError: Error, LocalizedError {
         case noFrames
@@ -221,20 +222,17 @@ public enum AnimationExporter {
             .frame(width: size.width, height: size.height)
 
             if let device {
-                let body = canvasSize(.appUI(tab: tab, device: device))
+                // The screen goes *behind* the frame: the artwork is opaque
+                // everywhere outside its aperture, so it masks the screen's
+                // square corners and supplies the Dynamic Island itself.
                 ZStack {
                     background
-                    RoundedRectangle(cornerRadius: phoneBodyCornerRadius, style: .continuous)
-                        .fill(device.bodyColor)
-                        .frame(width: body.width, height: body.height)
                     screen
-                        .clipShape(RoundedRectangle(cornerRadius: phoneScreenCornerRadius, style: .continuous))
-                    Capsule()
-                        .fill(Color.black)
-                        .frame(width: dynamicIslandSize.width, height: dynamicIslandSize.height)
-                        .offset(y: -size.height / 2 + 26)
+                    device.image
+                        .resizable()
+                        .frame(width: phoneFrameSize.width, height: phoneFrameSize.height)
                 }
-                .frame(width: body.width, height: body.height)
+                .frame(width: phoneFrameSize.width, height: phoneFrameSize.height)
                 .environment(\.colorScheme, colorScheme)
             } else {
                 // Square-cornered and unclipped on purpose: the bare screen

@@ -114,7 +114,7 @@ func run() async -> Int32 {
     do {
         try await AnimationExporter.export(
             config: config, colorScheme: .dark, loopCount: 1, transparent: true,
-            canvas: .appUI(tab: .dashboard, device: .blackTitanium),
+            canvas: .appUI(tab: .dashboard, device: .deepBlue),
             gif: streamed.appendingPathExtension("gif"),
             movie: streamed.appendingPathExtension("mov")
         )
@@ -126,7 +126,7 @@ func run() async -> Int32 {
         let framed = AVURLAsset(url: streamed.appendingPathExtension("mov"))
         if let track = try? await framed.loadTracks(withMediaType: .video).first {
             let size = try? await track.load(.naturalSize)
-            let expected = AnimationExporter.canvasSize(.appUI(tab: .dashboard, device: .blackTitanium))
+            let expected = AnimationExporter.canvasSize(.appUI(tab: .dashboard, device: .deepBlue))
             let want = CGSize(width: expected.width * AnimationExporter.renderScale,
                               height: expected.height * AnimationExporter.renderScale)
             check("framed movie is the right size", size == want, "\(size.map { "\(Int($0.width))x\(Int($0.height))" } ?? "?") vs \(Int(want.width))x\(Int(want.height))")
