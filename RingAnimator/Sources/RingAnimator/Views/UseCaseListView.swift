@@ -71,40 +71,42 @@ struct UseCaseListView: View {
             }
             .listStyle(.sidebar)
         } actions: {
-            // Grouped: make one, bring one in, hand them around. The
-            // dividers are what say so — four icons in a row otherwise
-            // leave the grouping to be guessed from the order.
-            Button {
-                newUseCaseName = "Use Case \(store.presets.count + 1)"
-                showingNewDialog = true
-            } label: {
-                Label("New Use Case", systemImage: "plus")
-            }
-            .help("Create a new use case, with its own full set of controls")
-
-            ColumnActionDivider()
-
-            importBlenderButton
-
-            Button {
-                importPatternFolder()
-            } label: {
-                Label("Import Patterns", systemImage: "tray.and.arrow.down")
-            }
-            .help("Import a folder of firmware pattern scripts — one use case per .py file")
-
-            ColumnActionDivider()
-
-            Menu {
-                Section("Use Cases") {
-                    Button("Export All as JSON…") { exportLibrary() }
-                        .disabled(store.presets.isEmpty)
-                    Button("Add from a JSON File…") { importUseCases() }
+            // New stands alone. The two imports are one control — they both
+            // bring a design in, they just read different file types — and
+            // Share is its own thing again.
+            ColumnActionGroup {
+                Button {
+                    newUseCaseName = "Use Case \(store.presets.count + 1)"
+                    showingNewDialog = true
+                } label: {
+                    Label("New Use Case", systemImage: "plus")
                 }
-            } label: {
-                Label("Share", systemImage: "square.and.arrow.up.on.square")
+                .help("Create a new use case, with its own full set of controls")
             }
-            .help("Export these use cases as a file, or add ones sent to you")
+
+            ColumnActionGroup {
+                importBlenderButton
+                ColumnActionDivider()
+                Button {
+                    importPatternFolder()
+                } label: {
+                    Label("Import Patterns", systemImage: "tray.and.arrow.down")
+                }
+                .help("Import a folder of firmware pattern scripts — one use case per .py file")
+            }
+
+            ColumnActionGroup {
+                Menu {
+                    Section("Use Cases") {
+                        Button("Export All as JSON…") { exportLibrary() }
+                            .disabled(store.presets.isEmpty)
+                        Button("Add from a JSON File…") { importUseCases() }
+                    }
+                } label: {
+                    Label("Share", systemImage: "square.and.arrow.up.on.square")
+                }
+                .help("Export these use cases as a file, or add ones sent to you")
+            }
         }
         .sheet(isPresented: $showingNewDialog) { newDialog }
         .sheet(item: $renamingUseCase) { _ in renameDialog }

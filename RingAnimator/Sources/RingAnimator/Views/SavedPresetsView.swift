@@ -85,6 +85,7 @@ struct SavedPresetsView: View {
                 preset.apply(to: config)
             }
         } actions: {
+            ColumnActionGroup {
             Button {
                 newPresetName = "Animation \(store.presets.count + 1)"
                 showingSaveDialog = true
@@ -92,9 +93,9 @@ struct SavedPresetsView: View {
                 Label("Save Current Animation", systemImage: "plus")
             }
             .help("Save the ring's current settings as a new saved animation")
+            }
 
-            ColumnActionDivider()
-
+            ColumnActionGroup {
             Menu {
                 // Named for what they move, not for the verb alone.
                 // "Export Library…" sitting next to "Import…" left you to
@@ -114,6 +115,7 @@ struct SavedPresetsView: View {
                 Label("Share", systemImage: "square.and.arrow.up.on.square")
             }
             .help("Export saved animations to share with your team, or import ones they've sent you")
+            }
         }
         // Custom sheets instead of `.alert(...)` with an embedded
         // `TextField` — SwiftUI alerts only support a bare TextField with

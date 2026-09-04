@@ -127,15 +127,19 @@ struct CueListView: View {
             }
 
         } actions: {
+            ColumnActionGroup {
             Button {
                 exportLibrary()
             } label: {
                 Label("Export Library…", systemImage: "square.and.arrow.up")
             }
             .help("Export the full cue library, with your tweaks applied, as JSON")
+            }
 
-            ColumnActionDivider()
-
+            // Its own control, not ruled off inside Export's. Sharing a
+            // library and throwing every tweak away are not two halves of
+            // one idea, and this one can't be undone.
+            ColumnActionGroup {
             Button(role: .destructive) {
                 confirmingResetAll = true
             } label: {
@@ -143,6 +147,7 @@ struct CueListView: View {
             }
             .help("Reset every cue back to its shipped default")
             .disabled(store.overrides.isEmpty)
+            }
         }
         .confirmationDialog(
             "Reset every cue to its shipped default?",

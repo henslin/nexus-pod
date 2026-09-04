@@ -59,30 +59,17 @@ struct ListColumn<Content: View, Actions: View>: View {
         }
     }
 
-    /// One capsule, all icons, all the same size — Mail's toolbar shape.
+    /// Whatever groups the column hands it, laid out trailing.
     ///
-    /// A labelled button used to sit alongside these in its own capsule.
-    /// At a 220pt column that label had nowhere to go and wrapped one
-    /// character per line into a capsule taller than the header above it.
-    /// Everything is an icon with a tooltip now, which is also what makes
-    /// the row read as one set of controls rather than a big thing and
-    /// three small ones.
+    /// The glass belongs to each `ColumnActionGroup`, not to this bar — one
+    /// capsule around everything made four unrelated controls look like one
+    /// control with four parts, and adding rules inside it only said where
+    /// the seams were. A control that stands alone gets its own circle; a
+    /// pair that genuinely belongs together shares a capsule.
     private var actionBar: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
-            HStack(spacing: 4) {
-                actions()
-            }
-            .labelStyle(.iconOnly)
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            // A fixed square per control, so a heavier or wider symbol
-            // can't make its button bigger than its neighbours.
-            .font(.system(size: 13, weight: .medium))
-            .frame(height: 22)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .glassBackground(in: Capsule())
+            actions()
         }
         .padding(.horizontal, 10)
         .padding(.bottom, search == nil ? 10 : 8)
@@ -144,17 +131,38 @@ extension ListColumn where Actions == EmptyView {
     }
 }
 
-/// A hairline between two groups of controls inside a column's action
-/// capsule.
+/// One glass control. A single button comes out a circle; two or three
+/// related ones share a capsule, ruled apart by `ColumnActionDivider`.
 ///
-/// Mail's toolbar does this — reply/reply-all/forward share a capsule but
-/// are ruled off from archive/delete/junk. Without it a row of four icons
-/// is four icons, and which of them are related is left to be guessed from
-/// the order.
+/// Which is the point: grouping should be something you can see rather than
+/// infer from the order. Import-from-Blender and import-a-pattern-folder
+/// are one control with two buttons; New and Share are not.
+struct ColumnActionGroup<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 6) {
+            content()
+        }
+        .labelStyle(.iconOnly)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        // Fixed height and font so a heavier or wider SF Symbol can't make
+        // its control taller than the one beside it. With this padding a
+        // lone icon comes out square, which a capsule renders as a circle.
+        .font(.system(size: 13, weight: .medium))
+        .frame(height: 22)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .glassBackground(in: Capsule())
+    }
+}
+
+/// A hairline inside a `ColumnActionGroup`.
 struct ColumnActionDivider: View {
     var body: some View {
         Divider()
             .frame(height: 15)
-            .padding(.horizontal, 3)
+            .padding(.horizontal, 1)
     }
 }

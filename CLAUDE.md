@@ -445,17 +445,34 @@ own name, so every section was headed "Nexus Pod" above its real one. The
 fix is `.toolbar(removing: .title)`, and the heading that means something
 is drawn by `ListColumn`.
 
-**Controls sit in one glass capsule, all icons, all one size** — Mail's
-toolbar shape. A labelled button briefly had its own capsule alongside
-them; at a 220pt column the label had nowhere to go and wrapped *one
-character per line* into a capsule taller than the header above it. Every
-action is an icon with a tooltip now, which is also what makes the row
-read as one set of controls rather than a big thing and three small ones.
+**A control that stands alone gets its own circle; controls that genuinely
+belong together share a capsule** — `ColumnActionGroup`, ruled apart inside
+by `ColumnActionDivider`. In Use Cases that's `[+]`, then
+`[Blender | pattern folder]` as one control because both bring a design in,
+then `[Share]`.
 
-Two rules for that bar: buttons inside the capsule are `.plain`, because
-the capsule is the glass and styling them too nests one inside the other;
-and each gets a fixed height and font, so a heavier or wider SF Symbol
-can't make its button bigger than its neighbours.
+One capsule around everything was tried first and was worse: four
+unrelated controls read as one control with four parts, and adding rules
+inside only marked where the seams were. Grouping should be visible rather
+than inferred from the order.
+
+Three rules for these:
+
+- Buttons inside a group are `.plain`. The capsule is the glass; styling
+  them too nests one inside the other.
+- Fixed height and font per group, so a heavier or wider SF Symbol can't
+  make its control taller than its neighbour.
+- Everything is an icon with a tooltip. A labelled button briefly sat
+  alongside them and, at a 220pt column, wrapped *one character per line*
+  into a capsule taller than the header above it.
+
+Icons alone can't explain themselves, so the **menus** carry it: named for
+what they move rather than the verb, under section headers. "Export
+Library…" above "Import…" left you to work out they were two ends of the
+same JSON file — they read "Export All as JSON…" and "Add from a JSON
+File…" under a **Saved Animations** header now. macOS menu items have no
+subtitle to hang an explanation on, so the label has to be the
+explanation.
 
 What those headers also carried had to go somewhere, and "somewhere" is
 the panel whose contents the control acts on:
