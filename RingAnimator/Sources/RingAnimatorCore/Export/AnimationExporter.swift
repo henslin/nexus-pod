@@ -250,6 +250,14 @@ public enum AnimationExporter {
     // MARK: - Frame rendering
 
     /// Renders `loopCount` repeats of the animation's natural loop as a
+    /// flat array of `CGImage`s.
+    ///
+    /// Kept for `AlphaCheck`, which inspects pixels and so needs the frames
+    /// themselves. Exporting goes through `export(...)` instead, which
+    /// streams — holding 120 framed-phone frames costs 1.7GB against
+    /// 281MB, measured.
+    ///
+    /// Renders `loopCount` repeats of the animation's natural loop as a
     /// flat sequence of opaque `CGImage`s — GIF and the movie encoder below
     /// both consume the same frame array, so rendering only happens once
     /// even when exporting both formats.
@@ -375,167 +383,126 @@ public enum AnimationExporter {
         return frames
     }
 
-    // MARK: - GIF
+    // MARK: - Writing
+    //
+    // Both encoders live in `ExportSink`, which takes frames one at a time.
+    // These two just drive it.
 
-    public static func writeGIF(frames: [CGImage], to url: URL) throws {
-        guard !frames.isEmpty else { throw ExportError.noFrames }
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.gif.identifier as CFString, frames.count, nil) else {
-            throw ExportError.gifSetupFailed
+    /// Renders and writes in one pass, never holding more than the frame
+    /// being encoded — see `ExportSink` for why that matters now that a
+    /// frame can be a framed phone rather than a small ring.
+    public static func export(
+        config: RingConfig,
+        colorScheme: ColorScheme,
+        loopCount: Int,
+        transparent: Bool = false,
+        canvas: Canvas = .ring,
+        gif gifURL: URL? = nil,
+        movie movieURL: URL? = nil,
+        onProgress: @MainActor (Double) -> Void = { _ in }
+    ) async throws {
+        let export = exportConfig(from: config)
+        let loopDuration = naturalLoopDuration(for: config)
+        let frameCount = frameCount(duration: loopDuration, loopCount: loopCount)
+        let sink = try makeSink(canvas: canvas, transparent: transparent, frameCount: frameCount, gif: gifURL, movie: movieURL)
+
+        for index in 0..<frameCount {
+            guard let image = render(
+                canvas: canvas, config: export, elapsed: Double(index) / fps,
+                opacity: 1, colorScheme: colorScheme, transparent: transparent
+            ) else { continue }
+            try await sink.append(image)
+            onProgress(Double(index + 1) / Double(frameCount))
+            await Task.yield()
         }
-
-        let fileProperties: [CFString: Any] = [
-            kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]
-        ]
-        CGImageDestinationSetProperties(destination, fileProperties as CFDictionary)
-
-        let frameProperties: [CFString: Any] = [
-            kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1 / fps]
-        ]
-        for frame in frames {
-            CGImageDestinationAddImage(destination, frame, frameProperties as CFDictionary)
-        }
-
-        guard CGImageDestinationFinalize(destination) else {
-            throw ExportError.gifFinalizeFailed
-        }
+        try await sink.finish()
     }
 
-    // MARK: - Movie
+    /// The timeline equivalent, frame for frame.
+    public static func export(
+        timeline: RingTimeline,
+        colorScheme: ColorScheme,
+        loopCount: Int,
+        transparent: Bool = false,
+        canvas: Canvas = .ring,
+        gif gifURL: URL? = nil,
+        movie movieURL: URL? = nil,
+        onProgress: @MainActor (Double) -> Void = { _ in }
+    ) async throws {
+        guard !timeline.isEmpty, timeline.duration > 0 else { throw ExportError.noFrames }
+        var source = timeline
+        source.loops = true
 
-    /// `transparent` switches the codec, not just a flag: H.264 has no
-    /// alpha channel at all, so a transparent export is written as HEVC
-    /// with alpha (`hvc1` carrying `ContainsAlphaChannel`) instead. That
-    /// plays with transparency in QuickTime, Keynote, and `AVPlayer` — so
-    /// a clip can be dropped into a real build as a video layer with no
-    /// black box around the ring — at roughly H.264-like file sizes,
-    /// where ProRes 4444 would be the same picture an order of magnitude
-    /// larger. Premultiplied alpha, matching what `ImageRenderer` hands
-    /// back.
-    public static func writeMovie(frames: [CGImage], to url: URL, transparent: Bool = false) async throws {
-        guard let firstFrame = frames.first else { throw ExportError.noFrames }
-        let width = firstFrame.width
-        let height = firstFrame.height
-
-        if FileManager.default.fileExists(atPath: url.path) {
-            try? FileManager.default.removeItem(at: url)
+        var configs: [UUID: RingConfig] = [:]
+        for segment in timeline.segments where configs[segment.id] == nil {
+            let config = RingConfig()
+            segment.snapshot.apply(to: config)
+            config.sequencePlaybackEnabled = false
+            configs[segment.id] = exportConfig(from: config)
         }
 
-        let writer: AVAssetWriter
-        do {
-            writer = try AVAssetWriter(outputURL: url, fileType: .mov)
-        } catch {
-            throw ExportError.movieSetupFailed
+        let frameCount = frameCount(duration: timeline.duration, loopCount: loopCount)
+        let sink = try makeSink(canvas: canvas, transparent: transparent, frameCount: frameCount, gif: gifURL, movie: movieURL)
+
+        for index in 0..<frameCount {
+            guard
+                let resolved = source.resolve(at: Double(index) / fps),
+                let config = configs[resolved.segment.id],
+                let image = render(
+                    canvas: canvas, config: config, elapsed: resolved.phaseTime,
+                    opacity: resolved.opacity, colorScheme: colorScheme, transparent: transparent
+                )
+            else { continue }
+            try await sink.append(image)
+            onProgress(Double(index + 1) / Double(frameCount))
+            await Task.yield()
         }
-
-        var outputSettings: [String: Any] = [
-            AVVideoCodecKey: transparent ? AVVideoCodecType.hevcWithAlpha : AVVideoCodecType.h264,
-            AVVideoWidthKey: width,
-            AVVideoHeightKey: height
-        ]
-        if transparent {
-            outputSettings[AVVideoCompressionPropertiesKey] = [
-                kVTCompressionPropertyKey_AlphaChannelMode as String:
-                    kVTAlphaChannelMode_PremultipliedAlpha as String
-            ]
-        }
-        let input = AVAssetWriterInput(mediaType: .video, outputSettings: outputSettings)
-        input.expectsMediaDataInRealTime = false
-
-        // BGRA for the alpha path: it's the format the HEVC-with-alpha
-        // encoder actually accepts. ARGB stays for the opaque path,
-        // where it has always worked.
-        let pixelFormat = transparent ? kCVPixelFormatType_32BGRA : kCVPixelFormatType_32ARGB
-        let pixelBufferAttributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: pixelFormat,
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height
-        ]
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: pixelBufferAttributes)
-
-        guard writer.canAdd(input) else { throw ExportError.movieSetupFailed }
-        writer.add(input)
-        writer.startWriting()
-        writer.startSession(atSourceTime: .zero)
-
-        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
-
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            // `requestMediaDataWhenReady`'s callback runs on `queue`, a
-            // plain background `DispatchQueue` — not this function's
-            // (MainActor) isolation domain. Under Swift 6 strict
-            // concurrency a mutable local `var` captured by that callback
-            // would need to prove it's safe to mutate off-actor, which the
-            // compiler can't do for an ordinary local. `nonisolated(unsafe)`
-            // is the correct escape hatch here: the callback is documented
-            // to only ever be invoked serially, one call at a time, so
-            // there's no actual data race — just nothing in the type
-            // system that expresses that guarantee.
-            nonisolated(unsafe) var frameIndex = 0
-            let queue = DispatchQueue(label: "com.nexusringapp.animation-export")
-            input.requestMediaDataWhenReady(on: queue) {
-                while input.isReadyForMoreMediaData {
-                    if frameIndex >= frames.count {
-                        input.markAsFinished()
-                        writer.finishWriting {
-                            if writer.status == .completed {
-                                continuation.resume()
-                            } else {
-                                continuation.resume(throwing: ExportError.movieWritingFailed(writer.error?.localizedDescription ?? "unknown error"))
-                            }
-                        }
-                        return
-                    }
-
-                    guard let pixelBuffer = pixelBuffer(from: frames[frameIndex], width: width, height: height, transparent: transparent) else {
-                        continuation.resume(throwing: ExportError.pixelBufferCreationFailed)
-                        return
-                    }
-                    let presentationTime = CMTimeMultiply(frameDuration, multiplier: Int32(frameIndex))
-                    if !adaptor.append(pixelBuffer, withPresentationTime: presentationTime) {
-                        continuation.resume(throwing: ExportError.movieWritingFailed(writer.error?.localizedDescription ?? "append failed"))
-                        return
-                    }
-                    frameIndex += 1
-                }
-            }
-        }
+        try await sink.finish()
     }
 
-    nonisolated private static func pixelBuffer(from cgImage: CGImage, width: Int, height: Int, transparent: Bool) -> CVPixelBuffer? {
-        var pixelBufferOut: CVPixelBuffer?
-        let attributes: [String: Any] = [
-            kCVPixelBufferCGImageCompatibilityKey as String: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
-        ]
-        let format = transparent ? kCVPixelFormatType_32BGRA : kCVPixelFormatType_32ARGB
-        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, format, attributes as CFDictionary, &pixelBufferOut)
-        guard status == kCVReturnSuccess, let pixelBuffer = pixelBufferOut else { return nil }
+    /// Writes frames that already exist — the particle recorder's path,
+    /// where the frames come from a real-time capture rather than a render.
+    public static func write(
+        frames: [CGImage],
+        gif gifURL: URL? = nil,
+        movie movieURL: URL? = nil,
+        transparent: Bool = false
+    ) async throws {
+        guard let first = frames.first else { throw ExportError.noFrames }
+        let sink = try ExportSink(
+            gif: gifURL, movie: movieURL,
+            size: CGSize(width: first.width, height: first.height),
+            fps: fps, transparent: transparent, frameCount: frames.count
+        )
+        for frame in frames { try await sink.append(frame) }
+        try await sink.finish()
+    }
 
-        CVPixelBufferLockBaseAddress(pixelBuffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+    private static func frameCount(duration: TimeInterval, loopCount: Int) -> Int {
+        max(Int((duration * Double(max(loopCount, 1)) * fps).rounded()), 1)
+    }
 
-        // `noneSkipFirst` discards alpha, which is right for the opaque
-        // path and would silently flatten the transparent one.
-        let bitmapInfo = transparent
-            ? CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
-            : CGImageAlphaInfo.noneSkipFirst.rawValue
-        guard let context = CGContext(
-            data: CVPixelBufferGetBaseAddress(pixelBuffer),
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: bitmapInfo
-        ) else { return nil }
+    private static func makeSink(
+        canvas: Canvas, transparent: Bool, frameCount: Int, gif: URL?, movie: URL?
+    ) throws -> ExportSink {
+        let size = canvasSize(canvas)
+        return try ExportSink(
+            gif: gif, movie: movie,
+            size: CGSize(width: size.width * renderScale, height: size.height * renderScale),
+            fps: fps, transparent: transparent, frameCount: frameCount
+        )
+    }
 
-        // Clearing matters only when transparent: the buffer comes back
-        // with whatever was in it, and an untouched pixel must be
-        // transparent rather than garbage.
-        if transparent {
-            context.clear(CGRect(x: 0, y: 0, width: width, height: height))
-        }
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return pixelBuffer
+    private static func render(
+        canvas: Canvas, config: RingConfig, elapsed: Double, opacity: Double,
+        colorScheme: ColorScheme, transparent: Bool
+    ) -> CGImage? {
+        let renderer = ImageRenderer(content: frameView(
+            canvas: canvas, config: config, elapsed: elapsed, opacity: opacity,
+            colorScheme: colorScheme, transparent: transparent
+        ))
+        renderer.scale = renderScale
+        renderer.isOpaque = !transparent
+        return renderer.cgImage
     }
 }

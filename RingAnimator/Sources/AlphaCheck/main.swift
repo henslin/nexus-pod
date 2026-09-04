@@ -73,7 +73,7 @@ func run() async -> Int32 {
 
     let movURL = dir.appendingPathComponent("clip.mov")
     do {
-        try await AnimationExporter.writeMovie(frames: frames, to: movURL, transparent: true)
+        try await AnimationExporter.write(frames: frames, movie: movURL, transparent: true)
     } catch {
         check("movie written", false, error.localizedDescription)
         return failed ? 1 : 0
@@ -96,7 +96,7 @@ func run() async -> Int32 {
     //    backdrop drops out — partial alpha is expected to be lost here.
     let gifURL = dir.appendingPathComponent("clip.gif")
     do {
-        try AnimationExporter.writeGIF(frames: frames, to: gifURL)
+        try await AnimationExporter.write(frames: frames, gif: gifURL)
         if let src = CGImageSourceCreateWithURL(gifURL as CFURL, nil),
            let img = CGImageSourceCreateImageAtIndex(src, 0, nil) {
             let (gifClear, _, gifTotal) = alphaHistogram(img)
@@ -107,7 +107,39 @@ func run() async -> Int32 {
         check("GIF written", false, error.localizedDescription)
     }
 
+    // 5. The streaming path — what every export sheet actually calls now.
+    //    Rendering and encoding run as one pass, so this is also the only
+    //    check that a real file comes out the far end.
+    let streamed = dir.appendingPathComponent("streamed")
+    do {
+        try await AnimationExporter.export(
+            config: config, colorScheme: .dark, loopCount: 1, transparent: true,
+            canvas: .appUI(tab: .dashboard, device: .blackTitanium),
+            gif: streamed.appendingPathExtension("gif"),
+            movie: streamed.appendingPathExtension("mov")
+        )
+        let gifSize = fileSize(streamed.appendingPathExtension("gif"))
+        let movSize = fileSize(streamed.appendingPathExtension("mov"))
+        check("streaming export writes a GIF", gifSize > 1024, "\(gifSize) bytes")
+        check("streaming export writes a movie", movSize > 1024, "\(movSize) bytes")
+
+        let framed = AVURLAsset(url: streamed.appendingPathExtension("mov"))
+        if let track = try? await framed.loadTracks(withMediaType: .video).first {
+            let size = try? await track.load(.naturalSize)
+            let expected = AnimationExporter.canvasSize(.appUI(tab: .dashboard, device: .blackTitanium))
+            let want = CGSize(width: expected.width * AnimationExporter.renderScale,
+                              height: expected.height * AnimationExporter.renderScale)
+            check("framed movie is the right size", size == want, "\(size.map { "\(Int($0.width))x\(Int($0.height))" } ?? "?") vs \(Int(want.width))x\(Int(want.height))")
+        }
+    } catch {
+        check("streaming export", false, error.localizedDescription)
+    }
+
     return failed ? 1 : 0
+}
+
+func fileSize(_ url: URL) -> Int {
+    ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int) ?? 0
 }
 
 /// Redraws into a known layout rather than reading `CGImage` bytes

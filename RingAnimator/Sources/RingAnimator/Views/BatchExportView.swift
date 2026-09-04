@@ -21,7 +21,9 @@ struct BatchExportView: View {
 
     @State private var exportGIF = true
     @State private var exportMovie = false
-    @State private var transparent = false
+    /// The same canvas/appearance/transparency options the single export
+    /// sheet has — one type, one control group, so the two can't drift.
+    @State private var canvasSettings = ExportCanvasSettings()
     @State private var loopCount = 2
     @State private var isExporting = false
     @State private var completed = 0
@@ -100,11 +102,13 @@ struct BatchExportView: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("GIF", isOn: $exportGIF)
             Toggle("Movie (.mov)", isOn: $exportMovie)
-            Toggle("Transparent background", isOn: $transparent)
+
+            ExportCanvasOptionsView(settings: $canvasSettings)
+
             Stepper(value: $loopCount, in: 1...8) {
                 Text("Loops per file: \(loopCount)")
             }
-            Text(transparent
+            Text(canvasSettings.effectiveTransparent
                  ? "Files are named after each animation. Existing files with the same name are replaced. Movies are written as HEVC with alpha; GIF transparency is 1-bit, so its edges will be harder."
                  : "Files are named after each animation. Existing files with the same name are replaced.")
                 .font(.caption)
@@ -249,37 +253,23 @@ struct BatchExportView: View {
                 let config = RingConfig()
                 preset.apply(to: config)
 
-                let frames = await AnimationExporter.renderFrames(
-                    config: config,
-                    colorScheme: colorScheme,
-                    loopCount: loopCount,
-                    transparent: transparent
-                ) { value in
-                    frameProgress = value * 0.9
-                    items[index].state = .rendering(value)
-                }
-
-                guard !frames.isEmpty else {
-                    failures.append(preset.name)
-                    items[index].state = .failed
-                    completed += 1
-                    continue
-                }
-
                 let base = folder.appendingPathComponent(safeFileName(preset.name))
                 do {
-                    if exportGIF {
-                        try AnimationExporter.writeGIF(
-                            frames: frames, to: base.appendingPathExtension("gif")
-                        )
-                    }
-                    if exportMovie {
-                        let movie = base.appendingPathExtension("mov")
-                        // AVAssetWriter refuses to start when something is
-                        // already at the destination, which on a re-run of
-                        // the same folder is every file.
-                        try? FileManager.default.removeItem(at: movie)
-                        try await AnimationExporter.writeMovie(frames: frames, to: movie, transparent: transparent)
+                    // Rendered and encoded in one pass — see `ExportSink`.
+                    // A batch of framed-phone exports held frame by frame
+                    // would be gigabytes of images waiting on an encoder
+                    // that consumes them in order anyway.
+                    try await AnimationExporter.export(
+                        config: config,
+                        colorScheme: canvasSettings.appearance,
+                        loopCount: loopCount,
+                        transparent: canvasSettings.effectiveTransparent,
+                        canvas: canvasSettings.canvas,
+                        gif: exportGIF ? base.appendingPathExtension("gif") : nil,
+                        movie: exportMovie ? base.appendingPathExtension("mov") : nil
+                    ) { value in
+                        frameProgress = value
+                        items[index].state = .rendering(value)
                     }
                     items[index].state = .done
                 } catch {
