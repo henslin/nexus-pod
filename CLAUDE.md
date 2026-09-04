@@ -438,13 +438,22 @@ existing ones right. These are all known, deliberate gaps rather than
 bugs — the reason each was deferred is recorded where the code lives, and
 none of them should be picked up piecemeal while feature work continues.
 
-- **Code generator parity.** The four export backends (SwiftUI, Compose,
-  JS, Blender) don't reflect Diode Mode or `DiodeShape` at all, and
-  export Multi Chase as two colors where the app does N. `ExportView`
-  states these on screen so nobody is surprised — clearing the gap means
-  clearing those notices too. `RingView.diodeIntensity` is the shape the
-  generators would follow: each animation as a scalar field over ring
-  position.
+- **Code generator parity.** Done for SwiftUI, outstanding for the other
+  three. SwiftUI now exports the full color list (Multi Chase gives each
+  its own comet, as in the app), Diode Mode, and all four diode shapes —
+  `CodeGeneratorsDiodeMode.swift` ports `RingView.diodeIntensity` field for
+  field, drawn into one `Canvas` the way the app's own renderer is.
+  `ExportView`'s notice is narrowed to the backends that still lack it
+  rather than removed.
+  **What `ExportCheck` proves and doesn't.** It compiles all 82 exports —
+  every animation type crossed with every diode shape, extra colors, Diode
+  Mode on — so a body that doesn't build can't ship. It does *not* prove
+  the field computes the same numbers as the app: the two are hand-ported
+  copies kept honest by reading them side by side. A differential check
+  (compile the export, run it, compare against `diodeIntensity`) is the
+  real answer and isn't built. `voiceLevel` is deliberately 0 throughout
+  the export — a drop-in file has no microphone, and inventing one would
+  be worse than dropping the term.
 - **Kotlin and JavaScript exports are unverified.** `swift run
   ExportCheck` typechecks all 30 SwiftUI exports (see below) and found
   four that didn't compile. The Compose and web generators emit the same

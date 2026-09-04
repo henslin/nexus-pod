@@ -43,17 +43,17 @@ struct ExportView: View {
             .padding(.horizontal)
             .padding(.top, 10)
 
-            // Said out loud rather than left to be discovered: the
-            // generators draw each animation the continuous way, so a
-            // config using Diode Mode or a non-round diode shape exports
-            // as something that doesn't match the preview. Better to state
-            // the gap than to hand someone code that quietly differs from
-            // what they designed.
-            if config.diodeModeEnabled || config.diodeShape != .round {
+            // Said out loud rather than left to be discovered. SwiftUI now
+            // exports Diode Mode and the diode shapes; the other three
+            // backends still draw every animation the continuous way, so a
+            // config using either exports as something that doesn't match
+            // the preview. Better to state the gap than to hand someone
+            // code that quietly differs from what they designed.
+            if (config.diodeModeEnabled || config.diodeShape != .round), language != .swift {
                 Label(
                     config.diodeModeEnabled
-                        ? "Diode Mode isn't in the exported code yet — this exports the continuous form of \(config.animationType.rawValue)."
-                        : "Diode shape isn't in the exported code yet — exported diodes are round.",
+                        ? "\(language.rawValue) doesn't carry Diode Mode yet — this exports the continuous form of \(config.animationType.rawValue). The SwiftUI export does."
+                        : "\(language.rawValue) doesn't carry diode shape yet — exported diodes are round. The SwiftUI export does.",
                     systemImage: "info.circle"
                 )
                 .font(.caption)

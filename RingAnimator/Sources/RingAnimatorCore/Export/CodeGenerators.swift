@@ -357,6 +357,17 @@ struct ThinkingRingView: View {
     var bloomSoftness: Double = \(config.bloomSoftness)
     var chasingDrawUndraw: Bool = \(config.chasingFillStyle == .drawUndraw)
     var diodeCount: Int = \(Int(config.diodeCount.rounded()))
+    // Diode Mode — the pixels are fixed and an animation is a brightness
+    // pattern swept across them. See `diodeState` below.
+    var diodeScale: CGFloat = \(config.diodeScale)
+    var diodeGap: Double = \(config.diodeGap)
+    var diodeFloor: Double = \(config.diodeFloor)
+    var loopSeconds: Double = \(config.loopSeconds)
+    var rippleDropCount: Double = \(config.rippleDropCount)
+    var rippleDecay: Double = \(config.rippleDecay)
+    var rippleLife: Double = \(config.rippleLife)
+    var rippleSeed: Double = \(config.rippleSeed)
+    var bloomCount: Double = \(config.bloomCount)
     var primaryColor: Color = Color(hex: "\(primaryHex)")
     var secondaryColor: Color = Color(hex: "\(secondaryHex)")
     // Every configured color, in order. The app cycles all of them — Multi
@@ -1146,7 +1157,14 @@ fun ThinkingRingView(
         }
 """
 
-        return header + indent(animationBody, by: 12) + aberrationDispatch + "\n" + particlesFunc + "\n" + footer
+        // Diode Mode replaces the animation body outright rather than
+        // layering on top of it: the continuous renderers draw arcs that
+        // rotate and gradients that sweep, and this draws fixed pixels
+        // whose brightness changes. There is nothing to share.
+        let body = config.diodeModeEnabled ? swiftDiodeBody() : animationBody
+        let diodeSupport = config.diodeModeEnabled ? swiftDiodeSupport(config: config) : ""
+        return header + indent(body, by: 12) + aberrationDispatch + "\n"
+            + particlesFunc + diodeSupport + "\n" + footer
     }
 
     // MARK: - Web (vanilla HTML/Canvas)
@@ -1734,7 +1752,7 @@ ctx.stroke();
         return "Cue" + pascal
     }
 
-    private static func indent(_ text: String, by spaces: Int) -> String {
+    static func indent(_ text: String, by spaces: Int) -> String {
         let pad = String(repeating: " ", count: spaces)
         return text
             .split(separator: "\n", omittingEmptySubsequences: false)
