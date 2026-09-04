@@ -14,7 +14,11 @@ import SwiftUI
 /// File scope, not a static on `ListColumn`: that type is generic over its
 /// content and actions, and Swift has no static stored properties on
 /// generic types.
-private let columnMargin: CGFloat = 16
+///
+/// **Measured, not read.** macOS doesn't expose the navigation title's own
+/// margin, so this is eyeballed against a screenshot — 16 was a hair too
+/// far left. If it drifts again this is the one number to move.
+private let columnMargin: CGFloat = 20
 
 private struct ColumnSubtitleKey: EnvironmentKey {
     static let defaultValue: String = ""
@@ -66,8 +70,12 @@ struct ListColumn<Content: View, Actions: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, columnMargin)
-                    .padding(.top, 2)
-                    .padding(.bottom, 8)
+                    // Negative, to close the gap the title band leaves
+                    // below itself. The description is a second line of the
+                    // heading, not a separate block, and at the band's own
+                    // spacing it read as floating halfway down the column.
+                    .padding(.top, -8)
+                    .padding(.bottom, 10)
             }
             // Actions at the *top*, above the search field. They were along
             // the bottom, which is the Finder/Xcode convention for a source

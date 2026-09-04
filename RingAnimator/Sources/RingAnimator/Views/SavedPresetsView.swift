@@ -49,12 +49,14 @@ struct SavedPresetsView: View {
 
     @State private var importErrorMessage: String?
     @State private var importSuccessMessage: String?
-    @State private var showingBatchExport = false
+    /// Non-empty while the render sheet is up — one animation or all of
+    /// them, the same sheet either way.
+    @State private var renderTargets: [RingPreset] = []
 
     var body: some View {
         ListColumn {
             List(selection: $selectedPresetID) {
-                Section("Saved Animations") {
+                Section("All Saved Animations") {
                     if store.presets.isEmpty {
                         Text("Click + to save the animation you're looking at now.")
                             .font(.caption)
@@ -103,28 +105,31 @@ struct SavedPresetsView: View {
                 // work out that they were two ends of the same JSON file,
                 // and that neither had anything to do with the two Blender
                 // items under them.
-                // First, because sending one animation to a teammate is
-                // the common errand and exporting the whole library is the
-                // occasional one. It was only on the row's right-click
-                // menu, which is a thing you have to already know about.
-                Section("Selected Animation") {
-                    Button(selectedPreset.map { "Export “\($0.name)”…" } ?? "Export Selected…") {
+                // Grouped by *scope*, and each item names its own scope
+                // rather than leaning on the header — one animation, or the
+                // whole list. Mixing the two under one heading is what made
+                // this confusing: "Export All…" and "Export “X”…" look like
+                // the same kind of thing until you read them twice.
+                Section(selectedPreset.map { "“\($0.name)”" } ?? "Selected Animation") {
+                    Button("Export This Animation…") {
                         if let selectedPreset { exportSingle(selectedPreset) }
                     }
                     .disabled(selectedPreset == nil)
+                    Button("Export This as GIF or Movie…") {
+                        renderTargets = selectedPreset.map { [$0] } ?? []
+                    }
+                    .disabled(selectedPreset == nil)
                 }
-                Section("Saved Animations") {
-                    Button("Export All as JSON…") { exportLibrary() }
+                Section(store.presets.count == 1
+                        ? "All 1 Animation"
+                        : "All \(store.presets.count) Animations") {
+                    Button("Export Them All…") { exportLibrary() }
                         .disabled(store.presets.isEmpty)
-                    Button("Add from a JSON File…") { importPresets() }
-                }
-                Section("Render") {
-                    Button("Export All as GIF or Movie…") { showingBatchExport = true }
-                        .disabled(store.presets.isEmpty)
-                }
-                Section("Bring in a Design") {
-                    Button("Read a Blender Script into the Ring…") { importBlenderScript() }
-                    Button("Add a Pattern Folder to Use Cases…") { importPatternFolder() }
+                    Button("Export Them All as GIF or Movie…") {
+                        renderTargets = store.presets
+                    }
+                    .disabled(store.presets.isEmpty)
+                    Button("Add from a File…") { importPresets() }
                 }
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up.on.square")
@@ -139,12 +144,17 @@ struct SavedPresetsView: View {
         // comment), so the alert version was simply unusable: nothing you
         // typed ever landed in the field. A plain sheet gives room for the
         // paste-workaround button alongside it.
-        .sheet(isPresented: $showingBatchExport) {
+        .sheet(isPresented: Binding(
+            get: { !renderTargets.isEmpty },
+            set: { if !$0 { renderTargets = [] } }
+        )) {
             BatchExportView(
-                presets: store.presets,
-                sectionName: "Saved Animations",
+                presets: renderTargets,
+                sectionName: renderTargets.count == 1
+                    ? renderTargets[0].name
+                    : "Saved Animations",
                 colorScheme: .dark
-            ) { showingBatchExport = false }
+            ) { renderTargets = [] }
         }
         .sheet(isPresented: $showingSaveDialog) { saveDialog }
         .sheet(item: $blenderReport) { report in
@@ -234,8 +244,8 @@ struct SavedPresetsView: View {
     private func exportSingle(_ preset: RingPreset) {
         let panel = NSSavePanel()
         let safeName = preset.name.isEmpty ? "animation" : preset.name
-        panel.nameFieldStringValue = "\(safeName).json"
-        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = AnimationDocument.fileName(safeName)
+        panel.allowedContentTypes = AnimationDocument.writableTypes
         if panel.runModal() == .OK, let url = panel.url {
             try? store.exportPresetJSON(preset).write(to: url)
         }
@@ -328,8 +338,8 @@ struct SavedPresetsView: View {
 
     private func exportLibrary() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "ring-pod-animations.json"
-        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = AnimationDocument.fileName("Nexus Animations")
+        panel.allowedContentTypes = AnimationDocument.writableTypes
         if panel.runModal() == .OK, let url = panel.url {
             try? store.exportLibraryJSON().write(to: url)
         }
@@ -337,7 +347,7 @@ struct SavedPresetsView: View {
 
     private func importPresets() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
+        panel.allowedContentTypes = AnimationDocument.readableTypes
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }

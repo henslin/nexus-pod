@@ -23,7 +23,9 @@ struct UseCaseListView: View {
 
     @State private var importErrorMessage: String?
     @State private var importSuccessMessage: String?
-    @State private var showingBatchExport = false
+    /// Non-empty while the render sheet is up — one use case or all of
+    /// them, the same sheet either way.
+    @State private var renderTargets: [RingPreset] = []
 
     var body: some View {
         ListColumn {
@@ -95,20 +97,32 @@ struct UseCaseListView: View {
 
             ColumnActionGroup {
                 Menu {
-                    Section("Selected Use Case") {
-                        Button(selectedPreset.map { "Export “\($0.name)”…" } ?? "Export Selected…") {
+                    // Grouped by *scope*, and each item names its own scope
+                    // rather than leaning on the header — one use case, or
+                    // the whole list. Mixing the two under one heading is
+                    // what made this confusing: "Export All…" and
+                    // "Export “X”…" look like the same kind of thing until
+                    // you read them twice.
+                    Section(selectedPreset.map { "“\($0.name)”" } ?? "Selected Use Case") {
+                        Button("Export This Use Case…") {
                             if let selectedPreset { exportSingle(selectedPreset) }
                         }
                         .disabled(selectedPreset == nil)
+                        Button("Export This as GIF or Movie…") {
+                            renderTargets = selectedPreset.map { [$0] } ?? []
+                        }
+                        .disabled(selectedPreset == nil)
                     }
-                    Section("Use Cases") {
-                        Button("Export All as JSON…") { exportLibrary() }
+                    Section(store.presets.count == 1
+                            ? "All 1 Use Case"
+                            : "All \(store.presets.count) Use Cases") {
+                        Button("Export Them All…") { exportLibrary() }
                             .disabled(store.presets.isEmpty)
-                        Button("Add from a JSON File…") { importUseCases() }
-                    }
-                    Section("Render") {
-                        Button("Export All as GIF or Movie…") { showingBatchExport = true }
-                            .disabled(store.presets.isEmpty)
+                        Button("Export Them All as GIF or Movie…") {
+                            renderTargets = store.presets
+                        }
+                        .disabled(store.presets.isEmpty)
+                        Button("Add from a File…") { importUseCases() }
                     }
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up.on.square")
@@ -116,12 +130,17 @@ struct UseCaseListView: View {
                 .help("Export these use cases as a file, or add ones sent to you")
             }
         }
-        .sheet(isPresented: $showingBatchExport) {
+        .sheet(isPresented: Binding(
+            get: { !renderTargets.isEmpty },
+            set: { if !$0 { renderTargets = [] } }
+        )) {
             BatchExportView(
-                presets: store.presets,
-                sectionName: "Use Cases",
+                presets: renderTargets,
+                sectionName: renderTargets.count == 1
+                    ? renderTargets[0].name
+                    : "Use Cases",
                 colorScheme: .dark
-            ) { showingBatchExport = false }
+            ) { renderTargets = [] }
         }
         .sheet(isPresented: $showingNewDialog) { newDialog }
         .sheet(item: $renamingUseCase) { _ in renameDialog }
@@ -262,8 +281,8 @@ struct UseCaseListView: View {
     private func exportSingle(_ preset: RingPreset) {
         let panel = NSSavePanel()
         let safeName = preset.name.isEmpty ? "use-case" : preset.name
-        panel.nameFieldStringValue = "\(safeName).json"
-        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = AnimationDocument.fileName(safeName)
+        panel.allowedContentTypes = AnimationDocument.writableTypes
         if panel.runModal() == .OK, let url = panel.url {
             try? store.exportPresetJSON(preset).write(to: url)
         }
@@ -271,8 +290,8 @@ struct UseCaseListView: View {
 
     private func exportLibrary() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "use-cases.json"
-        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = AnimationDocument.fileName("Use Cases")
+        panel.allowedContentTypes = AnimationDocument.writableTypes
         if panel.runModal() == .OK, let url = panel.url {
             try? store.exportLibraryJSON().write(to: url)
         }
@@ -280,7 +299,7 @@ struct UseCaseListView: View {
 
     private func importUseCases() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
+        panel.allowedContentTypes = AnimationDocument.readableTypes
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }

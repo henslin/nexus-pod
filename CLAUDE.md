@@ -378,6 +378,41 @@ The Cue Library deliberately has no `+`. It's a fixed transcription of the
 hardware spec with per-cue overrides, and staying trustworthy as a spec is
 what it's for.
 
+## The export menu, and why it says nothing about JSON
+
+Two things were confusing about it, both worth keeping fixed.
+
+**The format was in the interface.** "Export All as JSON…" next to "Add
+from a JSON File…" named the storage format in a menu, and the two halves
+of one errand — send a teammate an animation, load the one they sent —
+read as a developer tool. Exports write `.nexusanim` now (see
+`AnimationDocument`) and imports accept that *and* `.json`, because every
+file anyone has already exported ends in `.json` and a rename shouldn't
+strand them. It's still JSON underneath; that's storage.
+
+`.nexusanim` is **not** a registered document type. Doing it properly means
+an exported UTType in `Info.plist` with a Finder icon and a kind string, so
+right now the extension is a name and nothing more — double-clicking one
+won't open the app.
+
+**Scope wasn't visible.** One-animation and whole-list actions sat under
+one heading, and "Export All…" and "Export “X”…" look like the same kind of
+thing until you read them twice. Each item names its own scope now — "This"
+versus "Them All" — with the count in the section header so "all" has a
+number attached:
+
+    “Nexus Default”
+      Export This Animation…
+      Export This as GIF or Movie…
+    All 2 Animations
+      Export Them All…
+      Export Them All as GIF or Movie…
+      Add from a File…
+
+A single render reuses `BatchExportView` with a one-item list, which is
+also how single-animation GIF export came to exist outside the phone
+mockup's own button.
+
 ## Exporting a whole list at once
 
 `BatchExportView` renders every animation in a list to GIF and/or movie
