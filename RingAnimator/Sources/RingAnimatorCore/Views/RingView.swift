@@ -42,6 +42,11 @@ public struct RingView: View {
     /// from sixty at 22 points and a fifth of the work.
     public static let thumbnailFrameRate: Double = 12
 
+    /// Whether this is one of those. Set alongside the frame rate rather
+    /// than inferred from `diameter`, so a genuinely small *main* preview
+    /// doesn't quietly lose detail.
+    private var isThumbnail: Bool { frameRate != nil }
+
     // The size every absolute value on `RingConfig` (line width, glow
     // radius, particle size, ...) was tuned against — the tab bar's ring
     // pod. Rendering at any other `diameter` scales those values by
@@ -1145,7 +1150,7 @@ public struct RingView: View {
         // and having both paths hand `diodeLayer` the same finished array
         // keeps the hardware render the single source of what smoothing is
         // smoothing.
-        let states: [DiodeState] = config.smoothingEnabled
+        let states: [DiodeState] = config.smoothingEnabled || isThumbnail
             ? smoothedStates(
                 count: count,
                 elapsed: elapsed,
@@ -1180,7 +1185,16 @@ public struct RingView: View {
 
         // Same states either way — the only question is whether they're
         // drawn as twenty shapes or as one stroke sampled from all twenty.
-        let ring: AnyView = config.smoothingEnabled && config.smoothingGradientRing
+        //
+        // A thumbnail always takes the stroke. Twenty positioned `Circle`
+        // views cost the same to build at 22 points as at 200 — the work is
+        // view-graph construction, not pixels — and measured at 0.98 ms a
+        // frame against 0.36 for the stroke. Across the twenty rows a
+        // sidebar shows, that is 234 ms of main-thread work per second
+        // versus 86. At 28 points the individual diodes are a pixel and a
+        // half wide, so nothing is lost: it's the same field, drawn with one
+        // shape instead of twenty.
+        let ring: AnyView = isThumbnail || (config.smoothingEnabled && config.smoothingGradientRing)
             ? AnyView(gradientRing(states: states, scale: scale))
             : AnyView(diodeLayer(count: count, scale: scale) { i in
                 states.indices.contains(i) ? states[i] : DiodeState(color: all[0], opacity: 0)
@@ -1379,11 +1393,21 @@ public struct RingView: View {
         colors all: [Color],
         rippleNorm: Double
     ) -> [DiodeState] {
+        // A thumbnail takes the spatial pass and skips the temporal one.
+        //
+        // Drawn as a bare stroke, a single lit diode out of twenty is a
+        // wedge a few degrees wide — on a sparse pattern like the comet
+        // that reads as a speck where the diode version showed a dot. A
+        // little bleed widens it back into something visible. The
+        // persistence taps are what actually cost: each one resamples the
+        // whole ring, and none of it survives being drawn at 28 points.
+        let spreadOverride = isThumbnail ? 1.0 : max(config.smoothingSpread, 0)
+        let releaseOverride = isThumbnail ? 0 : max(config.smoothingTrail, 0)
         // Continuous time is most of what "smooth" means for an imported
         // pattern: `quantized` is what makes a 312 ms tick visible as a
         // series of held frames.
         let base = config.smoothingFluidTime ? elapsed : quantized(elapsed)
-        let release = max(config.smoothingTrail, 0)
+        let release = releaseOverride
         // A short look *forward*, which softens the rise. Possible only
         // because the field is a pure function of time — there's no "next
         // frame" to wait for, just another instant to evaluate.
@@ -1430,7 +1454,7 @@ public struct RingView: View {
 
         var field = accumulators.map(\.resolved)
 
-        let spread = max(config.smoothingSpread, 0)
+        let spread = spreadOverride
         if spread > 0.01 {
             field = spatiallySpread(field, spread: spread)
         }

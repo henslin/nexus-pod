@@ -360,11 +360,37 @@ build, and neither one guessable:
   both are memoized — static tables, because `RingView` is a struct rebuilt
   every frame with no instance to hang a cache on.
 
-Result: **100% → ~29%**, and no RingAnimator symbol appears meaningfully in
-the profile any more. What's left is SwiftUI's own view-graph work
-(`SwiftUICore`, `AppKit`, `AttributeGraph`), which is the next lever if it
-ever needs one — fewer nested `GeometryReader`s and less view churn per
-frame, not faster maths.
+That took the idle profile from 100% of a core to somewhere in the
+20-40% range. **Don't quote a single number for this** — `ps` and `top`
+disagree because one is a long-run average and the other is instantaneous,
+and both depend on which section is showing. An early "~29%" reading here
+was taken 44 seconds after launch while the average was still climbing;
+a later `ps` on the same build read 65%. Measure the thing you're changing,
+not the whole app.
+
+### Measure the pieces, not the process
+
+`swift run -c release PerfCheck` times each part of the UI and reports
+milliseconds of main-thread work per second of wall clock, so "20 rows at
+12fps" and "one stage ring at 60fps" are comparable. It's a tool, not a
+gate — the numbers need a person.
+
+It answered the question sampling couldn't. **A 22pt list row cost the same
+as the 200pt stage ring** — 0.98 ms either way — because the work is
+SwiftUI view-graph construction, not pixels, and size barely enters into
+it. Twenty visible rows at 12fps was 234 ms/s against the stage ring's 62.
+The rows were still the dominant cost even after the frame-rate cap.
+
+The fix was to stop building twenty positioned `Circle` views per
+thumbnail: a row now draws the same field as a single `AngularGradient`
+stroke, the one the smoothing pass added. It keeps the spatial bleed and
+skips the persistence taps — without the bleed a lone lit diode out of
+twenty is a wedge a few degrees wide, which reads as a speck on a sparse
+pattern like the comet. 0.98 ms → 0.38, so twenty rows went 234 ms/s → 86.
+
+Always check the harness floor first: an empty view measures 0.03 ms
+through `ImageRenderer`, so these numbers are the view's own cost rather
+than the harness's.
 
 Two things deliberately not done:
 

@@ -101,6 +101,15 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/BlenderCheck"
         ),
+        // Times each piece of the UI so "what should I optimize" has an
+        // answer with units — see the header comment in
+        // Sources/PerfCheck/main.swift. A tool, not a gate: the numbers
+        // need a person to read them. `swift run -c release PerfCheck`.
+        .executableTarget(
+            name: "PerfCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/PerfCheck"
+        ),
         // macOS design tool: sidebar controls + tab bar mockup + code export.
         .executableTarget(
             name: "RingAnimator",
