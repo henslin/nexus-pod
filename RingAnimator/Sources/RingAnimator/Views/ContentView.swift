@@ -37,24 +37,64 @@ struct ContentView: View {
     @State private var selectedCueID: String? = LEDCueLibrary.all.first?.id
     @State private var cueSearchText: String = ""
     @State private var selectedUseCaseID: RingPreset.ID?
+    /// Sections someone made — see `UserSectionStore`.
+    @StateObject private var userSections = UserSectionStore()
+    @State private var showingNewSection = false
+    @State private var newSectionName = ""
+    @State private var renamingSection: UserSection?
+    @State private var renameSectionText = ""
+    /// Which preset is selected *within* each user section, kept per
+    /// section so switching between two doesn't clear the other's.
+    @State private var userSelection: [UUID: RingPreset.ID] = [:]
+    @StateObject private var sectionStores = SectionStores()
     /// The post-update release notes — see `WhatsNewPresenter` for when
     /// they're due. Also reachable on demand from the Help menu, which is
     /// where macOS users look for "what changed".
     @State private var showingWhatsNew = false
 
-    enum AppSection: String, CaseIterable, Identifiable, Hashable {
-        case ringDesigner = "Nexus"
-        case cueLibrary = "Cue Library"
-        case useCases = "Use Cases"
+    /// What the sidebar can be pointed at: one of the three built-in
+    /// sections, or a section someone made.
+    enum AppSection: Identifiable, Hashable {
+        case ringDesigner
+        case cueLibrary
+        case useCases
+        case user(UUID)
 
-        var id: String { rawValue }
+        static let fixed: [AppSection] = [.ringDesigner, .cueLibrary, .useCases]
+
+        var id: String {
+            switch self {
+            case .ringDesigner: return "nexus"
+            case .cueLibrary: return "cues"
+            case .useCases: return "useCases"
+            case .user(let id): return id.uuidString
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .ringDesigner: return "Nexus"
+            case .cueLibrary: return "Cue Library"
+            case .useCases: return "Use Cases"
+            // A user section's name lives in the store, not in the case —
+            // it can be renamed, and duplicating it here would be a second
+            // copy to keep in step.
+            case .user: return ""
+            }
+        }
 
         var icon: String {
             switch self {
             case .ringDesigner: return "sparkles"
             case .cueLibrary: return "books.vertical"
             case .useCases: return "target"
+            case .user: return "folder"
             }
+        }
+
+        var userID: UUID? {
+            if case .user(let id) = self { return id }
+            return nil
         }
     }
 
@@ -66,13 +106,51 @@ struct ContentView: View {
             // Library and Use Cases — visually groups them apart from
             // Nexus without needing a full `Section` header for just two
             // items.
-            List(selection: $section) {
-                ForEach(AppSection.allCases) { item in
-                    Label(item.rawValue, systemImage: item.icon).tag(item)
-                    if item == .cueLibrary {
-                        Divider()
+            VStack(spacing: 0) {
+                List(selection: $section) {
+                    ForEach(AppSection.fixed) { item in
+                        Label(item.title, systemImage: item.icon).tag(item)
+                        if item == .cueLibrary {
+                            Divider()
+                        }
+                    }
+                    if !userSections.sections.isEmpty {
+                        Section("Sections") {
+                            ForEach(userSections.sections) { userSection in
+                                Label(userSection.name, systemImage: "folder")
+                                    .tag(AppSection.user(userSection.id))
+                                    .contextMenu {
+                                        Button("Rename…") {
+                                            renamingSection = userSection
+                                            renameSectionText = userSection.name
+                                        }
+                                        Button("Delete", role: .destructive) {
+                                            deleteUserSection(userSection)
+                                        }
+                                    }
+                            }
+                            .onMove { userSections.move(fromOffsets: $0, toOffset: $1) }
+                        }
                     }
                 }
+                Divider()
+                // Just "+". A label would have to name what it makes, and
+                // "New Section" is the only honest name — these aren't
+                // folders, they don't contain the built-in sections, and
+                // each one is its own list with its own storage.
+                HStack {
+                    Button {
+                        newSectionName = "Section \(userSections.sections.count + 1)"
+                        showingNewSection = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("New section — its own list of animations")
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
             }
             .navigationSplitViewColumnWidth(180)
         } content: {
@@ -86,6 +164,16 @@ struct ContentView: View {
             case .useCases:
                 UseCaseListView(store: useCaseStore, selectedUseCaseID: $selectedUseCaseID)
                     .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+            case .user(let id):
+                // The same list as Use Cases, over that section's own
+                // store. `.id(id)` so switching sections rebuilds it
+                // against the new store rather than keeping the old one.
+                UseCaseListView(
+                    store: store(forSection: id),
+                    selectedUseCaseID: binding(forSection: id)
+                )
+                .id(id)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
             case .none:
                 ContentUnavailableView("Select a tool", systemImage: "sidebar.left")
             }
@@ -109,6 +197,8 @@ struct ContentView: View {
                 cueDetail
             case .useCases:
                 useCaseDetail
+            case .user(let id):
+                userSectionDetail(id)
             case .none:
                 EmptyView()
             }
@@ -126,6 +216,23 @@ struct ContentView: View {
                 showingWhatsNew = false
             }
         }
+        .sheet(isPresented: $showingNewSection) {
+            SectionNameSheet(title: "New Section", name: $newSectionName) {
+                let made = userSections.add(named: newSectionName)
+                section = .user(made.id)
+                showingNewSection = false
+            } onCancel: {
+                showingNewSection = false
+            }
+        }
+        .sheet(item: $renamingSection) { target in
+            SectionNameSheet(title: "Rename Section", name: $renameSectionText) {
+                userSections.rename(target.id, to: renameSectionText)
+                renamingSection = nil
+            } onCancel: {
+                renamingSection = nil
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .showWhatsNew)) { _ in
             showingWhatsNew = true
         }
@@ -138,6 +245,67 @@ struct ContentView: View {
         }
     }
 
+
+    /// One `RingPresetStore` per user section, made on demand and kept for
+    /// the window's lifetime. Rebuilding it on every redraw would drop the
+    /// list's `@Published` identity and re-read the file each time.
+    @MainActor
+    private final class SectionStores: ObservableObject {
+        private var stores: [UUID: RingPresetStore] = [:]
+
+        func store(for section: UserSection) -> RingPresetStore {
+            if let existing = stores[section.id] { return existing }
+            let made = RingPresetStore(fileName: section.storeFileName)
+            stores[section.id] = made
+            return made
+        }
+
+        func forget(_ id: UUID) { stores[id] = nil }
+    }
+
+    private func store(forSection id: UUID) -> RingPresetStore {
+        guard let section = userSections.sections.first(where: { $0.id == id }) else {
+            // Only reachable for a beat while a section is being deleted.
+            return RingPresetStore(fileName: "orphaned-section.json")
+        }
+        return sectionStores.store(for: section)
+    }
+
+    private func binding(forSection id: UUID) -> Binding<RingPreset.ID?> {
+        Binding(
+            get: { userSelection[id] },
+            set: { userSelection[id] = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private func userSectionDetail(_ id: UUID) -> some View {
+        let store = store(forSection: id)
+        if let presetID = userSelection[id],
+           let preset = store.presets.first(where: { $0.id == presetID }) {
+            UseCaseDetailView(
+                preset: preset,
+                store: store,
+                tab: $useCaseTab,
+                stage: { config, playback, timeline in
+                    AnyView(RingStage(
+                        config: config, playback: playback, timeline: timeline, state: stageState
+                    ))
+                },
+                code: { config in AnyView(ExportView(config: config)) }
+            )
+            .id(preset.id)
+        } else {
+            ContentUnavailableView("Select or create an animation", systemImage: "folder")
+        }
+    }
+
+    private func deleteUserSection(_ userSection: UserSection) {
+        sectionStores.forget(userSection.id)
+        userSelection[userSection.id] = nil
+        if section == .user(userSection.id) { section = .useCases }
+        userSections.delete(userSection.id)
+    }
 
     @ViewBuilder
     private var designerDetail: some View {
@@ -275,5 +443,34 @@ private struct PreviewTab: View {
         guard player.isPlaying, let resolved else { return nil }
         player.prepareForPlayback(resolved)
         return TimelinePlayback(resolved)
+    }
+}
+
+/// Name prompt for creating or renaming a user section.
+///
+/// A sheet rather than an `.alert` with a `TextField`, matching
+/// `SavedPresetsView`'s dialogs — see the comment there.
+private struct SectionNameSheet: View {
+    let title: String
+    @Binding var name: String
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.headline)
+            TextField("Name", text: $name)
+                .onSubmit(onConfirm)
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .ringGlassButtonStyle()
+                Button("Save", action: onConfirm)
+                    .keyboardShortcut(.defaultAction)
+                    .ringGlassButtonStyle()
+            }
+        }
+        .padding()
+        .frame(width: 320)
     }
 }

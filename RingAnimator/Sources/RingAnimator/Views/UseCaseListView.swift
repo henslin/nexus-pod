@@ -60,6 +60,9 @@ struct UseCaseListView: View {
                             )
                             .tag(preset.id)
                         }
+                        // The list's order *is* the store's array order, so
+                        // a move is just a move.
+                        .onMove { store.move(fromOffsets: $0, toOffset: $1) }
                     }
                 }
             }

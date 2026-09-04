@@ -340,6 +340,44 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   `xcodebuild`/`xcrun simctl` — use that instead of asking for manual
   screenshots when debugging UI issues here.
 
+## Sections you make yourself
+
+The sidebar's `+` creates a `UserSection`: a named list of animations with
+its own `RingPresetStore` file and, per animation, its own timeline. It is
+shaped **like Use Cases and not like the other two**, because Use Cases is
+the only one of the three it makes sense to have more of — Nexus is a
+single live ring, so a second one would be a second app, and the Cue
+Library is a transcription of the hardware spec, which a user-created copy
+of would stop being.
+
+The button is just `+`, deliberately. Any label would have to name what it
+makes, and these aren't folders: they don't contain the built-in sections,
+and each is its own list with its own storage.
+
+Three things that would otherwise bite:
+
+- **`AppSection` is no longer a plain `String` enum.** It has a `.user(UUID)`
+  case, so it isn't `CaseIterable` any more — `AppSection.fixed` is the
+  built-in three. A user section's *name* deliberately isn't in the case:
+  it can be renamed, and a copy in the selection would be a second one to
+  keep in step.
+- **One store per section, cached.** `SectionStores` hands out a
+  `RingPresetStore` per id and keeps it. Building one per redraw would drop
+  the list's `@Published` identity and re-read the file every time.
+- **Deleting a section deletes its files.** Its presets JSON *and* every
+  per-preset timeline in it, which are keyed by preset ids that exist
+  nowhere else once the section is gone.
+
+**Reordering** is `.onMove` on the store's array, which is already the
+list's order: user sections in the sidebar, and animations inside Use
+Cases, Nexus's Saved Animations, and any user section. Timeline steps
+already reordered by drag (`TimelinePlayer.moveSegment`), so that one
+needed nothing.
+
+The Cue Library deliberately has no `+`. It's a fixed transcription of the
+hardware spec with per-cue overrides, and staying trustworthy as a spec is
+what it's for.
+
 ## Preview and Code, in every section
 
 `DetailPane` is the Preview/Code control plus the two panes under it, and

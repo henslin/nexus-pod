@@ -31,6 +31,14 @@ public final class RingPresetStore: ObservableObject {
         return preset
     }
 
+    /// Drag-to-reorder. The array's order *is* the list's order — `add`
+    /// inserts at the front for exactly that reason — so persisting a move
+    /// is persisting the array.
+    public func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        presets.move(fromOffsets: source, toOffset: destination)
+        save()
+    }
+
     public func rename(_ id: RingPreset.ID, to newName: String) {
         guard let index = presets.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
