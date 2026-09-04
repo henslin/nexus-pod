@@ -51,58 +51,55 @@ struct SavedPresetsView: View {
     @State private var importSuccessMessage: String?
 
     var body: some View {
-        List(selection: $selectedPresetID) {
-            Section("Saved Animations") {
-                if store.presets.isEmpty {
-                    Text("Click + to save the animation you're looking at now.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
-                } else {
-                    ForEach(store.presets) { preset in
-                        SavedAnimationRow(
-                            preset: preset,
-                            onLoad: { preset.apply(to: config) },
-                            onRename: {
-                                renameText = preset.name
-                                renamingPreset = preset
-                            },
-                            onExport: { exportSingle(preset) },
-                            onDelete: { store.delete(preset.id) }
-                        )
-                        .tag(preset.id)
+        ListColumn {
+            List(selection: $selectedPresetID) {
+                Section("Saved Animations") {
+                    if store.presets.isEmpty {
+                        Text("Click + to save the animation you're looking at now.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 4)
+                    } else {
+                        ForEach(store.presets) { preset in
+                            SavedAnimationRow(
+                                preset: preset,
+                                onLoad: { preset.apply(to: config) },
+                                onRename: {
+                                    renameText = preset.name
+                                    renamingPreset = preset
+                                },
+                                onExport: { exportSingle(preset) },
+                                onDelete: { store.delete(preset.id) }
+                            )
+                            .tag(preset.id)
+                        }
                     }
                 }
             }
-        }
-        .listStyle(.sidebar)
-        .onChange(of: selectedPresetID) { _, newValue in
-            guard let id = newValue, let preset = store.presets.first(where: { $0.id == id }) else { return }
-            preset.apply(to: config)
-        }
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    newPresetName = "Animation \(store.presets.count + 1)"
-                    showingSaveDialog = true
-                } label: {
-                    Label("Save Current Animation", systemImage: "plus")
-                }
-                .help("Save the ring's current settings as a new saved animation")
+            .listStyle(.sidebar)
+            .onChange(of: selectedPresetID) { _, newValue in
+                guard let id = newValue, let preset = store.presets.first(where: { $0.id == id }) else { return }
+                preset.apply(to: config)
             }
-            ToolbarItem {
-                Menu {
-                    Button("Export Library…") { exportLibrary() }
-                        .disabled(store.presets.isEmpty)
-                    Button("Import…") { importPresets() }
-                    Divider()
-                    Button("Import Blender Script…") { importBlenderScript() }
-                    Button("Import Pattern Library → Use Cases…") { importPatternFolder() }
-                } label: {
-                    Label("Share", systemImage: "square.and.arrow.up.on.square")
-                }
-                .help("Export saved animations to share with your team, or import ones they've sent you")
+        } actions: {
+            Button {
+                newPresetName = "Animation \(store.presets.count + 1)"
+                showingSaveDialog = true
+            } label: {
+                Label("Save Current Animation", systemImage: "plus")
             }
+            .help("Save the ring's current settings as a new saved animation")
+            Menu {
+                Button("Export Library…") { exportLibrary() }
+                    .disabled(store.presets.isEmpty)
+                Button("Import…") { importPresets() }
+                Divider()
+                Button("Import Blender Script…") { importBlenderScript() }
+                Button("Import Pattern Library → Use Cases…") { importPatternFolder() }
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up.on.square")
+            }
+            .help("Export saved animations to share with your team, or import ones they've sent you")
         }
         // Custom sheets instead of `.alert(...)` with an embedded
         // `TextField` — SwiftUI alerts only support a bare TextField with

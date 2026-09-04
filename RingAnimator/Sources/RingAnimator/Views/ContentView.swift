@@ -120,7 +120,12 @@ struct ContentView: View {
                 EmptyView()
             }
         }
+        // The section, then whatever is selected inside it. The name used
+        // to sit in a header block above each pane's stage, which made two
+        // of the three canvases shorter than Nexus's; the title bar is
+        // where macOS puts "which document am I looking at" anyway.
         .navigationTitle(section?.rawValue ?? "Nexus")
+        .navigationSubtitle(selectionName ?? "")
         .sheet(isPresented: $showingWhatsNew) {
             WhatsNewView {
                 WhatsNewPresenter.markSeen()
@@ -136,6 +141,21 @@ struct ContentView: View {
             // `@StateObject`s aren't guaranteed to be constructed until the
             // view first appears, and binding needs both objects to exist.
             timelinePlayer.bind(to: config)
+        }
+    }
+
+    /// What's selected in the current section, for the window subtitle.
+    private var selectionName: String? {
+        switch section {
+        case .cueLibrary:
+            return selectedCueID.flatMap { LEDCueLibrary.cue(id: $0) }?.name
+        case .useCases:
+            return selectedUseCaseID.flatMap { id in
+                useCaseStore.presets.first(where: { $0.id == id })?.name
+            }
+        case .ringDesigner, .none:
+            // Nexus has no single selected thing — its ring is the document.
+            return nil
         }
     }
 

@@ -25,79 +25,74 @@ struct UseCaseListView: View {
     @State private var importSuccessMessage: String?
 
     var body: some View {
-        List(selection: $selectedUseCaseID) {
-            Section("Use Cases") {
-                if store.presets.isEmpty {
-                    Text("Click + to create a new use-case animation.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
-                } else {
-                    ForEach(store.presets) { preset in
-                        UseCaseRow(
-                            preset: preset,
-                            onRename: {
-                                renameText = preset.name
-                                renamingUseCase = preset
-                            },
-                            onExport: { exportSingle(preset) },
-                            onDelete: {
-                                store.delete(preset.id)
-                                // A use case's timeline lives in its own
-                                // store file (see
-                                // `TimelinePlayer.useCaseFileName`), which
-                                // nothing else would ever clean up — a
-                                // deleted use case would otherwise leave an
-                                // orphan in Application Support forever,
-                                // and a new use case can't collide with it
-                                // since the name is keyed by UUID.
-                                TimelinePlayer.deleteStore(
-                                    fileName: TimelinePlayer.useCaseFileName(preset.id)
-                                )
-                                if selectedUseCaseID == preset.id { selectedUseCaseID = nil }
-                            }
-                        )
-                        .tag(preset.id)
+        ListColumn {
+            List(selection: $selectedUseCaseID) {
+                Section("Use Cases") {
+                    if store.presets.isEmpty {
+                        Text("Click + to create a new use-case animation.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 4)
+                    } else {
+                        ForEach(store.presets) { preset in
+                            UseCaseRow(
+                                preset: preset,
+                                onRename: {
+                                    renameText = preset.name
+                                    renamingUseCase = preset
+                                },
+                                onExport: { exportSingle(preset) },
+                                onDelete: {
+                                    store.delete(preset.id)
+                                    // A use case's timeline lives in its own
+                                    // store file (see
+                                    // `TimelinePlayer.useCaseFileName`), which
+                                    // nothing else would ever clean up — a
+                                    // deleted use case would otherwise leave an
+                                    // orphan in Application Support forever,
+                                    // and a new use case can't collide with it
+                                    // since the name is keyed by UUID.
+                                    TimelinePlayer.deleteStore(
+                                        fileName: TimelinePlayer.useCaseFileName(preset.id)
+                                    )
+                                    if selectedUseCaseID == preset.id { selectedUseCaseID = nil }
+                                }
+                            )
+                            .tag(preset.id)
+                        }
                     }
                 }
             }
-        }
-        .listStyle(.sidebar)
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    newUseCaseName = "Use Case \(store.presets.count + 1)"
-                    showingNewDialog = true
-                } label: {
-                    Label("New Use Case", systemImage: "plus")
-                }
-                .help("Create a new use-case animation, with its own full set of controls")
+            .listStyle(.sidebar)
+        } actions: {
+            Button {
+                newUseCaseName = "Use Case \(store.presets.count + 1)"
+                showingNewDialog = true
+            } label: {
+                Label("New Use Case", systemImage: "plus")
             }
-            // Its own button rather than a third item inside the Share
-            // menu below. Taking delivery of a pattern library is the way
-            // most of this list gets populated, and it was sitting behind
-            // an upload-looking icon in a menu of JSON import/export —
-            // findable only if you already knew it was there.
-            ToolbarItem {
-                Button {
-                    importPatternFolder()
-                } label: {
-                    Label("Import Patterns", systemImage: "tray.and.arrow.down")
-                }
-                .help("Import a folder of firmware pattern scripts (.py) — one use case per pattern")
+            .help("Create a new use-case animation, with its own full set of controls")
+        // Its own button rather than a third item inside the Share
+        // menu below. Taking delivery of a pattern library is the way
+        // most of this list gets populated, and it was sitting behind
+        // an upload-looking icon in a menu of JSON import/export —
+        // findable only if you already knew it was there.
+            Button {
+                importPatternFolder()
+            } label: {
+                Label("Import Patterns", systemImage: "tray.and.arrow.down")
             }
-            ToolbarItem {
-                Menu {
-                    Button("Export Library…") { exportLibrary() }
-                        .disabled(store.presets.isEmpty)
-                    Button("Import…") { importUseCases() }
-                    Divider()
-                    Button("Import Pattern Scripts…") { importPatternFolder() }
-                } label: {
-                    Label("Share", systemImage: "square.and.arrow.up.on.square")
-                }
-                .help("Export use cases to share with your team, or import ones they've sent you")
+            .help("Import a folder of firmware pattern scripts (.py) — one use case per pattern")
+            Menu {
+                Button("Export Library…") { exportLibrary() }
+                    .disabled(store.presets.isEmpty)
+                Button("Import…") { importUseCases() }
+                Divider()
+                Button("Import Pattern Scripts…") { importPatternFolder() }
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up.on.square")
             }
+            .help("Export use cases to share with your team, or import ones they've sent you")
         }
         .sheet(isPresented: $showingNewDialog) { newDialog }
         .sheet(item: $renamingUseCase) { _ in renameDialog }

@@ -175,16 +175,20 @@ public struct UseCaseDetailView: View {
 
             VStack(spacing: 0) {
                 if let stage {
-                    header
-                        .padding(.horizontal, 24)
-                        .padding(.top, 20)
-                        .padding(.bottom, 14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // No header above the stage — same reasoning as the Cue
+                    // Library's pane: it made this section's canvas shorter
+                    // than Nexus's for no visible reason. The name is in the
+                    // window title.
                     stage(displayConfig, playback, player.timeline)
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 24) {
-                            header
+                            // Only the fallback pane names the use case
+                            // inline. Where a stage is injected the name is
+                            // in the window title; here there's no title bar
+                            // to put it in.
+                            Text(currentPreset?.name ?? "Use Case")
+                                .font(.title2.bold())
                             centeredPreview(playback: playback)
                         }
                         .padding(24)
@@ -217,24 +221,31 @@ public struct UseCaseDetailView: View {
     }
 
     private var controlsPanel: some View {
-        ScrollView {
-            controls
-                .padding(16)
+        VStack(spacing: 0) {
+            #if os(macOS)
+            // What used to be the header above the stage. This import reads
+            // a Blender script *into the use case you're editing* — unlike
+            // the column's Import Patterns, which creates new ones — so it
+            // belongs with this use case's own controls rather than in the
+            // list's action bar next to something that does the opposite.
+            HStack {
+                Button("Import Blender…") { importBlenderScript() }
+                    .ringGlassButtonStyle()
+                    .controlSize(.small)
+                    .help("Read a Blender LED-ring script and interpret it into this use case")
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            Divider()
+            #endif
+            ScrollView {
+                controls
+                    .padding(16)
+            }
         }
     }
 
-    private var header: some View {
-        HStack {
-            Text(currentPreset?.name ?? "Use Case")
-                .font(.title2.bold())
-            Spacer()
-            #if os(macOS)
-            Button("Import Blender…") { importBlenderScript() }
-                .ringGlassButtonStyle()
-                .help("Read a Blender LED-ring script and interpret it into this use case")
-            #endif
-        }
-    }
 
     #if os(macOS)
     /// Interprets a Blender ring script into this use case's config — the

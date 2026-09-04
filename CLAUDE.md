@@ -340,6 +340,51 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   `xcodebuild`/`xcrun simctl` — use that instead of asking for manual
   screenshots when debugging UI issues here.
 
+## Every section has the same anatomy
+
+Three columns, three detail panes, one shape each.
+
+**Columns** are `ListColumn`: an optional search field at the top, the
+list, and that column's own actions along the bottom. All of it used to
+live in the *window* toolbar, because on macOS a `NavigationSplitView`
+hoists both `.searchable` and a column's `ToolbarItem`s up there — where
+they render right-aligned above the *detail* pane. The Cue Library's search
+field therefore sat at the far right of the window, about as far from the
+list it filters as the geometry allows, and nothing said which column any
+of the Add/Import/Export buttons belonged to. Inside the column is the
+Finder/Xcode/Mail convention and makes the association structural.
+
+**Detail panes** are the stage filling the pane, one strip under it,
+controls on the right. Cue Library and Use Cases each used to put a header
+block *above* the stage, which made those two canvases shorter than
+Nexus's for no reason a person could see. The selected item's name is in
+the window subtitle now.
+
+What those headers also carried had to go somewhere, and "somewhere" is
+the panel whose contents the control acts on:
+
+- The cue's breadcrumb, its **Tweaked** badge and **Reset to Default** are
+  at the top of the Cue Library's controls panel — they're about the
+  parameters below them.
+- **Import Blender…** is at the top of a use case's controls panel, not in
+  the list's action bar. It reads a script *into the use case you're
+  editing*, while the column's Import Patterns *creates* use cases; sitting
+  them next to each other would put two buttons that do opposite things in
+  one row.
+
+### The search field may not accept typing
+
+`ListColumn`'s search box is a plain `TextField`, and this app has a
+standing text-input bug on this Xcode beta where typing never reaches a
+TextField hosted in its own view hierarchy — that's why `PasteableTextField`
+exists. The `.searchable` field this replaced was hosted by the *system*
+toolbar and may have been working for exactly that reason.
+`Package.swift`'s linker-embedded Info.plist was the fix for the underlying
+cause and has never been confirmed against a text field. If typing in
+search does nothing, check whether the Save Animation dialog's field
+accepts typing either: if neither does, it's the old bug and not this
+layout.
+
 ## What's New
 
 `WhatsNewView` in the core, shown by both apps — Mac presents it from

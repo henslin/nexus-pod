@@ -29,114 +29,112 @@ struct CueListView: View {
     @State private var expandedSubcategories: Set<String> = []
 
     var body: some View {
-        List(selection: $selectedCueID) {
-            ForEach(LEDCueLibrary.categories, id: \.self) { category in
-                let groups = LEDCueLibrary.groupedBySubcategory(in: category)
-                    .map { group in (subcategory: group.subcategory, cues: group.cues.filter { matches($0) }) }
-                    .filter { !$0.cues.isEmpty }
-                if !groups.isEmpty {
-                    Section(isExpanded: expansion(for: category)) {
-                        ForEach(groups, id: \.subcategory) { group in
-                            if let subcategory = group.subcategory {
-                                let isExpanded = subExpansion(category: category, subcategory: subcategory)
-                                DisclosureGroup(isExpanded: isExpanded) {
+        ListColumn(search: $searchText, searchPrompt: "Search cues") {
+            List(selection: $selectedCueID) {
+                ForEach(LEDCueLibrary.categories, id: \.self) { category in
+                    let groups = LEDCueLibrary.groupedBySubcategory(in: category)
+                        .map { group in (subcategory: group.subcategory, cues: group.cues.filter { matches($0) }) }
+                        .filter { !$0.cues.isEmpty }
+                    if !groups.isEmpty {
+                        Section(isExpanded: expansion(for: category)) {
+                            ForEach(groups, id: \.subcategory) { group in
+                                if let subcategory = group.subcategory {
+                                    let isExpanded = subExpansion(category: category, subcategory: subcategory)
+                                    DisclosureGroup(isExpanded: isExpanded) {
+                                        cueRows(group.cues)
+                                    } label: {
+                                        // Deliberately between the two levels
+                                        // around it: smaller and dimmer than
+                                        // the category header so the hierarchy
+                                        // still reads, but not the tertiary
+                                        // caption2 this used to be — that was
+                                        // unclickably small once it became a
+                                        // control rather than a caption. Same
+                                        // full-width hit target as the header
+                                        // above, for the same reason.
+                                        Text(subcategory.uppercased())
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                            .padding(.vertical, 3)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .contentShape(Rectangle())
+                                            // macOS `DisclosureGroup` only makes
+                                            // the chevron itself a toggle target
+                                            // — clicking the label does nothing,
+                                            // which is the same too-small hit
+                                            // target the category headers had,
+                                            // one level down. The `Section`
+                                            // headers above toggle on their
+                                            // whole row for free; this makes
+                                            // these match.
+                                            .onTapGesture { isExpanded.wrappedValue.toggle() }
+                                    }
+                                } else {
+                                    // Categories whose cues aren't grouped at
+                                    // all — nothing to disclose, so the rows
+                                    // sit directly under the category.
                                     cueRows(group.cues)
-                                } label: {
-                                    // Deliberately between the two levels
-                                    // around it: smaller and dimmer than
-                                    // the category header so the hierarchy
-                                    // still reads, but not the tertiary
-                                    // caption2 this used to be — that was
-                                    // unclickably small once it became a
-                                    // control rather than a caption. Same
-                                    // full-width hit target as the header
-                                    // above, for the same reason.
-                                    Text(subcategory.uppercased())
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                        .padding(.vertical, 3)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .contentShape(Rectangle())
-                                        // macOS `DisclosureGroup` only makes
-                                        // the chevron itself a toggle target
-                                        // — clicking the label does nothing,
-                                        // which is the same too-small hit
-                                        // target the category headers had,
-                                        // one level down. The `Section`
-                                        // headers above toggle on their
-                                        // whole row for free; this makes
-                                        // these match.
-                                        .onTapGesture { isExpanded.wrappedValue.toggle() }
                                 }
-                            } else {
-                                // Categories whose cues aren't grouped at
-                                // all — nothing to disclose, so the rows
-                                // sit directly under the category.
-                                cueRows(group.cues)
                             }
+                        } header: {
+                            // A custom header rather than `Section(category,
+                            // isExpanded:)`'s automatic one.
+                            //
+                            // The default renders category names in the small,
+                            // dim, secondary type a section header normally
+                            // wants — correct when a header labels visible
+                            // content, wrong here. With every section closed
+                            // these headers *are* the navigation, and label
+                            // styling doesn't advertise that they're the thing
+                            // to click. Their height was never really the
+                            // problem (~27pt, about a standard sidebar row);
+                            // they just didn't read as targets.
+                            //
+                            // `contentShape` makes the whole width clickable
+                            // rather than only the glyph-width of the text.
+                            Text(category)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .padding(.vertical, 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
-                    } header: {
-                        // A custom header rather than `Section(category,
-                        // isExpanded:)`'s automatic one.
-                        //
-                        // The default renders category names in the small,
-                        // dim, secondary type a section header normally
-                        // wants — correct when a header labels visible
-                        // content, wrong here. With every section closed
-                        // these headers *are* the navigation, and label
-                        // styling doesn't advertise that they're the thing
-                        // to click. Their height was never really the
-                        // problem (~27pt, about a standard sidebar row);
-                        // they just didn't read as targets.
-                        //
-                        // `contentShape` makes the whole width clickable
-                        // rather than only the glyph-width of the text.
-                        Text(category)
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.primary)
-                            .padding(.vertical, 4)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
                     }
                 }
             }
-        }
-        .listStyle(.sidebar)
-        .searchable(text: $searchText, prompt: "Search cues")
-        .onAppear {
-            // Open whichever category holds the current selection, so the
-            // list doesn't start as seven closed headers with nothing to
-            // look at.
-            if expandedCategories.isEmpty,
-               let selectedCueID,
-               let cue = LEDCueLibrary.cue(id: selectedCueID) {
-                expandedCategories.insert(cue.category)
-                // And the subcategory too, or opening the category reveals
-                // nothing but another closed header and the selected cue
-                // still isn't visible.
-                if let subcategory = cue.subcategory {
-                    expandedSubcategories.insert("\(cue.category)/\(subcategory)")
+            .listStyle(.sidebar)
+            .onAppear {
+                // Open whichever category holds the current selection, so the
+                // list doesn't start as seven closed headers with nothing to
+                // look at.
+                if expandedCategories.isEmpty,
+                   let selectedCueID,
+                   let cue = LEDCueLibrary.cue(id: selectedCueID) {
+                    expandedCategories.insert(cue.category)
+                    // And the subcategory too, or opening the category reveals
+                    // nothing but another closed header and the selected cue
+                    // still isn't visible.
+                    if let subcategory = cue.subcategory {
+                        expandedSubcategories.insert("\(cue.category)/\(subcategory)")
+                    }
                 }
             }
-        }
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    exportLibrary()
-                } label: {
-                    Label("Export Library…", systemImage: "square.and.arrow.up")
-                }
-                .help("Export the full cue library, with your tweaks applied, as JSON")
+
+        } actions: {
+            Button {
+                exportLibrary()
+            } label: {
+                Label("Export Library…", systemImage: "square.and.arrow.up")
             }
-            ToolbarItem {
-                Button(role: .destructive) {
-                    store.resetAll()
-                } label: {
-                    Label("Reset All", systemImage: "arrow.counterclockwise")
-                }
-                .help("Reset every cue back to its shipped default")
-                .disabled(store.overrides.isEmpty)
+            .help("Export the full cue library, with your tweaks applied, as JSON")
+
+            Button(role: .destructive) {
+                store.resetAll()
+            } label: {
+                Label("Reset All", systemImage: "arrow.counterclockwise")
             }
+            .help("Reset every cue back to its shipped default")
+            .disabled(store.overrides.isEmpty)
         }
     }
 
@@ -303,12 +301,12 @@ struct CueDetailView: View {
     /// bottom, where Nexus puts its timeline, rather than scrolling with a
     /// preview that no longer scrolls.
     private var previewPane: some View {
+        // Exactly Nexus's shape: the stage fills the pane, and a single
+        // strip sits under it. The cue's name used to be a header block
+        // *above* the stage, which made this the one section whose canvas
+        // was shorter than the others for no reason anyone could see — the
+        // name lives in the window title now (see `ContentView`).
         VStack(spacing: 0) {
-            header
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
             RingStage(config: stageConfig, state: stageState)
             Divider()
             ScrollView {
@@ -332,36 +330,47 @@ struct CueDetailView: View {
     /// Right pane: every `GlassSectionCard` from `controls`, in its own
     /// scroll view — the Cue Library's equivalent of `ControlsView.body`.
     private var controlsPanel: some View {
-        ScrollView {
-            controls
-                .padding(16)
+        VStack(spacing: 0) {
+            // What used to be the header above the stage. The breadcrumb
+            // and the Tweaked badge say what this cue is and whether you've
+            // changed it, and Reset to Default undoes those changes — all
+            // of which is about the parameters below, not about the canvas
+            // it used to sit on top of.
+            detailHeader
+            Divider()
+            ScrollView {
+                controls
+                    .padding(16)
+            }
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private var detailHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text([cue.category, cue.subcategory].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            HStack {
-                Text(cue.name).font(.title2.bold())
-                if isModified {
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if isModified {
+                HStack(spacing: 8) {
                     Text("Tweaked")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(Color.accentColor.opacity(0.15)))
                         .foregroundStyle(Color.accentColor)
-                }
-                Spacer()
-                if isModified {
+                    Spacer(minLength: 0)
                     Button("Reset to Default") {
                         params = cue.defaultParameters
                     }
                     .ringGlassButtonStyle()
+                    .controlSize(.small)
                 }
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
+
 
     private var specReference: some View {
         VStack(alignment: .leading, spacing: 4) {
