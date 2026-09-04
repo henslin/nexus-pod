@@ -34,6 +34,12 @@ extension EnvironmentValues {
 /// something you have to learn.
 struct ListColumn<Content: View, Actions: View>: View {
     @Environment(\.columnSubtitle) private var subtitle
+
+    /// The margin macOS gives the navigation title in the band above this
+    /// column. Everything the column draws under it — description, search
+    /// field, action bar — uses the same one, so the left edge is a single
+    /// line down the whole column rather than three near-misses.
+    private static let margin: CGFloat = 16
     /// Omit for a column with nothing to search.
     var search: Binding<String>?
     var searchPrompt: String = "Search"
@@ -54,7 +60,7 @@ struct ListColumn<Content: View, Actions: View>: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, Self.margin)
                     .padding(.top, 2)
                     .padding(.bottom, 8)
             }
@@ -84,7 +90,7 @@ struct ListColumn<Content: View, Actions: View>: View {
             Spacer(minLength: 0)
             actions()
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, Self.margin)
         .padding(.bottom, search == nil ? 10 : 8)
     }
 
@@ -122,7 +128,7 @@ struct ListColumn<Content: View, Actions: View>: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(Color.secondary.opacity(0.12))
         )
-        .padding(.horizontal, 10)
+        .padding(.horizontal, Self.margin)
         .padding(.vertical, 8)
     }
 }
