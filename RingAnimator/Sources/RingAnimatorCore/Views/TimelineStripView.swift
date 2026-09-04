@@ -17,6 +17,12 @@ import SwiftUI
 /// later without a second implementation to keep in sync.
 public struct TimelineStripView: View {
     @ObservedObject var player: TimelinePlayer
+    /// Whether to point at Add Step — see `FirstEditCoach`. Passed as a
+    /// plain value, with the coach observed by whoever owns it, so this
+    /// view doesn't need a reference type it would only ever read one
+    /// boolean from.
+    var showsCoachMark: Bool = false
+    var onCoachDismiss: (() -> Void)?
     /// The live config the Controls panel edits. Needed for "Add Step",
     /// which snapshots whatever's currently tuned.
     @ObservedObject var config: RingConfig
@@ -32,11 +38,15 @@ public struct TimelineStripView: View {
         player: TimelinePlayer,
         config: RingConfig,
         playhead: Double,
+        showsCoachMark: Bool = false,
+        onCoachDismiss: (() -> Void)? = nil,
         onScrub: @escaping (Double) -> Void
     ) {
         self.player = player
         self.config = config
         self.playhead = playhead
+        self.showsCoachMark = showsCoachMark
+        self.onCoachDismiss = onCoachDismiss
         self.onScrub = onScrub
     }
 
@@ -157,12 +167,27 @@ public struct TimelineStripView: View {
             Spacer()
 
             Button {
+                // Pressing it teaches the same thing the mark does.
+                onCoachDismiss?()
                 player.addSegment(from: config)
             } label: {
                 Label("Add Step", systemImage: "plus")
             }
             .help("Add the current ring settings as a new step")
             .ringGlassButtonStyle()
+            // Anchored to the button rather than floated near it, so the
+            // tail keeps pointing at the right thing when the strip's
+            // layout changes — the timecode and the duplicate/delete
+            // buttons all come and go with the window width and the
+            // selection.
+            .overlay(alignment: .top) {
+                if showsCoachMark {
+                    FirstEditCoachMark { onCoachDismiss?() }
+                        .fixedSize()
+                        .alignmentGuide(.top) { $0[.bottom] + 8 }
+                        .allowsHitTesting(true)
+                }
+            }
 
             if let selected = player.selectedSegmentID {
                 Button {

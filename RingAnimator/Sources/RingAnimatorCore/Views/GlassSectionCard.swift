@@ -27,15 +27,6 @@ public struct GlassSectionCard<Content: View>: View {
     var alignsAsForm: Bool = true
     /// Restores just this section's parameters to their defaults.
     var onReset: (() -> Void)?
-    /// Commits the ring's current state as a timeline step.
-    ///
-    /// The same action from every card, because a step is a snapshot of the
-    /// whole ring rather than of one section — there is no such thing as a
-    /// step that carries only Motion. It's offered on each card anyway
-    /// because "commit what I've just been tuning" is a thing you want
-    /// where you're tuning it, not after a trip to the toolbar. The help
-    /// text says what it captures so the placement doesn't imply otherwise.
-    var onAddToTimeline: (() -> Void)?
     @Binding var isExpanded: Bool
     @ViewBuilder var content: () -> Content
 
@@ -46,7 +37,6 @@ public struct GlassSectionCard<Content: View>: View {
         masterToggle: Binding<Bool>? = nil,
         alignsAsForm: Bool = true,
         onReset: (() -> Void)? = nil,
-        onAddToTimeline: (() -> Void)? = nil,
         isExpanded: Binding<Bool>,
         @ViewBuilder content: @escaping () -> Content
     ) {
@@ -56,7 +46,6 @@ public struct GlassSectionCard<Content: View>: View {
         self.masterToggle = masterToggle
         self.alignsAsForm = alignsAsForm
         self.onReset = onReset
-        self.onAddToTimeline = onAddToTimeline
         self._isExpanded = isExpanded
         self.content = content
     }
@@ -85,18 +74,13 @@ public struct GlassSectionCard<Content: View>: View {
 
                 Spacer(minLength: 8)
 
-                // Before the master toggle, so the switch stays the
-                // rightmost thing in every header it appears in.
-                if let onAddToTimeline {
-                    Button(action: onAddToTimeline) {
-                        Image(systemName: "plus.rectangle.on.folder")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Add the ring's current state to the timeline as a new step")
-                    .accessibilityLabel("Add to Timeline")
-                }
-
+                // Reset only. An Add to Timeline button lived here too and
+                // was removed: a step is a snapshot of the *whole* ring, so
+                // it did the same thing on every card, which made the
+                // per-section placement imply a per-section step that
+                // doesn't exist. The timeline's own Add Step is the one
+                // true place for it — see `FirstEditCoachMark`, which
+                // points at it the first time you change anything.
                 if let onReset {
                     Button(action: onReset) {
                         Image(systemName: "arrow.uturn.backward")

@@ -54,6 +54,9 @@ public struct UseCaseDetailView: View {
     /// from `TimelineView`'s own date, so nothing republishes per frame —
     /// same arrangement as the Mac app's Preview tab.
     @State private var pausedPlayhead: Double = 0
+    /// Same coach mark as Nexus — see `FirstEditCoach`. Shown once ever,
+    /// so whichever pane you first change a parameter in gets it.
+    @StateObject private var coach = FirstEditCoach()
 
     /// Builds the canvas this pane previews on, given the config to render
     /// and the current playback frame.
@@ -209,6 +212,8 @@ public struct UseCaseDetailView: View {
                     player: player,
                     config: editingConfig,
                     playhead: now,
+                    showsCoachMark: coach.isShowing,
+                    onCoachDismiss: { coach.dismiss() },
                     onScrub: { player.scrub(to: $0) }
                 )
             }
@@ -218,6 +223,7 @@ public struct UseCaseDetailView: View {
             // `@StateObject`s aren't guaranteed constructed until first
             // appearance, and binding needs both objects to exist.
             player.bind(to: editingConfig)
+            coach.watch(editingConfig)
         }
     }
 
@@ -388,10 +394,6 @@ public struct UseCaseDetailView: View {
             onReset: ControlsSectionReset.isResettable(id)
                 ? { ControlsSectionReset.reset(id, on: editingConfig) }
                 : nil,
-            // A use case has its own timeline, in its own store — see
-            // `TimelinePlayer.useCaseFileName` — so this adds a step to
-            // that one, not to Nexus's.
-            onAddToTimeline: { player.addSegment(from: editingConfig) },
             isExpanded: Binding(
                 get: { expanded[id, default: true] },
                 set: { expanded[id] = $0 }

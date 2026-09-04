@@ -458,14 +458,25 @@ until it's listed. Two sections deliberately opt out of parts of this:
   the Keychain; losing it to a mis-click on a section header would be a
   nasty thing for a section reset to do.
 
-**Add to Timeline** commits the ring's current state as a step. It is the
-same action on every card, because a step is a snapshot of the *whole*
-ring — there's no such thing as a step carrying only Motion. It's on each
-card anyway because "commit what I've just been tuning" is wanted where
-you're tuning it rather than after a trip to the toolbar, and the help text
-says what it captures so the placement doesn't imply otherwise. In Use
-Cases it adds to that use case's own timeline (`TimelinePlayer.useCaseFileName`),
-not to Nexus's.
+**There is no Add to Timeline button on the cards.** There was, briefly,
+and it was wrong: a step is a snapshot of the *whole* ring, so the button
+did exactly the same thing on every card, and putting one on the Motion
+card implied a step that carries only Motion. Adding a step has one home,
+the timeline's own **Add Step**.
+
+What that button lost was discoverability — the Controls panel says
+nothing about the timeline, and Add Step reads as "add an empty step"
+until you know it snapshots the current ring. `FirstEditCoach` covers it
+instead: the first time any parameter changes, a small dismissable callout
+points at Add Step and says what it does. Shown **once ever**, and
+dismissed either by acknowledging it or by pressing the button — anyone
+who has added a step has learned the thing.
+
+The one subtlety: the coach arms itself a run-loop turn *after*
+`watch(_:)`. Binding the config, loading a preset and the first layout pass
+all republish it, and any of those would otherwise fire the mark before the
+user had touched anything. `FirstEditCoach.reset()` puts it back for
+another look.
 
 ## Performance: profile it, don't reason about it
 

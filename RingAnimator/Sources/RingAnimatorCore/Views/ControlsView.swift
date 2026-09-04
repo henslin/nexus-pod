@@ -36,9 +36,6 @@ import SwiftUI
 /// `.ringGlassButtonStyle()` in `ControlsSections.swift` to compensate.
 public struct ControlsView: View {
     @ObservedObject var config: RingConfig
-    /// Commits the ring's current state as a timeline step. `nil` where
-    /// there's no timeline to add to, which is what hides the button.
-    var onAddToTimeline: (() -> Void)?
     /// Observed directly (rather than read through `config.elevenLabs`
     /// each time) so this view redraws when connection state, level, or
     /// transcripts change — see `RingConfig.elevenLabs`'s doc comment for
@@ -51,9 +48,8 @@ public struct ControlsView: View {
 
     @State private var expanded: [String: Bool]
 
-    public init(config: RingConfig, onAddToTimeline: (() -> Void)? = nil) {
+    public init(config: RingConfig) {
         self.config = config
-        self.onAddToTimeline = onAddToTimeline
         self.voice = config.elevenLabs
         self.stt = config.voiceConversation.stt
         _expanded = State(initialValue: [
@@ -174,7 +170,6 @@ public struct ControlsView: View {
             onReset: ControlsSectionReset.isResettable(id)
                 ? { ControlsSectionReset.reset(id, on: config) }
                 : nil,
-            onAddToTimeline: onAddToTimeline,
             isExpanded: Binding(
                 get: { expanded[id, default: true] },
                 set: { expanded[id] = $0 }

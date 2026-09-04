@@ -107,9 +107,7 @@ struct ContentView: View {
                 HSplitView {
                     designerDetail
                         .frame(minWidth: 420, idealWidth: 640)
-                    ControlsView(config: config) {
-                        timelinePlayer.addSegment(from: config)
-                    }
+                    ControlsView(config: config)
                         .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
                 }
             case .cueLibrary:
@@ -248,6 +246,9 @@ private struct PreviewTab: View {
     @ObservedObject var config: RingConfig
     @ObservedObject var player: TimelinePlayer
     @ObservedObject var stageState: StageState
+    /// Points at Add Step the first time a parameter changes — see
+    /// `FirstEditCoach`.
+    @StateObject private var coach = FirstEditCoach()
 
     /// Where the playhead sits when the clock isn't running. Playback
     /// itself is computed from `TimelineView`'s own date (see
@@ -293,10 +294,13 @@ private struct PreviewTab: View {
                     player: player,
                     config: config,
                     playhead: now,
+                    showsCoachMark: coach.isShowing,
+                    onCoachDismiss: { coach.dismiss() },
                     onScrub: { scrub(to: $0) }
                 )
             }
         }
+        .onAppear { coach.watch(config) }
         .onChange(of: player.isPlaying) { _, isPlaying in
             if isPlaying {
                 playAnchor = (date: Date(), offset: pausedPlayhead)
