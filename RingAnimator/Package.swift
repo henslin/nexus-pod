@@ -110,6 +110,14 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/PerfCheck"
         ),
+        // Replaces the Use Cases library from a folder of pattern scripts
+        // — see the header comment in Sources/LibraryImport/main.swift.
+        // Destructive, and asks to be told so. Not part of the app.
+        .executableTarget(
+            name: "LibraryImport",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/LibraryImport"
+        ),
         .executableTarget(
             name: "DiffCheck",
             dependencies: ["RingAnimatorCore"],

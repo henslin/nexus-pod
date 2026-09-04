@@ -15,6 +15,12 @@ struct UseCaseListView: View {
     @ObservedObject var store: RingPresetStore
     @Binding var selectedUseCaseID: RingPreset.ID?
 
+    /// Local rather than hoisted into `ContentView` the way the Cue
+    /// Library's is: this view is also every user-made section, keyed by
+    /// `.id(section)`, so a hoisted string would need to be one per
+    /// section — and a search that clears when you switch sections is the
+    /// behaviour you want anyway.
+    @State private var searchText = ""
     @State private var showingNewDialog = false
     @State private var newUseCaseName = ""
 
@@ -27,8 +33,51 @@ struct UseCaseListView: View {
     /// them, the same sheet either way.
     @State private var renderTargets: [RingPreset] = []
 
+    /// Name and animation type, which is what's on the row — searching for
+    /// something the row doesn't show would hide matches for no visible
+    /// reason.
+    private var visiblePresets: [RingPreset] {
+        guard !searchText.isEmpty else { return store.presets }
+        return store.presets.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+                || $0.animationType.rawValue.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    /// One row per animation. A function rather than inline so the
+    /// reorderable and filtered branches above share it instead of keeping
+    /// two copies of the row in step.
+    /// Returns `some DynamicViewContent`, not `some View`: `onMove` is
+    /// declared on the former, and an opaque `View` drops it.
+    private func rows(_ presets: [RingPreset]) -> some DynamicViewContent {
+        ForEach(presets) { preset in
+            UseCaseRow(
+                preset: preset,
+                onRename: {
+                    renameText = preset.name
+                    renamingUseCase = preset
+                },
+                onExport: { exportSingle(preset) },
+                onDelete: {
+                    store.delete(preset.id)
+                    // A use case's timeline lives in its own store file
+                    // (see `TimelinePlayer.useCaseFileName`), which nothing
+                    // else would ever clean up — a deleted use case would
+                    // otherwise leave an orphan in Application Support
+                    // forever, and a new use case can't collide with it
+                    // since the name is keyed by UUID.
+                    TimelinePlayer.deleteStore(
+                        fileName: TimelinePlayer.useCaseFileName(preset.id)
+                    )
+                    if selectedUseCaseID == preset.id { selectedUseCaseID = nil }
+                }
+            )
+            .tag(preset.id)
+        }
+    }
+
     var body: some View {
-        ListColumn {
+        ListColumn(search: $searchText, searchPrompt: "Search animations") {
             List(selection: $selectedUseCaseID) {
                 Section {
                     if store.presets.isEmpty {
@@ -36,36 +85,21 @@ struct UseCaseListView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 4)
+                    } else if visiblePresets.isEmpty {
+                        Text("No animations match “\(searchText)”.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 4)
+                    } else if searchText.isEmpty {
+                        // Reordering only when nothing is filtered out.
+                        // `onMove` hands back offsets into the rows on
+                        // screen, and against a filtered list those index
+                        // the wrong animations — a drag would quietly
+                        // reorder something else.
+                        rows(visiblePresets)
+                            .onMove { store.move(fromOffsets: $0, toOffset: $1) }
                     } else {
-                        ForEach(store.presets) { preset in
-                            UseCaseRow(
-                                preset: preset,
-                                onRename: {
-                                    renameText = preset.name
-                                    renamingUseCase = preset
-                                },
-                                onExport: { exportSingle(preset) },
-                                onDelete: {
-                                    store.delete(preset.id)
-                                    // A use case's timeline lives in its own
-                                    // store file (see
-                                    // `TimelinePlayer.useCaseFileName`), which
-                                    // nothing else would ever clean up — a
-                                    // deleted use case would otherwise leave an
-                                    // orphan in Application Support forever,
-                                    // and a new use case can't collide with it
-                                    // since the name is keyed by UUID.
-                                    TimelinePlayer.deleteStore(
-                                        fileName: TimelinePlayer.useCaseFileName(preset.id)
-                                    )
-                                    if selectedUseCaseID == preset.id { selectedUseCaseID = nil }
-                                }
-                            )
-                            .tag(preset.id)
-                        }
-                        // The list's order *is* the store's array order, so
-                        // a move is just a move.
-                        .onMove { store.move(fromOffsets: $0, toOffset: $1) }
+                        rows(visiblePresets)
                     }
                 }
             }
