@@ -105,11 +105,12 @@ struct SavedPresetsView: View {
                 // work out that they were two ends of the same JSON file,
                 // and that neither had anything to do with the two Blender
                 // items under them.
-                // Grouped by *scope*, and each item names its own scope
-                // rather than leaning on the header — one animation, or the
-                // whole list. Mixing the two under one heading is what made
-                // this confusing: "Export All…" and "Export “X”…" look like
-                // the same kind of thing until you read them twice.
+                // Grouped by *scope*, and each item says which scope it
+                // means — "This" against "All". Mixing the two under one
+                // heading is what made this confusing; the section headers
+                // name the animation and give the count, so "All" already
+                // has a number attached and doesn't need "Them" to carry
+                // the contrast.
                 Section(selectedPreset.map { "“\($0.name)”" } ?? "Selected Animation") {
                     Button("Export This Animation…") {
                         if let selectedPreset { exportSingle(selectedPreset) }
@@ -123,9 +124,9 @@ struct SavedPresetsView: View {
                 Section(store.presets.count == 1
                         ? "All 1 Animation"
                         : "All \(store.presets.count) Animations") {
-                    Button("Export Them All…") { exportLibrary() }
+                    Button("Export All…") { exportLibrary() }
                         .disabled(store.presets.isEmpty)
-                    Button("Export Them All as GIF or Movie…") {
+                    Button("Export All as GIF or Movie…") {
                         renderTargets = store.presets
                     }
                     .disabled(store.presets.isEmpty)

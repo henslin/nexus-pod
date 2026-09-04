@@ -83,10 +83,15 @@ struct ListColumn<Content: View, Actions: View>: View {
             // one sat mid-screen against the timeline strip, reading as
             // part of it rather than as part of the column.
             actionBar
+            Divider()
+            // Below the divider, not above it: the darker band above is the
+            // column's heading — name, description, its controls — and the
+            // search field isn't part of that. It belongs to the list it
+            // filters, so it sits on the list's own background, directly
+            // over the rows.
             if let search {
                 searchField(search)
             }
-            Divider()
             content()
         }
     }
@@ -104,7 +109,7 @@ struct ListColumn<Content: View, Actions: View>: View {
             actions()
         }
         .padding(.horizontal, columnMargin)
-        .padding(.bottom, search == nil ? 10 : 8)
+        .padding(.bottom, 10)
     }
 
     private func searchField(_ text: Binding<String>) -> some View {
