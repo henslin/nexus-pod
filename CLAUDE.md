@@ -466,17 +466,26 @@ the timeline's own **Add Step**.
 
 What that button lost was discoverability — the Controls panel says
 nothing about the timeline, and Add Step reads as "add an empty step"
-until you know it snapshots the current ring. `FirstEditCoach` covers it
-instead: the first time any parameter changes, a small dismissable callout
-points at Add Step and says what it does. Shown **once ever**, and
-dismissed either by acknowledging it or by pressing the button — anyone
-who has added a step has learned the thing.
+until you know it snapshots the current ring. `AddStepTip` covers it: the
+first time any parameter changes, a tip points at Add Step and says what
+it keeps.
 
-The one subtlety: the coach arms itself a run-loop turn *after*
-`watch(_:)`. Binding the config, loading a preset and the first layout pass
-all republish it, and any of those would otherwise fire the mark before the
-user had touched anything. `FirstEditCoach.reset()` puts it back for
-another look.
+**Use TipKit, don't hand-roll a callout.** The first version here was
+hand-rolled and got wrong both of the things TipKit exists to get right:
+it was clipped by the pane's edge — an `.overlay` can't escape its parent's
+bounds the way a real popover can — and it sat too low. `.popoverTip` fixed
+both without a line of layout code. TipKit also owns "shown once, ever" and
+its own datastore, so there's no `UserDefaults` key of ours to keep in
+step. It needs `Tips.configure(...)` at launch, done in each app's
+`WindowGroup` via `.task` rather than in `init` so a failure can't take
+launch down with it.
+
+What did have to stay hand-written is *when* to donate the event.
+`ParameterEditWatcher` arms itself a run-loop turn after `watch(_:)`:
+binding the config, loading a preset and the first layout pass all
+republish it, and any of those would otherwise fire the tip before the user
+had touched anything. It stops listening after the first donation rather
+than donating on every slider tick.
 
 ## Performance: profile it, don't reason about it
 

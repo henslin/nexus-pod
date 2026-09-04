@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 import AppKit
 
 @main
@@ -9,6 +10,16 @@ struct RingPodApp: App {
         WindowGroup {
             ContentView()
                 .frame(minWidth: 1040, minHeight: 720)
+                // TipKit keeps its own record of which tips have been shown
+                // and dismissed, which is why nothing here owns a
+                // "seen" flag. Configured at the window rather than in the
+                // App's init so a failure can't take launch with it.
+                .task {
+                    try? Tips.configure([
+                        .displayFrequency(.immediate),
+                        .datastoreLocation(.applicationDefault),
+                    ])
+                }
         }
         .windowResizability(.contentSize)
         // Under Help, where macOS users look for "what changed". The

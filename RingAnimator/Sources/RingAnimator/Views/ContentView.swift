@@ -246,9 +246,9 @@ private struct PreviewTab: View {
     @ObservedObject var config: RingConfig
     @ObservedObject var player: TimelinePlayer
     @ObservedObject var stageState: StageState
-    /// Points at Add Step the first time a parameter changes — see
-    /// `FirstEditCoach`.
-    @StateObject private var coach = FirstEditCoach()
+    /// Donates the event that shows `AddStepTip` — see
+    /// `ParameterEditWatcher`.
+    @StateObject private var editWatcher = ParameterEditWatcher()
 
     /// Where the playhead sits when the clock isn't running. Playback
     /// itself is computed from `TimelineView`'s own date (see
@@ -294,13 +294,11 @@ private struct PreviewTab: View {
                     player: player,
                     config: config,
                     playhead: now,
-                    showsCoachMark: coach.isShowing,
-                    onCoachDismiss: { coach.dismiss() },
                     onScrub: { scrub(to: $0) }
                 )
             }
         }
-        .onAppear { coach.watch(config) }
+        .onAppear { editWatcher.watch(config) }
         .onChange(of: player.isPlaying) { _, isPlaying in
             if isPlaying {
                 playAnchor = (date: Date(), offset: pausedPlayhead)
