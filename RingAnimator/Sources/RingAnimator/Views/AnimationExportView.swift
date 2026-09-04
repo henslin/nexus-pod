@@ -25,6 +25,15 @@ struct AnimationExportView: View {
     @State private var loopCount = 2
     @State private var transparent = false
     @State private var captureParticles = false
+    @State private var includeAppUI = false
+    @State private var appUITab: DemoTab = .dashboard
+    @State private var includeDeviceFrame = false
+    @State private var deviceFinish: AnimationExporter.DeviceFinish = .blackTitanium
+    /// The sheet's own light/dark choice. Seeded from the canvas's current
+    /// appearance — that's the one you were just looking at — but free to
+    /// differ, so a dark clip can be exported without flipping the canvas
+    /// and flipping it back.
+    @State private var appearance: ColorScheme
     @State private var isExporting = false
     @State private var progress: Double = 0
     @State private var errorMessage: String?
@@ -39,6 +48,7 @@ struct AnimationExportView: View {
         self.colorScheme = colorScheme
         self.onDismiss = onDismiss
         _source = State(initialValue: timeline.isEmpty ? .live : .timeline)
+        _appearance = State(initialValue: colorScheme)
     }
 
     private enum ExportSource: String, CaseIterable, Identifiable {
@@ -99,6 +109,29 @@ struct AnimationExportView: View {
         return "Particles can't be rendered frame by frame, so they'll be off unless you record them."
     }
 
+    private var canvas: AnimationExporter.Canvas {
+        guard includeAppUI else { return .ring }
+        return .appUI(tab: appUITab, device: includeDeviceFrame ? deviceFinish : nil)
+    }
+
+    /// True when the export has no transparency to offer regardless of the
+    /// toggle — a bare screen is opaque from edge to edge.
+    private var transparencyUnavailable: Bool {
+        includeAppUI && !includeDeviceFrame
+    }
+
+    /// Says what you get and why it isn't rounded — the export is sized to
+    /// drop into a device frame that supplies its own corner mask.
+    private var appUINote: String {
+        let size = AnimationExporter.canvasSize(canvas)
+        let w = Int(size.width * AnimationExporter.renderScale)
+        let h = Int(size.height * AnimationExporter.renderScale)
+        if includeDeviceFrame {
+            return "Exports the phone at \(w)×\(h). Turn on Transparent background to keep the rounded corners clear instead of filled."
+        }
+        return "Exports the phone screen at \(w)×\(h), square-cornered, ready to drop into a device frame. The screen is opaque, so there's no transparency to keep."
+    }
+
     private var totalDuration: TimeInterval {
         loopDuration * Double(loopCount)
     }
@@ -127,9 +160,50 @@ struct AnimationExportView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Animated GIF", isOn: $exportGIF)
                 Toggle("Movie (.mov)", isOn: $exportMovie)
+                // The bare screen is opaque edge to edge, so there is no
+                // transparency to keep. With the phone frame on there is:
+                // the rounded corners.
                 Toggle("Transparent background", isOn: $transparent)
+                    .disabled(includeAppUI && !includeDeviceFrame)
+                Toggle("Include the app UI", isOn: $includeAppUI)
+                if includeAppUI {
+                    Toggle("Include the iPhone frame", isOn: $includeDeviceFrame)
+                        .padding(.leading, 18)
+                }
             }
             .toggleStyle(.checkbox)
+
+            if includeAppUI {
+                Picker("Tab", selection: $appUITab) {
+                    ForEach(DemoTab.allCases) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if includeDeviceFrame {
+                    Picker("Finish", selection: $deviceFinish) {
+                        ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
+                            Text(finish.rawValue).tag(finish)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+
+            Picker("Appearance", selection: $appearance) {
+                Text("Light").tag(ColorScheme.light)
+                Text("Dark").tag(ColorScheme.dark)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            if includeAppUI {
+                Label(appUINote, systemImage: "iphone")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if transparent {
                 Label(transparencyNote, systemImage: "square.on.square.dashed")
@@ -194,16 +268,18 @@ struct AnimationExportView: View {
         isTimelineExport
                 ? await AnimationExporter.renderFrames(
                     timeline: timeline,
-                    colorScheme: colorScheme,
+                    colorScheme: appearance,
                     loopCount: loopCount,
-                    transparent: transparent,
+                    transparent: transparent && !transparencyUnavailable,
+                    canvas: canvas,
                     onProgress: onProgress
                 )
                 : await AnimationExporter.renderFrames(
                     config: config,
-                    colorScheme: colorScheme,
+                    colorScheme: appearance,
                     loopCount: loopCount,
-                    transparent: transparent,
+                    transparent: transparent && !transparencyUnavailable,
+                    canvas: canvas,
                     onProgress: onProgress
                 )
     }
@@ -242,9 +318,10 @@ struct AnimationExportView: View {
                 do {
                     frames = try await LivePreviewRecorder.record(
                         config: config,
-                        colorScheme: colorScheme,
+                        colorScheme: appearance,
                         duration: totalDuration,
-                        transparent: transparent,
+                        transparent: transparent && !transparencyUnavailable,
+                        canvas: canvas,
                         onProgress: onProgress
                     )
                 } catch {
@@ -268,7 +345,7 @@ struct AnimationExportView: View {
                     progress = exportMovie ? 0.9 : 1
                 }
                 if exportMovie {
-                    try await AnimationExporter.writeMovie(frames: frames, to: baseURL.appendingPathExtension("mov"), transparent: transparent)
+                    try await AnimationExporter.writeMovie(frames: frames, to: baseURL.appendingPathExtension("mov"), transparent: transparent && !transparencyUnavailable)
                     progress = 1
                 }
                 isExporting = false

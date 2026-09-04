@@ -29,6 +29,73 @@ public enum AnimationExporter {
         case movie
     }
 
+    /// What fills the frame.
+    ///
+    /// `.ring` is the pod on its own — the original behaviour, and what a
+    /// transparent export is for. `.appUI` renders the phone *screen*:
+    /// the chosen tab's screenshot with the live Liquid Glass tab bar and
+    /// ring pod composited over it, which is the thing to drop into a
+    /// device frame in a deck.
+    public enum Canvas: Equatable, Sendable {
+        case ring
+        /// `device` nil is the bare screen; set, it wraps the screen in the
+        /// phone body in that finish.
+        case appUI(tab: DemoTab, device: DeviceFinish? = nil)
+    }
+
+    /// The phone body's colour. Named after the iPhone 16 Pro finishes
+    /// because that's what someone building a deck is matching, and
+    /// approximated as flat colours — the body here is the same drawn
+    /// rounded rectangle `PhoneMockupView` shows on the canvas, not a
+    /// photographic render.
+    public enum DeviceFinish: String, CaseIterable, Identifiable, Sendable {
+        case blackTitanium = "Black Titanium"
+        case naturalTitanium = "Natural Titanium"
+        case whiteTitanium = "White Titanium"
+        case desertTitanium = "Desert Titanium"
+
+        public var id: String { rawValue }
+
+        public var bodyColor: Color {
+            switch self {
+            case .blackTitanium: return Color(red: 0.24, green: 0.24, blue: 0.25)
+            case .naturalTitanium: return Color(red: 0.76, green: 0.74, blue: 0.71)
+            case .whiteTitanium: return Color(red: 0.95, green: 0.94, blue: 0.93)
+            case .desertTitanium: return Color(red: 0.76, green: 0.66, blue: 0.57)
+            }
+        }
+    }
+
+    /// The phone screen, in points — the single source of truth for both
+    /// this exporter and `PhoneMockupView`'s own mockup, so an exported
+    /// frame and what's on the canvas can't drift apart.
+    public static let phoneScreenSize = CGSize(width: 402, height: 874)
+
+    /// The point size of a rendered frame for a given canvas.
+    public static func canvasSize(_ canvas: Canvas) -> CGSize {
+        switch canvas {
+        case .ring:
+            return CGSize(width: canvasDiameter, height: canvasDiameter)
+        case .appUI(_, let device):
+            guard device != nil else { return phoneScreenSize }
+            return CGSize(
+                width: phoneScreenSize.width + phoneBezel * 2,
+                height: phoneScreenSize.height + phoneBezel * 2
+            )
+        }
+    }
+    /// Matches `PhoneMockupView.screen`: the bar is inset 21pt on each
+    /// side and sits 21pt off the bottom.
+    private static let tabBarInset: CGFloat = 42
+    private static let tabBarBottomPadding: CGFloat = 21
+    /// The phone body's bezel, corner radii and Dynamic Island — shared
+    /// with `PhoneMockupView.deviceFrame` for the same reason the screen
+    /// size is: two definitions of the same phone would drift.
+    public static let phoneBezel: CGFloat = 12
+    public static let phoneScreenCornerRadius: CGFloat = 44
+    public static let phoneBodyCornerRadius: CGFloat = 58
+    private static let dynamicIslandSize = CGSize(width: 126, height: 36)
+
     public enum ExportError: Error, LocalizedError {
         case noFrames
         case gifSetupFailed
@@ -102,6 +169,84 @@ public enum AnimationExporter {
         return min(max(oneCycle, 1), 8)
     }
 
+    /// One frame's worth of view, for either canvas.
+    ///
+    /// `elapsed` is the only thing that moves — the property the whole
+    /// deterministic export rests on, and the reason the tab bar's pod is
+    /// handed a `TimelinePlayback` rather than left to find its own clock.
+    /// Passing `nil` gives the *live* view instead, running off its own
+    /// clock: that's what the particle recorder needs, and it shares this
+    /// definition so a recorded clip and a rendered one can't be laid out
+    /// differently.
+    @ViewBuilder
+    public static func frameView(
+        canvas: Canvas,
+        config: RingConfig,
+        elapsed: Double?,
+        opacity: Double = 1,
+        colorScheme: ColorScheme,
+        transparent: Bool
+    ) -> some View {
+        let background: Color = transparent ? .clear : (colorScheme == .dark ? .black : .white)
+        switch canvas {
+        case .ring:
+            let outer = canvasDiameter
+            ZStack {
+                background
+                RingView(config: config, diameter: outer * (podDiameter / podFrameDiameter), overrideElapsed: elapsed)
+                    .frame(width: outer, height: outer)
+                    .opacity(opacity)
+            }
+            .frame(width: outer, height: outer)
+            .environment(\.colorScheme, colorScheme)
+
+        case .appUI(let tab, let device):
+            let size = phoneScreenSize
+            let screen = ZStack(alignment: .bottom) {
+                tab.screenshotImage(dark: colorScheme == .dark)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+                // The voice pill is left out on purpose — it's a transient
+                // state someone triggers, not part of the resting screen.
+                TabBarPreview(
+                    config: config,
+                    selectedTab: .constant(tab),
+                    width: size.width - tabBarInset,
+                    playback: elapsed.map { TimelinePlayback(elapsed: $0, opacity: opacity) }
+                )
+                .padding(.bottom, tabBarBottomPadding)
+            }
+            .frame(width: size.width, height: size.height)
+
+            if let device {
+                let body = canvasSize(.appUI(tab: tab, device: device))
+                ZStack {
+                    background
+                    RoundedRectangle(cornerRadius: phoneBodyCornerRadius, style: .continuous)
+                        .fill(device.bodyColor)
+                        .frame(width: body.width, height: body.height)
+                    screen
+                        .clipShape(RoundedRectangle(cornerRadius: phoneScreenCornerRadius, style: .continuous))
+                    Capsule()
+                        .fill(Color.black)
+                        .frame(width: dynamicIslandSize.width, height: dynamicIslandSize.height)
+                        .offset(y: -size.height / 2 + 26)
+                }
+                .frame(width: body.width, height: body.height)
+                .environment(\.colorScheme, colorScheme)
+            } else {
+                // Square-cornered and unclipped on purpose: the bare screen
+                // is for dropping into a frame that supplies its own corner
+                // mask, and rounding it here would either double up on that
+                // or leave four dark notches behind.
+                screen
+                    .environment(\.colorScheme, colorScheme)
+            }
+        }
+    }
+
     // MARK: - Frame rendering
 
     /// Renders `loopCount` repeats of the animation's natural loop as a
@@ -122,32 +267,23 @@ public enum AnimationExporter {
         colorScheme: ColorScheme,
         loopCount: Int,
         transparent: Bool = false,
+        canvas: Canvas = .ring,
         onProgress: @MainActor (Double) -> Void = { _ in }
     ) async -> [CGImage] {
         let export = exportConfig(from: config)
         let loopDuration = naturalLoopDuration(for: config)
         let totalDuration = loopDuration * Double(max(loopCount, 1))
         let frameCount = max(Int((totalDuration * fps).rounded()), 1)
-        let outerDiameter = canvasDiameter
-        let ringDiameter = outerDiameter * (podDiameter / podFrameDiameter)
-        // `colorScheme` still applies when transparent — it's what the
-        // ring's own colors are resolved against. Only the backdrop goes.
-        let background: Color = transparent ? .clear : (colorScheme == .dark ? .black : .white)
 
         var frames: [CGImage] = []
         frames.reserveCapacity(frameCount)
 
         for index in 0..<frameCount {
             let elapsed = Double(index) / fps
-            let frameView = ZStack {
-                background
-                RingView(config: export, diameter: ringDiameter, overrideElapsed: elapsed)
-                    .frame(width: outerDiameter, height: outerDiameter)
-            }
-            .frame(width: outerDiameter, height: outerDiameter)
-            .environment(\.colorScheme, colorScheme)
-
-            let renderer = ImageRenderer(content: frameView)
+            let renderer = ImageRenderer(content: frameView(
+                canvas: canvas, config: export, elapsed: elapsed, opacity: 1,
+                colorScheme: colorScheme, transparent: transparent
+            ))
             renderer.scale = renderScale
             renderer.isOpaque = !transparent
             if let cgImage = renderer.cgImage {
@@ -182,6 +318,7 @@ public enum AnimationExporter {
         colorScheme: ColorScheme,
         loopCount: Int,
         transparent: Bool = false,
+        canvas: Canvas = .ring,
         onProgress: @MainActor (Double) -> Void = { _ in }
     ) async -> [CGImage] {
         guard !timeline.isEmpty, timeline.duration > 0 else { return [] }
@@ -206,9 +343,6 @@ public enum AnimationExporter {
 
         let totalDuration = timeline.duration * Double(max(loopCount, 1))
         let frameCount = max(Int((totalDuration * fps).rounded()), 1)
-        let outerDiameter = canvasDiameter
-        let ringDiameter = outerDiameter * (podDiameter / podFrameDiameter)
-        let background: Color = transparent ? .clear : (colorScheme == .dark ? .black : .white)
 
         var frames: [CGImage] = []
         frames.reserveCapacity(frameCount)
@@ -220,21 +354,14 @@ public enum AnimationExporter {
                 let config = configs[resolved.segment.id]
             else { continue }
 
-            let frameView = ZStack {
-                background
-                RingView(config: config, diameter: ringDiameter, overrideElapsed: resolved.phaseTime)
-                    .frame(width: outerDiameter, height: outerDiameter)
-                    // Against an opaque backdrop a fade reads as
-                    // "dissolving into the background". Transparent, it
-                    // becomes real partial alpha — which HEVC carries
-                    // faithfully and GIF, being 1-bit, rounds to
-                    // fully-on until the step disappears outright.
-                    .opacity(resolved.opacity)
-            }
-            .frame(width: outerDiameter, height: outerDiameter)
-            .environment(\.colorScheme, colorScheme)
-
-            let renderer = ImageRenderer(content: frameView)
+            // Against an opaque backdrop a fade reads as "dissolving into
+            // the background". Transparent, it becomes real partial alpha
+            // — which HEVC carries faithfully and GIF, being 1-bit, rounds
+            // to fully-on until the step disappears outright.
+            let renderer = ImageRenderer(content: frameView(
+                canvas: canvas, config: config, elapsed: resolved.phaseTime,
+                opacity: resolved.opacity, colorScheme: colorScheme, transparent: transparent
+            ))
             renderer.scale = renderScale
             renderer.isOpaque = !transparent
             if let cgImage = renderer.cgImage {

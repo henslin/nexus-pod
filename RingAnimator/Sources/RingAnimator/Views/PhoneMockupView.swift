@@ -112,9 +112,11 @@ struct PhoneMockupView: View {
     @State private var showAppUI = false
 
     // Roughly iPhone 17 Pro proportioned.
-    private let screenWidth: CGFloat = 402
-    private let screenHeight: CGFloat = 874
-    private let cornerRadius: CGFloat = 44
+    // Shared with the exporter, so an exported App UI frame and this
+    // mockup can't drift apart.
+    private let screenWidth = AnimationExporter.phoneScreenSize.width
+    private let screenHeight = AnimationExporter.phoneScreenSize.height
+    private let cornerRadius = AnimationExporter.phoneScreenCornerRadius
 
     var body: some View {
         ZoomableCanvas(

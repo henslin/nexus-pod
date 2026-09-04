@@ -50,21 +50,17 @@ enum LivePreviewRecorder {
         }
     }
 
-    /// Same canvas the deterministic exporter uses, so a recorded clip and
-    /// a rendered one are the same size and proportions.
-    private static let canvas = AnimationExporter.canvasDiameter
     private static let scale = AnimationExporter.renderScale
-    private static let podDiameter: CGFloat = 34
-    private static let podFrameDiameter: CGFloat = 62
 
     static func record(
         config: RingConfig,
         colorScheme: ColorScheme,
         duration: TimeInterval,
         transparent: Bool,
+        canvas: AnimationExporter.Canvas = .ring,
         onProgress: @escaping @MainActor (Double) -> Void = { _ in }
     ) async throws -> [CGImage] {
-        let pixelSize = Int(canvas * scale)
+        let size = AnimationExporter.canvasSize(canvas)
         let wanted = max(Int((duration * AnimationExporter.fps).rounded()), 1)
 
         // A live config: unlike the export path this one keeps particles
@@ -74,7 +70,7 @@ enum LivePreviewRecorder {
         RingPreset(name: "Capture Snapshot", config: config).apply(to: live)
         live.voiceReactiveEnabled = false
 
-        let window = makeWindow(transparent: transparent, colorScheme: colorScheme, config: live)
+        let window = makeWindow(canvas: canvas, transparent: transparent, colorScheme: colorScheme, config: live)
         defer { window.orderOut(nil) }
 
         // The window server needs a moment to composite a brand-new window
@@ -91,14 +87,14 @@ enum LivePreviewRecorder {
 
         let pid = ProcessInfo.processInfo.processIdentifier
         guard let target = content.windows.first(where: {
-            $0.owningApplication?.processID == pid && $0.frame.width == canvas
+            $0.owningApplication?.processID == pid && $0.frame.width == size.width
         }) else {
             throw RecordError.windowNotFound
         }
 
         let configuration = SCStreamConfiguration()
-        configuration.width = pixelSize
-        configuration.height = pixelSize
+        configuration.width = Int(size.width * scale)
+        configuration.height = Int(size.height * scale)
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
         configuration.showsCursor = false
         // Clear regardless of `transparent`: an opaque export gets its
@@ -132,20 +128,17 @@ enum LivePreviewRecorder {
     /// composited and therefore captured. Borderless windows aren't listed
     /// by `SCShareableContent` at all, so this is `.titled` with the
     /// titlebar hidden — visually borderless, still capturable.
-    private static func makeWindow(transparent: Bool, colorScheme: ColorScheme, config: RingConfig) -> NSWindow {
-        let ringDiameter = canvas * (podDiameter / podFrameDiameter)
-        let background: Color = transparent ? .clear : (colorScheme == .dark ? .black : .white)
-
-        let content = ZStack {
-            background
-            RingView(config: config, diameter: ringDiameter)
-                .frame(width: canvas, height: canvas)
-        }
-        .frame(width: canvas, height: canvas)
-        .environment(\.colorScheme, colorScheme)
+    private static func makeWindow(canvas: AnimationExporter.Canvas, transparent: Bool, colorScheme: ColorScheme, config: RingConfig) -> NSWindow {
+        let size = AnimationExporter.canvasSize(canvas)
+        // `elapsed: nil` is the live view — the same layout the rendered
+        // path uses, running off its own clock so the emitter animates.
+        let content = AnimationExporter.frameView(
+            canvas: canvas, config: config, elapsed: nil,
+            colorScheme: colorScheme, transparent: transparent
+        )
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: canvas, height: canvas),
+            contentRect: NSRect(x: 0, y: 0, width: size.width, height: size.height),
             styleMask: [.titled, .fullSizeContentView],
             backing: .buffered,
             defer: false
