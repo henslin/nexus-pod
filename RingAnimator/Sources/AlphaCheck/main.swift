@@ -107,7 +107,72 @@ func run() async -> Int32 {
         check("GIF written", false, error.localizedDescription)
     }
 
-    // 5. The streaming path — what every export sheet actually calls now.
+    // 5. The screen stays inside the phone.
+    //
+    //    Sampling "just inside the corner" doesn't work — most of that
+    //    region is opaque bezel, and reads 255 whether or not anything
+    //    bled. The property that actually holds is simpler: in a
+    //    transparent export, every pixel where the *artwork* is clear must
+    //    still be clear. Anything painted there is the screen escaping,
+    //    which is what the square corners used to do where the cut-out's
+    //    rounding and the phone's outline curve apart.
+    let framedForBleed = await AnimationExporter.renderFrames(
+        config: config, colorScheme: .dark, loopCount: 1, transparent: true,
+        canvas: .appUI(tab: .dashboard, device: .silver)
+    )
+    let artworkRenderer = ImageRenderer(content:
+        AnimationExporter.DeviceFinish.silver.image
+            .resizable()
+            .frame(width: AnimationExporter.phoneFrameSize.width,
+                   height: AnimationExporter.phoneFrameSize.height)
+    )
+    artworkRenderer.scale = AnimationExporter.renderScale
+    artworkRenderer.isOpaque = false
+    if let framed = framedForBleed.first, let artwork = artworkRenderer.cgImage {
+        let (exported, width, height) = alphaBuffer(framed)
+        let (bare, artWidth, artHeight) = alphaBuffer(artwork)
+        if width == artWidth && height == artHeight {
+            // Outside the phone, not merely clear: the aperture is clear
+            // too, and the screen is *supposed* to paint there. The
+            // exterior is the clear region reachable from the image
+            // border, so a fill from (0,0) separates the two.
+            var exterior = [Bool](repeating: false, count: width * height)
+            var stack = [0]
+            exterior[0] = true
+            while let index = stack.popLast() {
+                let x = index % width, y = index / width
+                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                    let nx = x + dx, ny = y + dy
+                    guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
+                    let next = ny * width + nx
+                    guard !exterior[next], bare[next * 4] == 0 else { continue }
+                    exterior[next] = true
+                    stack.append(next)
+                }
+            }
+            var bled = 0
+            for pixel in 0..<(width * height) where exterior[pixel] && exported[pixel * 4] > 24 {
+                bled += 1
+            }
+            check("the screen doesn't poke past the device", bled == 0,
+                  "\(bled) px painted where the artwork is clear")
+        } else {
+            check("frame and artwork render at one size", false, "\(width)x\(height) vs \(artWidth)x\(artHeight)")
+        }
+    }
+
+    //    And without a frame it stays square, which is the point of that
+    //    option: the clip belongs to the device, not to the screen.
+    let bare = await AnimationExporter.renderFrames(
+        config: config, colorScheme: .dark, loopCount: 1, transparent: true,
+        canvas: .appUI(tab: .dashboard, device: nil)
+    )
+    if let first = bare.first {
+        check("a frameless export keeps square corners", cornerAlpha(first) == 255,
+              "corner alpha \(cornerAlpha(first)) of 255")
+    }
+
+    // 6. The streaming path — what every export sheet actually calls now.
     //    Rendering and encoding run as one pass, so this is also the only
     //    check that a real file comes out the far end.
     let streamed = dir.appendingPathComponent("streamed")

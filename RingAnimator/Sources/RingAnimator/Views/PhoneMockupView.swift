@@ -223,6 +223,9 @@ struct PhoneMockupView: View {
         ZStack {
             screen
                 .frame(width: screenWidth, height: screenHeight)
+                // Same clip the export uses — see
+                // `AnimationExporter.phoneScreenCornerRadius`.
+                .clipShape(RoundedRectangle(cornerRadius: AnimationExporter.phoneScreenCornerRadius, style: .continuous))
 
             deviceFinish.image
                 .resizable()

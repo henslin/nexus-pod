@@ -97,6 +97,20 @@ public enum AnimationExporter {
     /// scaling or offset, just a `ZStack` with the frame on top.
     public static let phoneFrameSize = CGSize(width: 450, height: 920)
 
+    /// The screen's own corner, for clipping content to the aperture.
+    ///
+    /// Apple's cut-out is a squircle, not a circular arc — at its topmost
+    /// row it is already 227px in at 3x, which no circular radius
+    /// produces. So this was fitted rather than derived: candidate
+    /// `RoundedRectangle`s rasterised and compared against the artwork's
+    /// own profile. `.continuous` at 65pt matches to a mean 1.7px at 3x
+    /// (0.57pt); the best circular fit is off by 7.5px, and looks it.
+    ///
+    /// Only used when the frame is on. A bare screen export stays square
+    /// on purpose — it's going into someone else's device frame, which
+    /// brings its own corners.
+    public static let phoneScreenCornerRadius: CGFloat = 65
+
     public enum ExportError: Error, LocalizedError {
         case noFrames
         case gifSetupFailed
@@ -227,7 +241,13 @@ public enum AnimationExporter {
                 // square corners and supplies the Dynamic Island itself.
                 ZStack {
                     background
+                    // Clipped to the aperture. Unclipped, the screen's
+                    // square corners poke out diagonally past the device:
+                    // the cut-out's rounding and the phone's outer
+                    // rounding curve away from each other, and the gap
+                    // between them is transparent artwork, not bezel.
                     screen
+                        .clipShape(RoundedRectangle(cornerRadius: phoneScreenCornerRadius, style: .continuous))
                     device.image
                         .resizable()
                         .frame(width: phoneFrameSize.width, height: phoneFrameSize.height)
