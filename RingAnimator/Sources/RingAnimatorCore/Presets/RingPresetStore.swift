@@ -58,6 +58,17 @@ public final class RingPresetStore: ObservableObject {
     /// entry). A no-op if `preset.id` isn't already in the list, so a
     /// stray call after a preset's been deleted elsewhere can't
     /// resurrect it.
+    /// Appends several at once, saving once — used when a new build's
+    /// bundled library brings animations this machine hasn't seen.
+    /// Appended rather than inserted at the top: a library arrives as a
+    /// set, and putting it above everything would bury whatever the person
+    /// was actually working on.
+    public func append(contentsOf newPresets: [RingPreset]) {
+        guard !newPresets.isEmpty else { return }
+        presets.append(contentsOf: newPresets)
+        save()
+    }
+
     public func update(_ preset: RingPreset) {
         guard let index = presets.firstIndex(where: { $0.id == preset.id }) else { return }
         presets[index] = preset

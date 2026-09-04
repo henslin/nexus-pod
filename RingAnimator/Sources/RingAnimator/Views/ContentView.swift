@@ -20,6 +20,9 @@ struct ContentView: View {
     /// just its own JSON file (`use-cases.json`) so the two lists never
     /// intermix. See `UseCaseListView`/`UseCaseDetailView`.
     @StateObject private var useCaseStore = RingPresetStore(fileName: "use-cases.json")
+    /// Non-nil only when a launch's library sync actually moved something,
+    /// which is what puts the summary on screen.
+    @State private var librarySync: UseCaseLibrary.Outcome?
     /// The sequencing document — see `TimelinePlayer`. Bound to `config`
     /// in `.onAppear` below, which is what makes the Controls panel edit
     /// the selected step in place rather than a detached scratch copy.
@@ -246,7 +249,38 @@ struct ContentView: View {
             // `@StateObject`s aren't guaranteed to be constructed until the
             // view first appears, and binding needs both objects to exist.
             timelinePlayer.bind(to: config)
+            // Reconcile the use cases with whatever library this build
+            // ships — see `UseCaseLibrary.sync` for what it will and won't
+            // overwrite. Silent unless something actually moved.
+            let outcome = UseCaseLibrary.sync(into: useCaseStore)
+            if outcome.changedAnything { librarySync = outcome }
         }
+        .alert(
+            "Animation Library Updated",
+            isPresented: Binding(
+                get: { librarySync != nil },
+                set: { if !$0 { librarySync = nil } }
+            )
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(librarySync.map(syncMessage) ?? "")
+        }
+    }
+
+    /// Says what moved, and — when it applies — that nothing of yours did.
+    private func syncMessage(_ outcome: UseCaseLibrary.Outcome) -> String {
+        var lines: [String] = []
+        if !outcome.added.isEmpty {
+            lines.append("\(outcome.added.count) new animation\(outcome.added.count == 1 ? "" : "s") added.")
+        }
+        if !outcome.updated.isEmpty {
+            lines.append("\(outcome.updated.count) updated to the version in this build.")
+        }
+        if !outcome.keptYours.isEmpty {
+            lines.append("\(outcome.keptYours.count) you'd edited \(outcome.keptYours.count == 1 ? "was" : "were") left as \(outcome.keptYours.count == 1 ? "it is" : "they are").")
+        }
+        return lines.joined(separator: "\n")
     }
 
 
@@ -285,7 +319,15 @@ struct ContentView: View {
         case .useCases:
             let count = useCaseStore.presets.count
             let purpose = "Hardware animations, in app"
-            return count == 0 ? purpose : "\(purpose) · \(count)"
+            guard count > 0 else { return purpose }
+            // The library's own date, not the app version: "is this set
+            // current?" is a question about the animations, and whoever
+            // asks it has no way to map a build number onto an answer.
+            var line = "\(purpose) · \(count)"
+            if let cut = UseCaseLibrary.bundled?.generatedAt {
+                line += " · updated \(cut.formatted(date: .abbreviated, time: .omitted))"
+            }
+            return line
         case .user(let id):
             // No purpose line: whoever made it named it, so writing one
             // would be putting words in their mouth.

@@ -79,6 +79,13 @@ step "Generated exports still compile"
 swift run --scratch-path "$SCRATCH" ExportCheck 2>&1 | tail -2
 result "${PIPESTATUS[0]}" "ExportCheck"
 
+# The one piece of the app that runs unattended over someone's own work.
+# Every branch, including the ones whose correct behaviour is to do
+# nothing.
+step "The bundled library reconciles without eating anyone's edits"
+swift run --scratch-path "$SCRATCH" SyncCheck 2>&1 | grep -E '^(bundled|  )'
+result "${PIPESTATUS[0]}" "SyncCheck"
+
 # A transparent export that quietly bakes in a black backdrop looks
 # perfectly fine everywhere except the one place it's for — dropped onto a
 # light background in Figma — so it needs a gate rather than an eyeball.

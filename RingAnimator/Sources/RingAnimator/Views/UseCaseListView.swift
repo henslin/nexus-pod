@@ -328,6 +328,13 @@ private struct UseCaseRow: View {
 
     @StateObject private var previewConfig = RingConfig()
 
+    /// Whether this one shipped with the app, and whether it's been
+    /// changed since. Recomputed when the preset changes rather than
+    /// stored, so an edit updates the badge as soon as it's saved.
+    private var origin: UseCaseLibrary.Origin {
+        UseCaseLibrary.origin(of: preset)
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             RingView(config: previewConfig, diameter: 22, frameRate: RingView.thumbnailFrameRate)
@@ -338,9 +345,24 @@ private struct UseCaseRow: View {
                 Text(preset.name)
                     .font(.body.weight(.medium))
                     .lineLimit(1)
-                Text(preset.animationType.rawValue)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(preset.animationType.rawValue)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    // A badge rather than a suffix on the name: the name
+                    // follows an animation into exported filenames and
+                    // into files you send people, and "Wifi Success
+                    // (Local)" arriving on someone else's machine is both
+                    // wrong and permanent.
+                    if let badge = origin.badge {
+                        Text(badge)
+                            .font(.caption2.weight(.medium))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.secondary.opacity(0.16)))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             Spacer()
         }

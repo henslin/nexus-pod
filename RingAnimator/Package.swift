@@ -110,6 +110,14 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/PerfCheck"
         ),
+        // Every branch of the bundled-library sync, including the ones
+        // whose correct behaviour is "leave it alone" — see the header
+        // comment in Sources/SyncCheck/main.swift. `swift run SyncCheck`.
+        .executableTarget(
+            name: "SyncCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/SyncCheck"
+        ),
         // Proves a transparent export really carries alpha all the way to
         // the file — see the header comment in Sources/AlphaCheck/main.swift.
         // Not part of the app; `swift run AlphaCheck` before a release.

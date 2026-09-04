@@ -17,7 +17,7 @@ struct AnimationExportView: View {
     let colorScheme: ColorScheme
     /// The finish the canvas is wearing, so the sheet opens on the phone
     /// you were just looking at.
-    var deviceFinish: AnimationExporter.DeviceFinish = .deepBlue
+    var deviceFinish: AnimationExporter.DeviceFinish = .silver
     /// Dismisses the sheet — passed in rather than using `@Environment(\.dismiss)`
     /// so the Cancel button can be disabled (not hidden) while exporting,
     /// matching the "Exporting…" progress state below.
@@ -45,7 +45,7 @@ struct AnimationExportView: View {
         config: RingConfig,
         timeline: RingTimeline = RingTimeline(),
         colorScheme: ColorScheme,
-        deviceFinish: AnimationExporter.DeviceFinish = .deepBlue,
+        deviceFinish: AnimationExporter.DeviceFinish = .silver,
         onDismiss: @escaping () -> Void
     ) {
         self.config = config
