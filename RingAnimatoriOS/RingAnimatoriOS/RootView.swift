@@ -37,6 +37,9 @@ struct RootView: View {
     @ObservedObject private var voiceConversation: VoiceConversationController
 
     @State private var showingSettings = false
+    /// The post-update release notes — see `WhatsNewPresenter`. Same screen
+    /// and same copy as the Mac app, so the two can't drift.
+    @State private var showingWhatsNew = false
     @State private var selectedTab: DemoTab = .dashboard
 
     /// The sequence, reached from the Ring Settings sheet — see
@@ -244,6 +247,19 @@ struct RootView: View {
             // means it reacts to `isDarkMode` directly, no cross-
             // presentation-boundary propagation required.
             .preferredColorScheme(isDarkMode ? .dark : .light)
+        }
+        .sheet(isPresented: $showingWhatsNew) {
+            WhatsNewView {
+                WhatsNewPresenter.markSeen()
+                showingWhatsNew = false
+            }
+            // Not dismissible by dragging: the one button is the way out,
+            // which is how the system's own post-update screens behave.
+            .interactiveDismissDisabled()
+            .preferredColorScheme(isDarkMode ? .dark : .light)
+        }
+        .task {
+            showingWhatsNew = WhatsNewPresenter.shouldPresent()
         }
     }
 

@@ -36,6 +36,10 @@ struct ContentView: View {
     @State private var selectedCueID: String? = LEDCueLibrary.all.first?.id
     @State private var cueSearchText: String = ""
     @State private var selectedUseCaseID: RingPreset.ID?
+    /// The post-update release notes — see `WhatsNewPresenter` for when
+    /// they're due. Also reachable on demand from the Help menu, which is
+    /// where macOS users look for "what changed".
+    @State private var showingWhatsNew = false
 
     enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case ringDesigner = "Nexus"
@@ -117,7 +121,17 @@ struct ContentView: View {
             }
         }
         .navigationTitle(section?.rawValue ?? "Nexus")
+        .sheet(isPresented: $showingWhatsNew) {
+            WhatsNewView {
+                WhatsNewPresenter.markSeen()
+                showingWhatsNew = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showWhatsNew)) { _ in
+            showingWhatsNew = true
+        }
         .onAppear {
+            showingWhatsNew = WhatsNewPresenter.shouldPresent()
             // Deferred to `.onAppear` rather than done in an initializer:
             // `@StateObject`s aren't guaranteed to be constructed until the
             // view first appears, and binding needs both objects to exist.

@@ -11,6 +11,16 @@ struct RingPodApp: App {
                 .frame(minWidth: 1040, minHeight: 720)
         }
         .windowResizability(.contentSize)
+        // Under Help, where macOS users look for "what changed". The
+        // notification is what `ContentView` listens for — a command can't
+        // reach into the window's own state directly.
+        .commands {
+            CommandGroup(replacing: .help) {
+                Button("What's New in Nexus Pod") {
+                    NotificationCenter.default.post(name: .showWhatsNew, object: nil)
+                }
+            }
+        }
     }
 }
 
@@ -27,6 +37,11 @@ struct RingPodApp: App {
 /// app. `Package.swift`'s linker-embedded Info.plist (see the comment
 /// there) fixes the *bundle identity* half of that gap; this fixes the
 /// *activation* half.
+public extension Notification.Name {
+    /// Posted by the Help menu item; `ContentView` presents the sheet.
+    static let showWhatsNew = Notification.Name("nexus.showWhatsNew")
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)

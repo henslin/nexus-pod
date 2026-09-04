@@ -340,6 +340,34 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   `xcodebuild`/`xcrun simctl` — use that instead of asking for manual
   screenshots when debugging UI issues here.
 
+## What's New
+
+`WhatsNewView` in the core, shown by both apps — Mac presents it from
+`ContentView` and iOS from `RootView`, so the two ship the same release
+notes rather than two hand-kept copies that drift. Styled after the
+system's own post-update screen: title, four or five symbol rows, one
+button out.
+
+**The copy in `WhatsNew.current` is placeholder.** It describes work that
+actually landed, so it reads as a real release note, but nobody has edited
+it for tone or decided what the release is called. Replace it rather than
+appending to it — four or five items is the shape Apple uses, and a list
+that grows every sprint stops being read.
+
+Two behaviors worth keeping:
+
+- **`WhatsNew.version` gates it**, not the app version. Edit the copy
+  without bumping that string and nobody who dismissed the old notes ever
+  sees the new ones.
+- **It doesn't show on a genuinely fresh install.** Someone opening the app
+  for the first time has no idea what's new relative to *what*, and the
+  list reads as an unrequested feature tour. First launch records the
+  version as seen and shows nothing.
+
+On the Mac it's also under **Help → What's New in Nexus Pod**, posted as a
+notification because a `CommandGroup` can't reach into the window's state
+directly.
+
 ## Reset and Add to Timeline, per section
 
 Every Controls card carries two actions in its header, in both panels
