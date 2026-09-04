@@ -154,34 +154,33 @@ public enum WhatsNew {
     /// Bump this when the notes change. The screen shows itself once per
     /// value, so editing the copy without bumping it means nobody who has
     /// already dismissed the old notes ever sees the new ones.
-    public static let version = "2.2"
+    public static let version = "3.0"
 
-    /// PLACEHOLDER COPY — see `WhatsNewView`'s doc comment.
     public static let current: [WhatsNewItem] = [
         WhatsNewItem(
-            symbol: "drop.halffull",
-            title: "Smooth",
-            detail: "The same hardware-accurate animation, spread in space and trailed in time — one continuous gradient instead of twenty hard edges."
+            symbol: "iphone",
+            title: "Export With the App Around It",
+            detail: "Put the animation on a real phone screen — your choice of tab, light or dark, and Apple's iPhone 17 Pro in Silver, Deep Blue or Cosmic Orange. Drops straight into a deck."
         ),
         WhatsNewItem(
-            symbol: "tray.and.arrow.down",
-            title: "Import a Whole Library",
-            detail: "Point at a folder of firmware patterns and get one use case per file, with their palettes, timings and phase steps."
+            symbol: "square.on.square.dashed",
+            title: "Transparent Backgrounds",
+            detail: "Export the ring with a real alpha channel — no black square around it in Figma, and it plays transparent in Keynote or in an app."
         ),
         WhatsNewItem(
-            symbol: "rectangle.3.group",
-            title: "One Preview, Everywhere",
-            detail: "The zoomable phone mockup is now the canvas in every section, and it keeps its place when you switch between them."
+            symbol: "sparkles",
+            title: "Particles You Can Export",
+            detail: "Particles are simulated where nothing can render them frame by frame, so the app records them from the live preview instead."
         ),
         WhatsNewItem(
-            symbol: "bolt.fill",
-            title: "Much Lighter",
-            detail: "The ring draws about four times faster, and the app no longer keeps a CPU core busy while sitting still."
+            symbol: "square.stack.3d.up",
+            title: "Apply to All",
+            detail: "Change one animation — Smooth, particles, speed, anything — and push exactly those changes onto the whole list in one go."
         ),
         WhatsNewItem(
-            symbol: "arrow.uturn.backward",
-            title: "Reset and Add to Timeline",
-            detail: "Every section of the controls can be put back to its defaults, or committed to the timeline as a step."
+            symbol: "shippingbox",
+            title: "The Library Comes With the App",
+            detail: "Every use case ships inside, dated so you can see how current it is. A new version adds what's new and updates what you haven't touched — anything you've edited is left exactly as you left it."
         ),
     ]
 }
