@@ -54,6 +54,14 @@ public struct UseCaseDetailView: View {
     /// from `TimelineView`'s own date, so nothing republishes per frame —
     /// same arrangement as the Mac app's Preview tab.
     @State private var pausedPlayhead: Double = 0
+
+    /// What this animation looked like when it was selected. Everything
+    /// changed since is what "Apply to All" will copy onto the others — so
+    /// turning on Smooth and then Particles is one button at the end, not
+    /// one per section as you go.
+    @State private var baseline: RingPreset?
+    @State private var confirmingApplyToAll = false
+    @State private var appliedCount: Int?
     /// Same tip as Nexus — see `AddStepTip`. Shown once ever, so whichever
     /// pane you first change a parameter in gets it.
     @StateObject private var editWatcher = ParameterEditWatcher()
@@ -152,6 +160,17 @@ public struct UseCaseDetailView: View {
                 }
             }
             #endif
+            .alert(
+                "Applied",
+                isPresented: Binding(
+                    get: { appliedCount != nil },
+                    set: { if !$0 { appliedCount = nil } }
+                )
+            ) {
+                Button("OK") {}
+            } message: {
+                Text("\(appliedCount ?? 0) other animation\((appliedCount ?? 0) == 1 ? "" : "s") updated.")
+            }
     }
 
     /// `HSplitView` is a macOS-only API, but this type lives in the shared
@@ -179,6 +198,59 @@ public struct UseCaseDetailView: View {
             controlsPanel
         }
         #endif
+    }
+
+    /// What's changed since this animation was selected, if anything.
+    private var pendingDiff: PresetDiff? {
+        guard let baseline, let current = currentPreset else { return nil }
+        guard let diff = PresetDiff(from: baseline, to: current), !diff.isEmpty else { return nil }
+        return diff
+    }
+
+    /// Appears only once something has actually changed, which is what
+    /// keeps it from being one more permanent button to ignore.
+    private func applyToAllBar(_ diff: PresetDiff) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(diff.changedKeyCount == 1
+                     ? "1 setting changed"
+                     : "\(diff.changedKeyCount) settings changed")
+                    .font(.caption.weight(.semibold))
+                Text("Apply the same changes to the whole list")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Button("Apply to All") { confirmingApplyToAll = true }
+                .controlSize(.small)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .confirmationDialog(
+            "Apply \(diff.changedKeyCount == 1 ? "this change" : "these \(diff.changedKeyCount) changes") to all \(store.presets.count)?",
+            isPresented: $confirmingApplyToAll,
+            titleVisibility: .visible
+        ) {
+            Button("Apply to All \(store.presets.count)", role: .destructive) {
+                applyToAll(diff)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every other animation in this list gets the same settings. This can't be undone.")
+        }
+    }
+
+    private func applyToAll(_ diff: PresetDiff) {
+        var count = 0
+        for preset in store.presets where preset.id != presetID {
+            guard let updated = diff.applied(to: preset) else { continue }
+            store.update(updated)
+            count += 1
+        }
+        // The new state becomes the baseline: the changes have landed, so
+        // offering to apply them again would be offering to do nothing.
+        baseline = currentPreset
+        appliedCount = count
     }
 
     private func persist() {
@@ -242,6 +314,10 @@ public struct UseCaseDetailView: View {
             // appearance, and binding needs both objects to exist.
             player.bind(to: editingConfig)
             editWatcher.watch(editingConfig)
+            // `.id(preset.id)` at the call site rebuilds this view per
+            // selection, so this runs once per animation and the baseline
+            // is what was on disk before any editing.
+            if baseline == nil { baseline = currentPreset }
         }
     }
 
@@ -254,12 +330,18 @@ public struct UseCaseDetailView: View {
     }
 
     private var controlsPanel: some View {
-        // Just the controls. Import Blender used to sit above them, and
-        // moved to the top of the Use Cases column: it isn't *about* these
-        // parameters, it replaces most of them.
-        ScrollView {
-            controls
-                .padding(16)
+        VStack(spacing: 0) {
+            if let diff = pendingDiff, store.presets.count > 1 {
+                applyToAllBar(diff)
+                Divider()
+            }
+            // Just the controls. Import Blender used to sit above them, and
+            // moved to the top of the Use Cases column: it isn't *about*
+            // these parameters, it replaces most of them.
+            ScrollView {
+                controls
+                    .padding(16)
+            }
         }
     }
 
