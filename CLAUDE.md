@@ -981,6 +981,39 @@ Two things that are load-bearing:
   span and draws a hard seam at twelve o'clock — most visible on exactly
   the patterns this mode is for.
 
+### Measuring flicker
+
+"It flickers a bit, depending on the setting" is not something a contact
+sheet can answer, and the obvious metric is the wrong one. Mean frame
+brightness barely moves on a comet however badly its tail stutters — the
+total light is roughly constant, it's just in different places.
+
+What works: sample the rendered ring at each diode's own angular position,
+build a per-diode trace over a couple of seconds at 60fps, and count
+**reversals** — a diode that rises then falls (or the reverse) by more than
+about 2% in consecutive frames. That's the signature of stutter, as opposed
+to a smooth rise or fall. Track the worst single-frame **step** alongside
+it, because the two trade against each other and a change that removes all
+the reversals by removing the look-ahead just converts them into pops.
+
+Doing that turned a vague report into three specific findings:
+
+- The flicker was confined to sparse patterns (a comet) at wide bleed and
+  long persistence. Solid patterns never flickered at any setting.
+- **Frame-aligned taps are worth having.** Sampling the stream's own
+  boundaries rather than evenly spaced instants took the comet from 6
+  reversals to 2 at the default and 32 to 18 at the extreme.
+- **The forward look-ahead was the main cause**, and capping it at 120 ms
+  rather than scaling it with persistence took the extreme from 18
+  reversals to 2 while leaving the default untouched. 80 and 100 ms were
+  both worse at the default without being better at the extreme.
+
+Also settled by measuring: a **p-norm soft max** in place of the hard max
+looked like the principled fix for "the winner keeps changing" and was
+much worse — contributions accumulate, so every pattern with light on most
+diodes brightened and dimmed as taps entered and left the window. The
+rainbow went from zero reversals to 31. The max stays.
+
 Preview only — the code generators still emit the hardware render, and the
 Smooth card's footer says so.
 

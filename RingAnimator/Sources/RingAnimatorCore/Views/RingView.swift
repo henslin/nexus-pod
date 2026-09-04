@@ -1182,26 +1182,59 @@ public struct RingView: View {
     /// `AngularGradient` would otherwise start at three. Getting this wrong
     /// rotates every pattern a quarter turn, which looks like a timing bug
     /// rather than a geometry one.
-    ///
-    /// The last stop repeats the *first* diode's color at location 1. Without
-    /// it the gradient runs from diode 19 straight back to diode 0 across a
-    /// zero-width span, which draws as a hard seam at twelve o'clock — most
-    /// visible on exactly the patterns this mode is for, where neighbouring
-    /// colors differ.
     private func ringGradient(_ states: [DiodeState]) -> AngularGradient {
-        let count = max(states.count, 1)
-        var stops = states.enumerated().map { index, state in
-            Gradient.Stop(
-                color: state.color.opacity(min(max(state.opacity, 0), 1)),
-                location: Double(index) / Double(count)
-            )
+        let count = states.count
+        guard count > 1 else {
+            let only = states.first.map { $0.color.opacity($0.opacity) } ?? .clear
+            return AngularGradient(colors: [only, only], center: .center)
         }
-        if let first = states.first {
-            stops.append(Gradient.Stop(
-                color: first.color.opacity(min(max(first.opacity, 0), 1)),
-                location: 1
-            ))
+
+        // Converted once per diode rather than once per emitted stop —
+        // `rgbComponents` goes through NSColor/UIColor, and the loop below
+        // emits several stops per diode.
+        let samples = states.map { state -> (r: Double, g: Double, b: Double, a: Double) in
+            let rgb = state.color.rgbComponents
+            return (rgb.red, rgb.green, rgb.blue, min(max(state.opacity, 0), 1))
         }
+
+        // Extra stops *between* diodes, eased rather than linear.
+        //
+        // A stop per diode leaves the gradient piecewise-linear: it's
+        // continuous, but its slope isn't, so every diode position is a
+        // visible crease and the ring reads as twenty facets rather than one
+        // sweep. Smoothstep between neighbours makes the slope continuous
+        // too, at the cost of a few more stops of an already-cheap gradient.
+        let subdivisions = 4
+        var stops: [Gradient.Stop] = []
+        stops.reserveCapacity(count * subdivisions + 1)
+
+        for index in 0..<count {
+            let from = samples[index]
+            let to = samples[(index + 1) % count]
+            for step in 0..<subdivisions {
+                let f = Double(step) / Double(subdivisions)
+                let eased = f * f * (3 - 2 * f)
+                stops.append(Gradient.Stop(
+                    color: Color(
+                        red: from.r + (to.r - from.r) * eased,
+                        green: from.g + (to.g - from.g) * eased,
+                        blue: from.b + (to.b - from.b) * eased
+                    ).opacity(from.a + (to.a - from.a) * eased),
+                    location: (Double(index) + f) / Double(count)
+                ))
+            }
+        }
+
+        // Closes the loop back onto diode 0. Without a stop at exactly 1 the
+        // gradient runs from the last emitted stop straight back to the first
+        // across a zero-width span, which draws as a hard seam at twelve
+        // o'clock — most visible on exactly the patterns this mode is for.
+        let first = samples[0]
+        stops.append(Gradient.Stop(
+            color: Color(red: first.r, green: first.g, blue: first.b).opacity(first.a),
+            location: 1
+        ))
+
         return AngularGradient(
             stops: stops,
             center: .center,
@@ -1221,6 +1254,38 @@ public struct RingView: View {
         var green: Double = 0
         var blue: Double = 0
         var level: Double = 0
+    }
+
+    /// Combines contributions to one diode, keeping the strongest.
+    ///
+    /// A max, not a sum and not an average. An average dims a lone lit diode
+    /// to a fraction of itself — blur a single pixel and you get a smudge,
+    /// not a glow. A sum (or a p-norm, which was tried) has the opposite
+    /// problem: contributions accumulate, so a pattern with colour on every
+    /// diode brightens and dims as taps enter and leave the window, which
+    /// measured *worse* than the max on every pattern that isn't sparse.
+    ///
+    /// Keeping the strongest also carries its colour, so a trail is the hue
+    /// of whatever lit it rather than of the diode it passes over.
+    private struct FieldAccumulator {
+        private var sample = FieldSample()
+
+        mutating func add(_ candidate: FieldSample, scaledBy scale: Double) {
+            let value = candidate.level * scale
+            guard value > sample.level else { return }
+            sample = FieldSample(
+                red: candidate.red,
+                green: candidate.green,
+                blue: candidate.blue,
+                level: value
+            )
+        }
+
+        var resolved: FieldSample {
+            var out = sample
+            out.level = min(max(out.level, 0), 1)
+            return out
+        }
     }
 
     /// The whole ring at one instant, before any smoothing.
@@ -1287,44 +1352,51 @@ public struct RingView: View {
         // series of held frames.
         let base = config.smoothingFluidTime ? elapsed : quantized(elapsed)
         let release = max(config.smoothingTrail, 0)
-        // A shorter look *forward*, which softens the rise. Possible only
+        // A short look *forward*, which softens the rise. Possible only
         // because the field is a pure function of time — there's no "next
-        // frame" to wait for, just another instant to evaluate. Kept
-        // proportional rather than exposed: an attack longer than about a
-        // third of the release stops reading as a light coming on.
-        let attack = release * 0.35
+        // frame" to wait for, just another instant to evaluate.
+        //
+        // Capped in absolute terms rather than kept proportional, and the cap
+        // is the whole point.
+        //
+        // A look-ahead is what stops a diode popping on at full brightness:
+        // without one, the worst single-frame jump on a comet goes from 38%
+        // to 51%. But it's also the main source of the flicker at long
+        // persistence — a diode gets lit by the *coming* frame's halo and the
+        // *previous* frame's halo in turn, and the handover between them
+        // reverses direction. Kept proportional at 0.35 it reached 0.28 s at
+        // the top of the Persistence range, which put 18 direction reversals
+        // into two seconds of comet.
+        //
+        // 120 ms was measured, not picked: it leaves the default setting
+        // exactly as it was (2 reversals, 38% worst step) while taking the
+        // extreme from 18 reversals to 2. Both 80 and 100 ms were worse at
+        // the default without being better at the extreme.
+        let attack = min(release * 0.35, 0.12)
 
-        var field = rawField(
+        var accumulators = [FieldAccumulator](repeating: FieldAccumulator(), count: count)
+        let now = rawField(
             at: base, count: count, colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
         )
+        for index in 0..<count {
+            accumulators[index].add(now[index], scaledBy: 1)
+        }
 
-        if release > 0.001 {
-            let pastTaps = 6
-            let futureTaps = 3
-            // Weights land on e^-3 ≈ 0.05 at the far end of each side, so
-            // the trail fades out within the time asked for instead of
-            // being cut off mid-decay.
-            for k in 1...pastTaps {
-                let f = Double(k) / Double(pastTaps)
-                accumulate(
-                    into: &field,
-                    at: base - f * release,
-                    weight: exp(-3 * f),
-                    count: count, colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
-                )
-            }
-            if attack > 0.001 {
-                for k in 1...futureTaps {
-                    let f = Double(k) / Double(futureTaps)
-                    accumulate(
-                        into: &field,
-                        at: base + f * attack,
-                        weight: exp(-3 * f),
-                        count: count, colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
-                    )
-                }
+        for tap in temporalTaps(base: base, release: release, attack: attack) {
+            // Clamped rather than skipped: at t = 0 a backward tap would
+            // otherwise wrap into negative time, where a stream replay has no
+            // events and every pattern reads as dark — so the first fraction
+            // of a second would smooth *toward* black.
+            let sampled = rawField(
+                at: max(tap.time, 0), count: count,
+                colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
+            )
+            for index in 0..<count where index < sampled.count {
+                accumulators[index].add(sampled[index], scaledBy: tap.weight)
             }
         }
+
+        var field = accumulators.map(\.resolved)
 
         let spread = max(config.smoothingSpread, 0)
         if spread > 0.01 {
@@ -1341,37 +1413,135 @@ public struct RingView: View {
         }
     }
 
-    /// Folds one earlier or later instant into `field`, keeping whichever
-    /// contribution is brighter per diode — and, with it, that
-    /// contribution's color, so a trail carries the hue of the head that
-    /// left it rather than of the diode it's passing over.
-    private func accumulate(
-        into field: inout [FieldSample],
-        at time: Double,
-        weight: Double,
-        count: Int,
-        colors all: [Color],
-        rippleNorm: Double,
-        voiceLevel: Double
-    ) {
-        // Clamped rather than skipped: at t = 0 a backward tap would
-        // otherwise wrap into negative time, where a stream replay has no
-        // events and every pattern reads as dark — so the first fraction of
-        // a second would smooth *toward* black.
-        let sampled = rawField(
-            at: max(time, 0), count: count, colors: all, rippleNorm: rippleNorm, voiceLevel: voiceLevel
-        )
-        for i in field.indices where i < sampled.count {
-            let level = sampled[i].level * weight
-            if level > field[i].level {
-                field[i] = FieldSample(
-                    red: sampled[i].red,
-                    green: sampled[i].green,
-                    blue: sampled[i].blue,
-                    level: level
-                )
+    private func uniformTaps(base: Double, release: Double, attack: Double) -> [(time: Double, weight: Double)] {
+        let pastTaps = 6
+        let futureTaps = 3
+        var taps: [(time: Double, weight: Double)] = []
+        // Weights land on e^-3 ≈ 0.05 at the far end of each side, so the
+        // trail fades out within the time asked for instead of being cut off
+        // mid-decay.
+        for k in 1...pastTaps {
+            let f = Double(k) / Double(pastTaps)
+            taps.append((base - f * release, exp(-3 * f)))
+        }
+        if attack > 0.001 {
+            for k in 1...futureTaps {
+                let f = Double(k) / Double(futureTaps)
+                taps.append((base + f * attack, exp(-3 * f)))
             }
         }
+        return taps
+    }
+
+    /// When to sample the field, and how much each sample counts.
+    ///
+    /// **Frame-aligned when the source is quantized**, which is the whole
+    /// point of this function existing rather than a loop at the call site.
+    ///
+    /// Sampling at `base - kΔ` — evenly spaced behind the playhead — flickers
+    /// on any pattern with a firmware tick. Each tap crosses a frame boundary
+    /// at a different moment, and because the fold below keeps a decaying
+    /// *max*, a tap crossing swaps in an entirely different frame's LEDs and
+    /// the visible level jumps by that tap's whole weight. At a 312 ms tick
+    /// and a 0.3 s trail the nearest tap carries ~0.6 of full brightness, so
+    /// that's a 60% jump, six times per tick.
+    ///
+    /// Sampling the *frames themselves* — at multiples of the tick — fixes it
+    /// outright: the sampled values are then constant between frame changes
+    /// and only the weights move, continuously, as the playhead advances. A
+    /// frame keeps its own absolute timestamp for as long as it's in the
+    /// window, so its age (and its weight) never jumps.
+    ///
+    /// The forward taps are what make the *arrival* of a new frame continuous
+    /// too. Without them the newest frame appears at full weight the instant
+    /// the playhead crosses into it; with them it has already been fading up
+    /// across the preceding `attack`, and at the crossing its weight is
+    /// exactly 1 either side.
+    ///
+    /// An unquantized source needs none of this — its value varies
+    /// continuously with the sample time, so evenly spaced taps are already
+    /// smooth — and gets the simple version.
+    private func temporalTaps(
+        base: Double,
+        release: Double,
+        attack: Double
+    ) -> [(time: Double, weight: Double)] {
+        guard release > 0.001 else { return [] }
+
+        // A recorded stream carries its own boundaries, and they're the ones
+        // that matter: `firmwareTickMs` is 0 for most of these patterns —
+        // including the comet and the rainbow, the two this is most visible
+        // on — because their timing lives in the event timestamps rather than
+        // in a nominal rate.
+        if let stream = config.firmwarePatternStream
+            .flatMap({ FirmwarePatternStream.stream(named: $0) }) {
+            let offset = config.firmwarePatternStreamOffset
+            let now = base + offset
+            let boundaries = stream.frameBoundaries(
+                around: now, back: release, forward: attack, limit: 24
+            )
+            if !boundaries.isEmpty {
+                return boundaries.enumerated().map { index, boundary in
+                    // Half a millisecond *inside* the frame this boundary
+                    // opens. Replay takes every event with `timeMs <= t`, and
+                    // sampling exactly on the boundary is one rounding error
+                    // away from returning the previous frame instead. Event
+                    // times are whole milliseconds, so this is safely inside.
+                    let time = boundary + 0.0005 - offset
+                    if boundary <= now {
+                        // Age measured from when this frame stopped being the
+                        // current one — so the frame the playhead is inside
+                        // counts for a full 1 however far through it we are,
+                        // and a ring that never changes never dims.
+                        let endsAt = index + 1 < boundaries.count ? boundaries[index + 1] : now
+                        return (time, exp(-3 * max(now - endsAt, 0) / release))
+                    }
+                    guard attack > 0.001 else { return (time, 0) }
+                    return (time, exp(-3 * (boundary - now) / attack))
+                }
+            }
+        }
+
+        let tick = config.firmwareTickMs / 1000
+
+        guard tick >= 0.001 else {
+            return uniformTaps(base: base, release: release, attack: attack)
+        }
+
+        // Capped rather than unbounded: a long trail over a short tick is a
+        // lot of frames, and each one is a full sweep of the ring plus a
+        // stream resolve. Twenty-four covers a 0.8 s trail at the 50 ms tick
+        // these patterns quantize to at their finest.
+        let maxTaps = 24
+        let latest = (base / tick).rounded(.down) * tick
+        var taps: [(time: Double, weight: Double)] = []
+
+        let back = min(Int((release / tick).rounded(.up)) + 1, maxTaps)
+        for n in 0...back {
+            let time = latest - Double(n) * tick
+            // Age *past the current frame*, not raw age. The frame the
+            // playhead is inside spans ages 0..<tick and has to count for a
+            // full 1 the whole way through it, or a ring that never changes
+            // dims as the playhead crosses the frame and snaps back at the
+            // boundary — the flicker, reintroduced from the other side.
+            // Starting the decay at `tick` also makes the weight continuous
+            // when a frame shifts from being the current one to being one
+            // behind: both sides read 1 at exactly that instant.
+            let age = max(base - time - tick, 0)
+            taps.append((time, exp(-3 * age / release)))
+        }
+
+        if attack > 0.001 {
+            let forward = min(Int((attack / tick).rounded(.up)), maxTaps)
+            if forward > 0 {
+                for n in 1...forward {
+                    let time = latest + Double(n) * tick
+                    let ahead = time - base
+                    taps.append((time, exp(-3 * ahead / attack)))
+                }
+            }
+        }
+        return taps
     }
 
     /// Bleeds each diode into its neighbours with a Gaussian falloff,
@@ -1388,25 +1558,15 @@ public struct RingView: View {
         // ring, a wider reach starts wrapping onto itself.
         let radius = min(max(Int(ceil(spread * 2)), 1), n / 2)
 
-        var out = field
-        for i in 0..<n {
-            var best = field[i]
-            for d in -radius...radius where d != 0 {
-                let weight = exp(-Double(d * d) / (2 * spread * spread))
-                let j = ((i + d) % n + n) % n
-                let level = field[j].level * weight
-                if level > best.level {
-                    best = FieldSample(
-                        red: field[j].red,
-                        green: field[j].green,
-                        blue: field[j].blue,
-                        level: level
-                    )
-                }
+        return (0..<n).map { index in
+            var accumulator = FieldAccumulator()
+            for offset in -radius...radius {
+                let weight = exp(-Double(offset * offset) / (2 * spread * spread))
+                let neighbour = ((index + offset) % n + n) % n
+                accumulator.add(field[neighbour], scaledBy: weight)
             }
-            out[i] = best
+            return accumulator.resolved
         }
-        return out
     }
 
     /// One drop: when it landed, and where on the ring.

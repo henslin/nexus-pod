@@ -72,6 +72,64 @@ public struct FirmwarePatternStream: Sendable {
     /// depend on. At a few hundred events this is cheap — but it is once
     /// per *frame*, never per diode. See `RingView`, which resolves the
     /// frame before the diode loop for exactly that reason.
+    /// The instants this stream's output actually changes, as absolute times
+    /// on the same clock `frame(atSeconds:)` takes, spanning
+    /// `[seconds - back, seconds + forward]` and looping as the stream does.
+    ///
+    /// Exists for `RingView`'s persistence pass, which has to sample the
+    /// frames themselves rather than evenly spaced instants behind the
+    /// playhead — see `RingView.temporalTaps` for why. `RingConfig.firmwareTickMs`
+    /// looks like it should answer this and doesn't: it's 0 for most recorded
+    /// patterns (the timing lives in the event timestamps), and where it is
+    /// set it's a nominal rate rather than the boundaries this particular
+    /// recording actually has.
+    ///
+    /// The boundary *at or before* `seconds` is always included even when it
+    /// falls outside the window. It's the frame the playhead is inside, and
+    /// dropping it because the frame happens to be older than the trail is
+    /// how a ring that never changes ends up with nothing at full weight.
+    public func frameBoundaries(
+        around seconds: Double,
+        back: Double,
+        forward: Double,
+        limit: Int = 32
+    ) -> [Double] {
+        guard !events.isEmpty else { return [] }
+        let loop = loopSeconds
+        let lo = seconds - max(back, 0)
+        let hi = seconds + max(forward, 0)
+
+        var collected: [Double] = []
+        // Greatest boundary at or before `seconds`.
+        var current: Double?
+
+        // One repetition earlier than the window needs, so a window opening
+        // just after a loop point still finds the frame it's inside.
+        var repetition = ((lo - loop) / loop).rounded(.down)
+        let last = (hi / loop).rounded(.down)
+        while repetition <= last {
+            let origin = repetition * loop
+            for event in events {
+                let time = origin + event.timeMs / 1000
+                if time > hi { break }
+                if time <= seconds { current = time }
+                // Events cluster at each boundary — a frame is usually a
+                // burst of select_led calls sharing one timestamp — so only
+                // the distinct times are boundaries.
+                if time >= lo, collected.last != time { collected.append(time) }
+            }
+            repetition += 1
+        }
+
+        if let current, collected.first.map({ $0 > current }) ?? true {
+            collected.insert(current, at: 0)
+        }
+        if collected.count > limit {
+            collected.removeFirst(collected.count - limit)
+        }
+        return collected
+    }
+
     public func frame(atSeconds seconds: Double, ledCount: Int = 16) -> Frame {
         let total = max(totalMs, 1)
         var t = (seconds * 1000).truncatingRemainder(dividingBy: total)
