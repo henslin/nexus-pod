@@ -44,21 +44,20 @@ public struct WhatsNewView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 0) {
-                    title
-                        .padding(.top, titleTopPadding)
-                        .padding(.bottom, 36)
-
-                    VStack(alignment: .leading, spacing: 26) {
-                        ForEach(items) { item in
-                            row(item)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                }
-                .padding(.horizontal, 28)
-                .frame(maxWidth: .infinity)
+            // Scrolls only when it has to. Five items on a 560pt sheet fit
+            // with room to spare, and a scroll view that never scrolls
+            // still eats the bounce and hides the fact that this is the
+            // whole list — the system's own screens don't scroll either
+            // until the text size makes them. `ViewThatFits` tries the
+            // plain stack first and falls back.
+            //
+            // It also makes the screen renderable offscreen: `ImageRenderer`
+            // lays out a `ScrollView`'s content as empty, so the version
+            // that always scrolled could not be checked without running the
+            // app and looking at it.
+            ViewThatFits(in: .vertical) {
+                content
+                ScrollView { content }
             }
 
             continueButton
@@ -68,8 +67,30 @@ public struct WhatsNewView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         #if os(macOS)
-        .frame(width: 440, height: 560)
+        // 660, not 560. At 560 the five items plus the title overflowed and
+        // `ViewThatFits` fell back to the scrolling branch — a sheet with
+        // its own scroll bar for content that should simply be on screen.
+        // Measured by rendering it, not guessed: the static branch is what
+        // renders now, which is how you can tell it fits.
+        .frame(width: 440, height: 660)
         #endif
+    }
+
+    private var content: some View {
+        VStack(spacing: 0) {
+            title
+                .padding(.top, titleTopPadding)
+                .padding(.bottom, 36)
+
+            VStack(alignment: .leading, spacing: 26) {
+                ForEach(items) { item in
+                    row(item)
+                }
+            }
+            .padding(.horizontal, 8)
+        }
+        .padding(.horizontal, 28)
+        .frame(maxWidth: .infinity)
     }
 
     private var title: some View {

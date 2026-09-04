@@ -368,6 +368,15 @@ On the Mac it's also under **Help → What's New in Nexus Pod**, posted as a
 notification because a `CommandGroup` can't reach into the window's state
 directly.
 
+**It scrolls only when it has to** (`ViewThatFits`), and the Mac sheet is
+660pt tall rather than 560 because at 560 the five items plus the title
+overflowed and it fell back to scrolling — a sheet with its own scroll bar
+for content that should just be on screen. That was found by rendering the
+view offscreen and looking at it, which is worth knowing how to do:
+`ImageRenderer` lays out a `ScrollView`'s content as **empty**, so a screen
+that always scrolls renders as a blank page with its buttons. If a rendered
+check of this view comes back blank, the content stopped fitting.
+
 ## Reset and Add to Timeline, per section
 
 Every Controls card carries two actions in its header, in both panels
