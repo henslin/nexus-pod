@@ -79,6 +79,12 @@ step "Generated exports still compile"
 swift run --scratch-path "$SCRATCH" ExportCheck 2>&1 | tail -2
 result "${PIPESTATUS[0]}" "ExportCheck"
 
+# Compiling isn't being right. The exported diode field is a hand port of
+# the app's, and this runs both and compares the numbers.
+step "The exported diode field computes what the app computes"
+swift run --scratch-path "$SCRATCH" DiffCheck 2>&1 | grep -E '^(exported|  )'
+result "${PIPESTATUS[0]}" "DiffCheck"
+
 # The one piece of the app that runs unattended over someone's own work.
 # Every branch, including the ones whose correct behaviour is to do
 # nothing.

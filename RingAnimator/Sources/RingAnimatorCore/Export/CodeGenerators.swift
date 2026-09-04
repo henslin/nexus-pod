@@ -610,7 +610,14 @@ extension Color {
 }
 """
 
-        return header + "\n" + indent(animationBody, by: 8) + "\n    }\n" + particlesFunc + "\n" + footer
+        // Diode Mode replaces the animation body outright rather than
+        // layering on top of it: the continuous renderers draw arcs that
+        // rotate and gradients that sweep, and this draws fixed pixels
+        // whose brightness changes. There is nothing to share.
+        let body = config.diodeModeEnabled ? swiftDiodeBody() : animationBody
+        let diodeSupport = config.diodeModeEnabled ? swiftDiodeSupport(config: config) : ""
+        return header + "\n" + indent(body, by: 8) + "\n    }\n"
+            + particlesFunc + diodeSupport + "\n" + footer
     }
 
     // MARK: - Jetpack Compose (Android)
@@ -1157,14 +1164,14 @@ fun ThinkingRingView(
         }
 """
 
-        // Diode Mode replaces the animation body outright rather than
-        // layering on top of it: the continuous renderers draw arcs that
-        // rotate and gradients that sweep, and this draws fixed pixels
-        // whose brightness changes. There is nothing to share.
-        let body = config.diodeModeEnabled ? swiftDiodeBody() : animationBody
-        let diodeSupport = config.diodeModeEnabled ? swiftDiodeSupport(config: config) : ""
-        return header + indent(body, by: 12) + aberrationDispatch + "\n"
-            + particlesFunc + diodeSupport + "\n" + footer
+        // No Diode Mode here. There is no Kotlin port of the diode field
+        // — `swiftDiodeSupport` emits Swift — and this generator used to
+        // call it, which put `func diodeState(...) -> (color: Color,
+        // brightness: Double)` inside a Kotlin file. Compose exports the
+        // continuous form until someone writes the Kotlin port; that's a
+        // gap, but a gap is better than a file that cannot compile.
+        return header + indent(animationBody, by: 12) + aberrationDispatch + "\n"
+            + particlesFunc + "\n" + footer
     }
 
     // MARK: - Web (vanilla HTML/Canvas)

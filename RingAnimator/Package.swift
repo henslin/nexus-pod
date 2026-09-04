@@ -110,6 +110,11 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/PerfCheck"
         ),
+        .executableTarget(
+            name: "DiffCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/DiffCheck"
+        ),
         // Every branch of the bundled-library sync, including the ones
         // whose correct behaviour is "leave it alone" — see the header
         // comment in Sources/SyncCheck/main.swift. `swift run SyncCheck`.

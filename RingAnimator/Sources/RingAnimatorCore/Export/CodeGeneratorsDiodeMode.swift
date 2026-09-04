@@ -314,8 +314,8 @@ extension CodeGenerators {
                 let seed = Int(rippleSeed.rounded())
                 return (0..<count).map { i in
                     Drop(
-                        landedAt: pseudoRandom(seed, i) * loop,
-                        center: pseudoRandom(seed, i + 5000)
+                        landedAt: pseudoRandom2(seed, i) * loop,
+                        center: pseudoRandom2(seed, i + 5000)
                     )
                 }
             }
@@ -395,10 +395,10 @@ extension CodeGenerators {
                     let cycle = Int(local.rounded(.down))
                     let f = local - Double(cycle)
 
-                    let placeSeed = pseudoRandom(i, cycle)
-                    let peakSeed = pseudoRandom(i, cycle + 4096)
-                    let driftSeed = pseudoRandom(i, cycle + 8192)
-                    let colorSeed = pseudoRandom(i, cycle + 16384)
+                    let placeSeed = pseudoRandom2(i, cycle)
+                    let peakSeed = pseudoRandom2(i, cycle + 4096)
+                    let driftSeed = pseudoRandom2(i, cycle + 8192)
+                    let colorSeed = pseudoRandom2(i, cycle + 16384)
 
                     // 0 -> 1 -> 0 across the cycle: the whole shape of
                     // surfacing and sinking back, so a patch genuinely

@@ -247,9 +247,19 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
                 onPercentChange(initialPercent)
             }
             magnificationObservation = scrollView.observe(\.magnification, options: [.new]) { [weak self] scrollView, _ in
-                guard let self else { return }
-                self.onPercentChange(self.percentage(for: scrollView.magnification))
-                MainActor.assumeIsolated { self.viewport?.magnification = scrollView.magnification }
+                // The whole body, not just the viewport write. AppKit posts
+                // this on the main thread — a magnification only changes
+                // because someone pinched — so `assumeIsolated` states that
+                // rather than hopping, which would land the badge a frame
+                // behind the gesture driving it. The viewport write was
+                // already doing this; the two lines above it were reaching
+                // for main-actor state from outside, which is the same
+                // assumption made silently.
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.onPercentChange(self.percentage(for: scrollView.magnification))
+                    self.viewport?.magnification = scrollView.magnification
+                }
             }
         }
 

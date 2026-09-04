@@ -2268,3 +2268,47 @@ public struct RingView: View {
     // Particle rendering (all 3 emission styles) has moved to a real
     // CAEmitterLayer — see RingParticleEmitter.swift / RingParticleEmitterView.swift.
 }
+
+// MARK: - Verification
+
+/// A way to read the diode field from outside, for `DiffCheck`.
+///
+/// In this file on purpose: `diodeIntensity` is `private`, and an extension
+/// in the same file is the one place that can reach it without widening the
+/// access of a method nothing else should call.
+///
+/// The point is to compare the app's field against the hand-ported copy the
+/// SwiftUI export carries (`CodeGeneratorsDiodeMode`). Those are two
+/// separate implementations of the same maths, kept honest by reading them
+/// side by side — which is exactly the arrangement that drifts silently.
+/// This lets a check put numbers to it.
+extension RingView {
+    /// Raw brightness for every diode at one instant: no floor, no blink,
+    /// no smoothing, no recorded stream — just the field, which is the part
+    /// the export ports.
+    ///
+    /// Arguments are built the same way `rawField(at:count:colors:...)`
+    /// builds them, so a difference here is a difference in the field
+    /// rather than in how it was called.
+    @MainActor
+    public static func probeBrightnesses(config: RingConfig, elapsed: Double) -> [Double] {
+        let view = RingView(config: config, diameter: 160)
+        let count = max(Int(config.diodeCount.rounded()), 2)
+        let all = view.activeColors(elapsed: elapsed)
+        let phase = view.easedPhaseValue(elapsed: elapsed)
+        let rippleNorm = view.rippleNormalization()
+        return (0..<count).map { i in
+            view.diodeIntensity(
+                index: i,
+                position: Double(i) / Double(count),
+                count: count,
+                phase: phase,
+                elapsed: elapsed,
+                voiceLevel: 0,
+                colors: all,
+                rippleNorm: rippleNorm,
+                streamFrame: nil
+            ).brightness
+        }
+    }
+}

@@ -776,7 +776,11 @@ private struct LabeledSlider: View {
 /// editors want ordinary bindings, and the default supplied here is always
 /// the matching `RingConfig` default, so an untouched cue behaves exactly
 /// as one that never had the field.
-private func optional<T>(_ source: Binding<T?>, default fallback: T) -> Binding<T> {
+/// `T: Sendable` because `Binding`'s accessors are `@Sendable` closures:
+/// without it every call site warns about capturing the source binding and
+/// the default. Every parameter this is used with is a `Double`, `Bool`,
+/// `String` or a plain enum, so the constraint costs nothing.
+private func optional<T: Sendable>(_ source: Binding<T?>, default fallback: T) -> Binding<T> {
     Binding(
         get: { source.wrappedValue ?? fallback },
         set: { source.wrappedValue = $0 }
