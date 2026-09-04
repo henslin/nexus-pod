@@ -240,14 +240,17 @@ private struct CueRow: View {
 struct CueDetailView: View {
     let cue: LEDCue
     @ObservedObject var store: LEDCueStore
+    /// Shared with every other section — see `StageState`.
+    @ObservedObject var stageState: StageState
     @State private var params: LEDCueParameters
     @State private var expanded: [String: Bool]
     /// The cue, in the form every preview surface takes — see `previewPane`.
     @StateObject private var stageConfig = RingConfig()
 
-    init(cue: LEDCue, store: LEDCueStore) {
+    init(cue: LEDCue, store: LEDCueStore, stageState: StageState) {
         self.cue = cue
         self.store = store
+        self.stageState = stageState
         let initialParams = store.parameters(for: cue)
         _params = State(initialValue: initialParams)
         // Same defaults as Nexus's own Controls panel (`ControlsView.init`):
@@ -306,7 +309,7 @@ struct CueDetailView: View {
                 .padding(.top, 20)
                 .padding(.bottom, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            RingStage(config: stageConfig)
+            RingStage(config: stageConfig, state: stageState)
             Divider()
             ScrollView {
                 specReference

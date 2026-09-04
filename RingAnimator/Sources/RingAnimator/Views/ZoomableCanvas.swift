@@ -32,6 +32,11 @@ struct ZoomableCanvas<Content: View>: View {
     let minMagnification: CGFloat
     let maxMagnification: CGFloat
     let restMagnification: CGFloat
+    /// Where the viewport was when this canvas was last torn down, and
+    /// where to report it back to. Optional so a canvas that doesn't need
+    /// to survive being rebuilt can leave it out — see `StageState` for why
+    /// the one in `RingStage` does.
+    var viewport: StageState?
     @ViewBuilder var content: () -> Content
 
     @State private var zoomPercent: Int = 100
@@ -47,12 +52,14 @@ struct ZoomableCanvas<Content: View>: View {
         minMagnification: CGFloat,
         maxMagnification: CGFloat,
         restMagnification: CGFloat,
+        viewport: StageState? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.contentSize = contentSize
         self.minMagnification = minMagnification
         self.maxMagnification = maxMagnification
         self.restMagnification = restMagnification
+        self.viewport = viewport
         self.content = content
     }
 
@@ -62,6 +69,7 @@ struct ZoomableCanvas<Content: View>: View {
             minMagnification: minMagnification,
             maxMagnification: maxMagnification,
             restMagnification: restMagnification,
+            viewport: viewport,
             onPercentChange: { percent in
                 zoomPercent = percent
             },
@@ -105,6 +113,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
     let minMagnification: CGFloat
     let maxMagnification: CGFloat
     let restMagnification: CGFloat
+    let viewport: StageState?
     let onPercentChange: (Int) -> Void
     let onMagnifyBegin: () -> Void
     let onMagnifyEnd: () -> Void
@@ -126,8 +135,30 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         scrollView.minMagnification = minMagnification
         scrollView.maxMagnification = maxMagnification
         scrollView.contentView = CenteringClipView()
-        scrollView.magnification = restMagnification
+        // Restored before `documentView` is set, so the clip view lays the
+        // content out at the right scale first time rather than at rest and
+        // then jumping.
+        scrollView.magnification = viewport?.magnification ?? restMagnification
         scrollView.documentView = hostingView
+        if let origin = viewport?.scrollOrigin {
+            // After `documentView`: the clip view has no scrollable extent
+            // to move within until it has content, so scrolling before this
+            // silently clamps back to zero.
+            scrollView.contentView.scroll(to: origin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+            // And again once layout has actually happened. At this point the
+            // scroll view has a document view but not necessarily its final
+            // frame, and `CenteringClipView` re-centers whatever it's given
+            // until the content is genuinely larger than the viewport — so
+            // the first call is frequently clamped straight back to the
+            // centered position. One deferred repeat lands after the first
+            // layout pass; it runs only at creation, so it can't fight a
+            // scroll the user is in the middle of.
+            DispatchQueue.main.async {
+                scrollView.contentView.scroll(to: origin)
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
+        }
 
         let doubleClick = NSClickGestureRecognizer(
             target: context.coordinator,
@@ -142,7 +173,9 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         context.coordinator.onPercentChange = onPercentChange
         context.coordinator.onMagnifyBegin = onMagnifyBegin
         context.coordinator.onMagnifyEnd = onMagnifyEnd
+        context.coordinator.viewport = viewport
         context.coordinator.observeMagnification(of: scrollView)
+        context.coordinator.observeScrolling(of: scrollView)
 
         let coordinator = context.coordinator
         NotificationCenter.default.addObserver(
@@ -164,6 +197,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.viewport = viewport
         context.coordinator.restMagnification = restMagnification
         context.coordinator.onPercentChange = onPercentChange
         context.coordinator.onMagnifyBegin = onMagnifyBegin
@@ -185,6 +219,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
     final class Coordinator: NSObject {
         weak var hostingView: NSHostingView<AnyView>?
         weak var scrollView: NSScrollView?
+        var viewport: StageState?
         var restMagnification: CGFloat = 1
         var onPercentChange: (Int) -> Void = { _ in }
         var onMagnifyBegin: () -> Void = {}
@@ -214,8 +249,36 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
             magnificationObservation = scrollView.observe(\.magnification, options: [.new]) { [weak self] scrollView, _ in
                 guard let self else { return }
                 self.onPercentChange(self.percentage(for: scrollView.magnification))
+                MainActor.assumeIsolated { self.viewport?.magnification = scrollView.magnification }
             }
         }
+
+        /// Records the pan position as it changes, so it can be put back
+        /// when this canvas is rebuilt.
+        ///
+        /// A clip view doesn't post bounds notifications unless asked, and
+        /// the ask has to come before the observer or the first pan goes
+        /// unrecorded.
+        func observeScrolling(of scrollView: NSScrollView) {
+            let clipView = scrollView.contentView
+            clipView.postsBoundsChangedNotifications = true
+            // Token deliberately not retained for later removal, matching
+            // the two live-magnify observers registered in `makeNSView`:
+            // the closure holds the coordinator weakly, so once it's gone
+            // this does nothing, and a nonisolated `deinit` can't touch a
+            // non-Sendable token anyway.
+            NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: clipView,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let scrollView = self.scrollView else { return }
+                    self.viewport?.scrollOrigin = scrollView.contentView.bounds.origin
+                }
+            }
+        }
+
 
         func magnifyDidBegin() {
             onMagnifyBegin()

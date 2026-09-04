@@ -85,12 +85,23 @@ struct PhoneMockupView: View {
     /// what makes that option simply not appear.
     var timeline: RingTimeline = RingTimeline()
 
-    init(config: RingConfig, isDarkMode: Binding<Bool>, playback: TimelinePlayback? = nil, timeline: RingTimeline = RingTimeline()) {
+    /// Carried so the zoomable canvas can put the viewport back where it
+    /// was after being rebuilt — see `StageState`.
+    var stageState: StageState?
+
+    init(
+        config: RingConfig,
+        isDarkMode: Binding<Bool>,
+        playback: TimelinePlayback? = nil,
+        timeline: RingTimeline = RingTimeline(),
+        stageState: StageState? = nil
+    ) {
         self.config = config
         self.timeline = timeline
         self.voiceConversation = config.voiceConversation
         self._isDarkMode = isDarkMode
         self.playback = playback
+        self.stageState = stageState
     }
 
     /// Shared with `PreviewTab`'s large preview — see the type doc comment.
@@ -110,7 +121,8 @@ struct PhoneMockupView: View {
             contentSize: CGSize(width: screenWidth + 24, height: screenHeight + 24),
             minMagnification: 0.25,
             maxMagnification: 4,
-            restMagnification: 1
+            restMagnification: 1,
+            viewport: stageState
         ) {
             deviceFrame
                 // Applied here, above deviceFrame, so the phone body, the

@@ -39,69 +39,19 @@ struct RingStage: View {
     /// default, which is what makes that option simply not appear.
     var timeline: RingTimeline = RingTimeline()
 
-    /// Owned here rather than inside `PhoneMockupView` so both previews
-    /// share one toggle — `PhoneMockupView` gets it as a `@Binding` (it
-    /// still hosts the actual picker control, and needs the raw value
-    /// itself to pick the correct light/dark "App UI" screenshot asset),
-    /// and `glassRing` below applies the same `.environment(\.colorScheme,
-    /// ...)` override its glass reads to pick up.
-    @State private var isDarkMode = true
+    /// Every piece of stage state that should outlive this view being torn
+    /// down and rebuilt — zoom, pan, appearance, which corner the card is
+    /// parked in. Owned by `ContentView` and shared by all three sections;
+    /// see `StageState` for why it lives there rather than here, and for why
+    /// hoisting the state was the cheap way to get what hoisting the whole
+    /// stage would have given.
+    @ObservedObject var state: StageState
 
-    /// Which corner Large Preview is currently pinned to — persists across
-    /// drags; `.topTrailing` matches where it always used to sit before it
-    /// became draggable.
-    @State private var previewCorner: PreviewCorner = .topTrailing
     /// Live finger-follow offset while a drag is in progress, added on top
-    /// of `previewCorner`'s resting position; reset to `.zero` the instant
-    /// the drag ends and the snap animation to the new corner takes over.
+    /// of the resting corner position and reset to `.zero` the instant the
+    /// drag ends. Genuinely transient — a drag can't still be in progress
+    /// across a section switch — so this one stays local.
     @State private var previewDragTranslation: CGSize = .zero
-    /// Measured off the card itself (its size varies with the "Preview
-    /// size" slider in Controls) so corner math can center it correctly
-    /// instead of assuming a fixed size.
-    @State private var previewCardSize: CGSize = .zero
-    /// Collapsed to a small round button once zooming/panning the canvas
-    /// makes the full card feel like it's in the way more than it's
-    /// helping — expand it again by tapping that button.
-    @State private var isPreviewCollapsed = false
-
-    private enum PreviewCorner {
-        case topLeading, topTrailing, bottomLeading, bottomTrailing
-
-        /// Which quadrant of the canvas a drop point falls into — this is
-        /// what makes the drag "snap to nearest corner" regardless of
-        /// which corner it started from.
-        static func nearest(to point: CGPoint, in canvasSize: CGSize) -> PreviewCorner {
-            let isTop = point.y < canvasSize.height / 2
-            let isLeading = point.x < canvasSize.width / 2
-            switch (isTop, isLeading) {
-            case (true, true): return .topLeading
-            case (true, false): return .topTrailing
-            case (false, true): return .bottomLeading
-            case (false, false): return .bottomTrailing
-            }
-        }
-
-        /// The card's *center* point when resting in this corner — used
-        /// both to render it (via `.position`) and, combined with a drag's
-        /// `translation`, to figure out where it was dropped.
-        func center(canvasSize: CGSize, cardSize: CGSize, margin: CGFloat) -> CGPoint {
-            let x: CGFloat
-            switch self {
-            case .topLeading, .bottomLeading:
-                x = margin + cardSize.width / 2
-            case .topTrailing, .bottomTrailing:
-                x = canvasSize.width - margin - cardSize.width / 2
-            }
-            let y: CGFloat
-            switch self {
-            case .topLeading, .topTrailing:
-                y = margin + cardSize.height / 2
-            case .bottomLeading, .bottomTrailing:
-                y = canvasSize.height - margin - cardSize.height / 2
-            }
-            return CGPoint(x: x, y: y)
-        }
-    }
 
     private let previewCardMargin: CGFloat = 20
     /// Fixed and known ahead of time (unlike the expanded card, which is
@@ -129,9 +79,10 @@ struct RingStage: View {
             ZStack(alignment: .topLeading) {
                 PhoneMockupView(
                     config: config,
-                    isDarkMode: $isDarkMode,
+                    isDarkMode: $state.isDarkMode,
                     playback: playback,
-                    timeline: timeline
+                    timeline: timeline,
+                    stageState: state
                 )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -198,10 +149,10 @@ struct RingStage: View {
                                     // removes that race instead of trying
                                     // to make two independent recognizers
                                     // agree.
-                                    if isPreviewCollapsed && dragDistance < 6 {
-                                        isPreviewCollapsed = false
+                                    if state.isPreviewCollapsed && dragDistance < 6 {
+                                        state.isPreviewCollapsed = false
                                     }
-                                    previewCorner = .nearest(to: dropPoint, in: proxy.size)
+                                    state.previewCorner = StageState.PreviewCorner.nearest(to: dropPoint, in: proxy.size)
                                     previewDragTranslation = .zero
                                 }
                             }
@@ -211,8 +162,8 @@ struct RingStage: View {
     }
 
     private func cardPosition(canvasSize: CGSize) -> CGPoint {
-        let cardSize = isPreviewCollapsed ? collapsedPreviewSize : previewCardSize
-        return previewCorner.center(canvasSize: canvasSize, cardSize: cardSize, margin: previewCardMargin)
+        let cardSize = state.isPreviewCollapsed ? collapsedPreviewSize : state.previewCardSize
+        return state.previewCorner.center(canvasSize: canvasSize, cardSize: cardSize, margin: previewCardMargin)
     }
 
     /// An invisible `GeometryReader` behind the card, purely to measure its
@@ -222,8 +173,8 @@ struct RingStage: View {
     private var previewCardSizeReader: some View {
         GeometryReader { cardProxy in
             Color.clear
-                .onAppear { previewCardSize = cardProxy.size }
-                .onChange(of: cardProxy.size) { _, newSize in previewCardSize = newSize }
+                .onAppear { state.previewCardSize = cardProxy.size }
+                .onChange(of: cardProxy.size) { _, newSize in state.previewCardSize = newSize }
         }
     }
 
@@ -234,7 +185,7 @@ struct RingStage: View {
     /// state's entire button doubles as the expand target.
     @ViewBuilder
     private var largePreviewCard: some View {
-        if isPreviewCollapsed {
+        if state.isPreviewCollapsed {
             collapsedPreviewButton
                 .frame(width: collapsedPreviewSize.width, height: collapsedPreviewSize.height)
         } else {
@@ -267,7 +218,7 @@ struct RingStage: View {
     private var largePreviewCollapseButton: some View {
         Button {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                isPreviewCollapsed = true
+                state.isPreviewCollapsed = true
             }
         } label: {
             Image(systemName: "arrow.down.right.and.arrow.up.left")
@@ -364,6 +315,6 @@ struct RingStage: View {
                 ring.background(.ultraThinMaterial, in: Circle())
             }
         }
-        .environment(\.colorScheme, isDarkMode ? .dark : .light)
+        .environment(\.colorScheme, state.isDarkMode ? .dark : .light)
     }
 }

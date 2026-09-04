@@ -24,6 +24,11 @@ struct ContentView: View {
     /// in `.onAppear` below, which is what makes the Controls panel edit
     /// the selected step in place rather than a detached scratch copy.
     @StateObject private var timelinePlayer = TimelinePlayer()
+    /// The stage's own state — zoom, pan, appearance, where Large Preview is
+    /// parked. Owned here, one instance, and handed to whichever section is
+    /// showing, so switching sections doesn't reset the canvas. See
+    /// `StageState`.
+    @StateObject private var stageState = StageState()
 
     @State private var section: AppSection? = .ringDesigner
     @State private var designerTab: DesignerTab = .preview
@@ -133,7 +138,7 @@ struct ContentView: View {
         // preserves all of that across tab switches, matching what a
         // person expects from "the two panes I keep flipping between."
         ZStack {
-            PreviewTab(config: config, player: timelinePlayer)
+            PreviewTab(config: config, player: timelinePlayer, stageState: stageState)
                 .opacity(designerTab == .preview ? 1 : 0)
                 .allowsHitTesting(designerTab == .preview)
                 .accessibilityHidden(designerTab != .preview)
@@ -161,7 +166,7 @@ struct ContentView: View {
             Group {
                 switch cueTab {
                 case .preview:
-                    CueDetailView(cue: cue, store: cueStore)
+                    CueDetailView(cue: cue, store: cueStore, stageState: stageState)
                 case .export:
                     CueExportView(cue: cue, store: cueStore)
                 }
@@ -191,7 +196,9 @@ struct ContentView: View {
     private var useCaseDetail: some View {
         if let id = selectedUseCaseID, let preset = useCaseStore.presets.first(where: { $0.id == id }) {
             UseCaseDetailView(preset: preset, store: useCaseStore) { config, playback, timeline in
-                AnyView(RingStage(config: config, playback: playback, timeline: timeline))
+                AnyView(RingStage(
+                    config: config, playback: playback, timeline: timeline, state: stageState
+                ))
             }
             .id(preset.id)
         } else {
@@ -203,6 +210,7 @@ struct ContentView: View {
 private struct PreviewTab: View {
     @ObservedObject var config: RingConfig
     @ObservedObject var player: TimelinePlayer
+    @ObservedObject var stageState: StageState
 
     /// Where the playhead sits when the clock isn't running. Playback
     /// itself is computed from `TimelineView`'s own date (see
@@ -240,7 +248,8 @@ private struct PreviewTab: View {
                 RingStage(
                     config: displayConfig,
                     playback: playback,
-                    timeline: player.timeline
+                    timeline: player.timeline,
+                    state: stageState
                 )
                 Divider()
                 TimelineStripView(

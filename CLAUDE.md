@@ -868,14 +868,41 @@ harness put `solid` at 34% mean pixel difference from the old preview
 before the fix and 21% after, with the remainder being the app's house ring
 proportion, which is the point of sharing a stage.
 
-**Known, and the reason to do part B.** Sections swap through a `switch` in
-`ContentView`, and a `switch` gives each branch its own identity — so
-SwiftUI tears the stage down and rebuilds it on every section change, and
-pan/zoom resets. `ZoomableCanvas`'s state lives in AppKit with nothing for
-SwiftUI to restore; `designerDetail` already keeps Preview and Export both
-mounted behind an opacity toggle for exactly this reason. Part B hoists a
-single stage into `ContentView` and feeds it whichever config is selected,
-at which point the `StageBuilder` seam above disappears.
+### Part B: hoist the state, not the stage
+
+Sections swap through a `switch` in `ContentView`, and a `switch` gives each
+branch its own identity — so SwiftUI tears the stage down and rebuilds it on
+every section change. `ZoomableCanvas` keeps its pan and zoom in a real
+`NSScrollView`, with nothing for SwiftUI to restore, so the canvas reset
+every time you changed section.
+
+The plan had been to hoist the whole stage into `ContentView` and feed it
+whichever config is selected. That works, but it only works by *first*
+hoisting every section's editing state — the cue's parameters, the use
+case's config and its own `TimelinePlayer`, and the reload-on-selection
+that `.id(preset.id)` currently gets for free — because one stage needs one
+resolved input. A large change to the thing most likely to break quietly.
+
+`StageState` gets the same result for much less: it holds what the stage
+*keeps* rather than what it *shows* — zoom, pan, appearance, which corner
+Large Preview is parked in — and `ContentView` owns one and hands it to all
+three sections. The view can now be rebuilt as often as SwiftUI likes and
+comes back exactly as it was. The `StageBuilder` seam stays, which is fine:
+it's what lets the core-hosted `UseCaseDetailView` still compile for iOS.
+
+Two things about it:
+
+- **`magnification` and `scrollOrigin` are not `@Published`.** They're
+  written continuously through a pinch or a scroll; publishing would
+  invalidate the stage on every frame of a gesture, and nothing needs to
+  react to them. They're storage, read once when the canvas is rebuilt.
+- **The scroll restore happens twice, the second time deferred.** At
+  `makeNSView` the scroll view has a document view but not its final frame,
+  and `CenteringClipView` re-centers whatever it is given until the content
+  is genuinely larger than the viewport — so the first call is usually
+  clamped straight back to centre. The deferred repeat lands after the
+  first layout pass, and only ever runs at creation, so it can't fight a
+  scroll in progress.
 
 ## Taking delivery of a whole library
 
