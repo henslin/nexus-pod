@@ -70,6 +70,10 @@ step "Generated exports still compile"
 swift run --scratch-path "$SCRATCH" ExportCheck 2>&1 | tail -2
 result "${PIPESTATUS[0]}" "ExportCheck"
 
+step "Every animation and cue style has a Blender branch"
+swift run --scratch-path "$SCRATCH" BlenderCheck "$SCRATCH/blender-scripts" 2>&1 | tail -2
+result "${PIPESTATUS[0]}" "BlenderCheck"
+
 step "Pattern library matches the committed fixtures"
 if [ -d "$PATTERNS_DIR" ]; then
     python3 Sources/FirmwareFieldCheck/library_manifest.py verify "$PATTERNS_DIR"

@@ -403,10 +403,21 @@ none of them should be picked up piecemeal while feature work continues.
 - **Timeline depth.** Interpolation between steps, per-property
   keyframes, and parallel tracks were all deliberately left out of the
   first cut. Interpolation is the one that changes the data model.
-- **Blender's string dispatch.** Both chains (style and animation) now
-  have explicit fallbacks that print the unhandled name, after two
-  separate incidents of new cases silently rendering as something else.
-  Worth converting to something the compiler can check.
+- **Blender's string dispatch.** Half done. `swift run BlenderCheck` now
+  asserts that every `RingAnimationType` and every `LEDPatternStyle`
+  reaches its own branch in the emitted Python rather than the fallback,
+  and it's a preflight gate — so a new case can no longer reach a release
+  unnoticed. It found two on its first run: `off` and `notApplicable` had
+  no branch, which meant an *off* cue exported to Blender as a lit solid
+  ring. Both now build an unlit ring.
+  What's still missing is compile-time enforcement. The chains are string
+  literals inside the Python heredoc, hand-mirrored from the Swift enums;
+  generating them from an exhaustive `switch` with no `default` would turn
+  "you forgot a case" from a check failure into a build failure. The
+  bodies are pure Python — no Swift interpolation, no backslashes, no
+  triple quotes — so they can be relocated verbatim, and `BlenderCheck`'s
+  dump gives a byte-exact before/after diff to prove the move changed
+  nothing.
 - **Nine concurrency warnings, deliberately left.** Five in
   `ZoomableCanvas` (a KVO observer on `magnification` touching
   main-actor state from a closure the compiler treats as `@Sendable`) and

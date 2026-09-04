@@ -93,6 +93,14 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/ImportCheck"
         ),
+        // Dumps and checks the Blender exports — see the header comment in
+        // Sources/BlenderCheck/main.swift. Not part of the app;
+        // `swift run BlenderCheck` before a release.
+        .executableTarget(
+            name: "BlenderCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/BlenderCheck"
+        ),
         // macOS design tool: sidebar controls + tab bar mockup + code export.
         .executableTarget(
             name: "RingAnimator",
