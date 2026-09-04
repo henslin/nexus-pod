@@ -35,10 +35,22 @@ public enum CodeGenerators {
 
     // MARK: - SwiftUI (iOS)
 
+    /// Every color the ring uses, in the order the renderer cycles them —
+    /// `primary`, `secondary`, then whatever else is configured. The same
+    /// list `RingView.activeColors` builds, so an export can't disagree
+    /// with the preview about how many colors there are.
+    static func ringColorList(config: RingConfig) -> [String] {
+        ([config.primaryColor, config.secondaryColor] + config.additionalColors)
+            .map { $0.hexString }
+    }
+
     public static func swiftUICode(config: RingConfig) -> String {
         if let placeholder = patternStyleExportPlaceholder(config: config) { return placeholder }
         let primaryHex = config.primaryColor.hexString
         let secondaryHex = config.secondaryColor.hexString
+        let ringColorLiterals = ringColorList(config: config)
+            .map { "Color(hex: \"\($0)\")" }
+            .joined(separator: ", ")
 
         let animationBody: String
         switch config.animationType {
@@ -102,23 +114,24 @@ GeometryReader { geo in
 }
 """
         case .multiChase:
-            // The exports carry the two colors every generator already has
-            // (`p`/`s`); the app itself gives every configured color its own
-            // comet. Two is the common case, and keeps the generated file
-            // self-contained rather than emitting a color array the host app
-            // would have to supply.
+            // Every configured color gets its own comet, as in the app.
+            // This used to emit two, on the reasoning that a color array
+            // would have to come from the host app — but the array can just
+            // be a literal (see `ringColors`), so the file stays a drop-in
+            // and stops disagreeing with the preview.
             animationBody = """
 let head = phase / (2 * Double.pi)
 let tail = max(trailFraction, 0.02)
+let all = activeColors(elapsed: elapsed)
 GeometryReader { geo in
     let radius = min(geo.size.width, geo.size.height) / 2 - lineWidth / 2
     ZStack {
         ForEach(0..<diodeCount, id: \\.self) { i in
             let position = Double(i) / Double(diodeCount)
-            let lit = brightestComet(at: position, head: head, tail: tail)
+            let lit = brightestComet(at: position, head: head, tail: tail, colorCount: all.count)
             let angle = position * 2 * Double.pi - .pi / 2
             Circle()
-                .fill(lit.index == 0 ? p : s)
+                .fill(all[lit.index % max(all.count, 1)])
                 .frame(width: lineWidth, height: lineWidth)
                 .opacity(max(lit.brightness, 0.06))
                 .position(
@@ -346,6 +359,12 @@ struct ThinkingRingView: View {
     var diodeCount: Int = \(Int(config.diodeCount.rounded()))
     var primaryColor: Color = Color(hex: "\(primaryHex)")
     var secondaryColor: Color = Color(hex: "\(secondaryHex)")
+    // Every configured color, in order. The app cycles all of them — Multi
+    // Chase gives each its own comet, and hue shift rotates through the
+    // whole list — so exporting only primary and secondary quietly dropped
+    // however many you'd added. Emitted as literals rather than taken as a
+    // parameter so the file stays a drop-in.
+    var ringColors: [Color] = [\(ringColorLiterals)]
     var glowEnabled: Bool = \(config.glowEnabled)
     var glowRadius: CGFloat = \(config.glowRadius)
 
@@ -454,15 +473,25 @@ struct ThinkingRingView: View {
         }
     }
 
-    private func colors(elapsed: Double) -> (Color, Color) {
-        guard hueShiftEnabled else { return (primaryColor, secondaryColor) }
+    /// Every color the ring is currently using, hue shift applied.
+    private func activeColors(elapsed: Double) -> [Color] {
+        guard hueShiftEnabled else { return ringColors }
         let raw = (elapsed * hueShiftSpeed).truncatingRemainder(dividingBy: 1)
-        let hue1 = raw < 0 ? raw + 1 : raw
-        let hue2 = (hue1 + 0.5).truncatingRemainder(dividingBy: 1)
-        return (
-            Color(hue: hue1, saturation: 0.85, brightness: 1),
-            Color(hue: hue2, saturation: 0.85, brightness: 1)
-        )
+        let base = raw < 0 ? raw + 1 : raw
+        let n = max(ringColors.count, 1)
+        return (0..<n).map { i in
+            let hue = (base + Double(i) / Double(n)).truncatingRemainder(dividingBy: 1)
+            return Color(hue: hue, saturation: 0.85, brightness: 1)
+        }
+    }
+
+    /// The two-color view of the above, for the animations that only ever
+    /// use a pair. With two colors and hue shift on, the spacing works out
+    /// to the same half-turn apart this used to hard-code.
+    private func colors(elapsed: Double) -> (Color, Color) {
+        let all = activeColors(elapsed: elapsed)
+        guard let first = all.first else { return (primaryColor, secondaryColor) }
+        return (first, all.count > 1 ? all[1] : first)
     }
 
     // Deterministic pseudo-random value in 0..<1 for a given index — used
@@ -488,11 +517,19 @@ struct ThinkingRingView: View {
     /// `@ViewBuilder` closure accepts `let` bindings and view expressions
     /// only — `var` and `for` inside one make the builder try to treat
     /// them as views.
-    private func brightestComet(at position: Double, head: Double, tail: Double) -> (index: Int, brightness: Double) {
+    private func brightestComet(
+        at position: Double,
+        head: Double,
+        tail: Double,
+        colorCount: Int
+    ) -> (index: Int, brightness: Double) {
         var bestIndex = 0
         var bestBrightness = 0.0
-        for k in 0..<2 {
-            let cometHead = head + Double(k) / 2
+        let count = max(colorCount, 1)
+        for k in 0..<count {
+            let cometHead = head + Double(k) / Double(count)
+            // Distance *behind* the comet head, wrapped into 0..<1 so the
+            // comparison works across the seam at the top of the ring.
             var behind = (cometHead - position).truncatingRemainder(dividingBy: 1)
             if behind < 0 { behind += 1 }
             if behind < tail {
@@ -503,7 +540,10 @@ struct ThinkingRingView: View {
                 }
             }
         }
-        return (bestIndex, bestBrightness)
+        // Unlit diodes stay faintly visible, the same way `chasing` draws a
+        // dim full-circle track behind its arc — otherwise the ring's shape
+        // disappears wherever no comet currently is.
+        return bestBrightness > 0.06 ? (bestIndex, bestBrightness) : (bestIndex, 0.06)
     }
 
     // Deliberately exaggerated RGB split, inspired by Siri's colorful

@@ -41,6 +41,28 @@ func main() -> Int32 {
         files.append((name, url))
     }
 
+    // A second pass over every type with the options that used to be
+    // absent from the exports entirely — extra colors, Diode Mode, and a
+    // non-round diode shape. Without this the new code paths are emitted
+    // by nothing the check ever compiles, which is how four broken exports
+    // shipped the first time: the generators emit *strings*, so an
+    // un-exercised branch is invisible until someone pastes it into Xcode.
+    for type in RingAnimationType.allCases {
+        for shape in DiodeShape.allCases {
+            let config = RingConfig()
+            config.animationType = type
+            config.particlesEnabled = true
+            config.additionalColors = [.green, .orange]
+            config.diodeModeEnabled = true
+            config.diodeShape = shape
+            let name = "Diode_" + type.rawValue.replacingOccurrences(of: " ", with: "")
+                + "_" + shape.rawValue.replacingOccurrences(of: " ", with: "")
+            let url = dir.appendingPathComponent(name + ".swift")
+            try? CodeGenerators.swiftUICode(config: config).write(to: url, atomically: true, encoding: .utf8)
+            files.append((name, url))
+        }
+    }
+
     if let cue = LEDCueLibrary.all.first {
         for style in LEDPatternStyle.allCases {
             var params = cue.defaultParameters
