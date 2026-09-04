@@ -25,6 +25,17 @@ public struct GlassSectionCard<Content: View>: View {
     /// the label column steals enough width to wrap it from two tidy rows
     /// into a ragged three.
     var alignsAsForm: Bool = true
+    /// Restores just this section's parameters to their defaults.
+    var onReset: (() -> Void)?
+    /// Commits the ring's current state as a timeline step.
+    ///
+    /// The same action from every card, because a step is a snapshot of the
+    /// whole ring rather than of one section — there is no such thing as a
+    /// step that carries only Motion. It's offered on each card anyway
+    /// because "commit what I've just been tuning" is a thing you want
+    /// where you're tuning it, not after a trip to the toolbar. The help
+    /// text says what it captures so the placement doesn't imply otherwise.
+    var onAddToTimeline: (() -> Void)?
     @Binding var isExpanded: Bool
     @ViewBuilder var content: () -> Content
 
@@ -34,6 +45,8 @@ public struct GlassSectionCard<Content: View>: View {
         footer: String? = nil,
         masterToggle: Binding<Bool>? = nil,
         alignsAsForm: Bool = true,
+        onReset: (() -> Void)? = nil,
+        onAddToTimeline: (() -> Void)? = nil,
         isExpanded: Binding<Bool>,
         @ViewBuilder content: @escaping () -> Content
     ) {
@@ -42,6 +55,8 @@ public struct GlassSectionCard<Content: View>: View {
         self.footer = footer
         self.masterToggle = masterToggle
         self.alignsAsForm = alignsAsForm
+        self.onReset = onReset
+        self.onAddToTimeline = onAddToTimeline
         self._isExpanded = isExpanded
         self.content = content
     }
@@ -69,6 +84,28 @@ public struct GlassSectionCard<Content: View>: View {
                 .buttonStyle(.plain)
 
                 Spacer(minLength: 8)
+
+                // Before the master toggle, so the switch stays the
+                // rightmost thing in every header it appears in.
+                if let onAddToTimeline {
+                    Button(action: onAddToTimeline) {
+                        Image(systemName: "plus.rectangle.on.folder")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Add the ring's current state to the timeline as a new step")
+                    .accessibilityLabel("Add to Timeline")
+                }
+
+                if let onReset {
+                    Button(action: onReset) {
+                        Image(systemName: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Reset \(title) to its defaults")
+                    .accessibilityLabel("Reset \(title)")
+                }
 
                 if let masterToggle {
                     Toggle("", isOn: masterToggle)

@@ -103,7 +103,9 @@ struct ContentView: View {
                 HSplitView {
                     designerDetail
                         .frame(minWidth: 420, idealWidth: 640)
-                    ControlsView(config: config)
+                    ControlsView(config: config) {
+                        timelinePlayer.addSegment(from: config)
+                    }
                         .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
                 }
             case .cueLibrary:

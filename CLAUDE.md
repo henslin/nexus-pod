@@ -340,6 +340,34 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   `xcodebuild`/`xcrun simctl` — use that instead of asking for manual
   screenshots when debugging UI issues here.
 
+## Reset and Add to Timeline, per section
+
+Every Controls card carries two actions in its header, in both panels
+(Nexus's `ControlsView` and the one inside `UseCaseDetailView`).
+
+**Reset** restores that section's parameters. Defaults come from a freshly
+constructed `RingConfig` rather than literals repeated in
+`ControlsSectionReset`, so changing a property's default changes Reset with
+it — no second copy to drift. What *can* rot is the section-to-fields
+mapping: add a knob to `ShapeSection` and Shape's Reset won't touch it
+until it's listed. Two sections deliberately opt out of parts of this:
+
+- **Firmware Fidelity has no Reset at all.** Its controls step an imported
+  pattern down through its fidelity levels, and "default" for a recorded
+  firmware pattern isn't a meaningful idea.
+- **Voice keeps the API key.** It's a credential the user pasted, stored in
+  the Keychain; losing it to a mis-click on a section header would be a
+  nasty thing for a section reset to do.
+
+**Add to Timeline** commits the ring's current state as a step. It is the
+same action on every card, because a step is a snapshot of the *whole*
+ring — there's no such thing as a step carrying only Motion. It's on each
+card anyway because "commit what I've just been tuning" is wanted where
+you're tuning it rather than after a trip to the toolbar, and the help text
+says what it captures so the placement doesn't imply otherwise. In Use
+Cases it adds to that use case's own timeline (`TimelinePlayer.useCaseFileName`),
+not to Nexus's.
+
 ## Performance: profile it, don't reason about it
 
 The app sat at **100% of a core while idle** on an M2. Two causes, both

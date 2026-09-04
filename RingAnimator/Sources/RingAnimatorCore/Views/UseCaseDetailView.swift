@@ -381,6 +381,13 @@ public struct UseCaseDetailView: View {
             systemImage: systemImage,
             footer: footer,
             masterToggle: masterToggle,
+            onReset: ControlsSectionReset.isResettable(id)
+                ? { ControlsSectionReset.reset(id, on: editingConfig) }
+                : nil,
+            // A use case has its own timeline, in its own store — see
+            // `TimelinePlayer.useCaseFileName` — so this adds a step to
+            // that one, not to Nexus's.
+            onAddToTimeline: { player.addSegment(from: editingConfig) },
             isExpanded: Binding(
                 get: { expanded[id, default: true] },
                 set: { expanded[id] = $0 }
