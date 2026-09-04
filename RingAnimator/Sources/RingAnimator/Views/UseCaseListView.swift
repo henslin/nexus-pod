@@ -23,6 +23,7 @@ struct UseCaseListView: View {
 
     @State private var importErrorMessage: String?
     @State private var importSuccessMessage: String?
+    @State private var showingBatchExport = false
 
     var body: some View {
         ListColumn {
@@ -99,11 +100,22 @@ struct UseCaseListView: View {
                             .disabled(store.presets.isEmpty)
                         Button("Add from a JSON File…") { importUseCases() }
                     }
+                    Section("Render") {
+                        Button("Export All as GIF or Movie…") { showingBatchExport = true }
+                            .disabled(store.presets.isEmpty)
+                    }
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up.on.square")
                 }
                 .help("Export these use cases as a file, or add ones sent to you")
             }
+        }
+        .sheet(isPresented: $showingBatchExport) {
+            BatchExportView(
+                presets: store.presets,
+                sectionName: "Use Cases",
+                colorScheme: .dark
+            ) { showingBatchExport = false }
         }
         .sheet(isPresented: $showingNewDialog) { newDialog }
         .sheet(item: $renamingUseCase) { _ in renameDialog }

@@ -378,6 +378,32 @@ The Cue Library deliberately has no `+`. It's a fixed transcription of the
 hardware spec with per-cue overrides, and staying trustworthy as a spec is
 what it's for.
 
+## Exporting a whole list at once
+
+`BatchExportView` renders every animation in a list to GIF and/or movie
+into one folder — **Share → Render → Export All as GIF or Movie…** in
+Nexus's Saved Animations, Use Cases, and any user section. The single-file
+sheet exports whatever the ring is showing, which with a pattern library
+imported is sixty-nine trips through a save panel.
+
+Four things it has to do, each for a reason:
+
+- **One at a time.** `ImageRenderer` drives AppKit, so rendering is
+  main-actor bound and can't be parallelised. Sixty-nine animations is a
+  long wait, which is why the progress line names the animation being
+  rendered and the bar counts partial progress within it — a bar that moved
+  once per item would sit still on the slow ones and read as hung.
+- **A fresh `RingConfig` per preset.** These carry recorded streams and
+  firmware fields; reusing one config would leave a previous animation's
+  settings in place and export the wrong thing for anything that doesn't
+  set every field.
+- **Delete an existing `.mov` first.** `AVAssetWriter` refuses to start
+  when something is already at the destination, which on a second run into
+  the same folder is every file. The GIF writer overwrites happily, so this
+  looks asymmetric and isn't.
+- **Collect failures, don't abort.** One animation that renders nothing
+  shouldn't abandon the other sixty-eight; the summary names what failed.
+
 ## Preview and Code, in every section
 
 `DetailPane` is the Preview/Code control plus the two panes under it, and
@@ -425,6 +451,11 @@ field therefore sat at the far right of the window, about as far from the
 list it filters as the geometry allows, and nothing said which column any
 of the Add/Import/Export buttons belonged to. Inside the column is the
 Finder/Xcode/Mail convention and makes the association structural.
+
+**Every content column is the same width** (`listColumnWidth()`). They were
+200/230/300, 260/300 and 220/260/320, so the column resized every time you
+changed section — and the longest subtitle pushed its own section wider
+still. Which column is showing shouldn't move the furniture.
 
 **Detail panes** are the stage filling the pane, one strip under it,
 controls on the right. Cue Library and Use Cases each used to put a header

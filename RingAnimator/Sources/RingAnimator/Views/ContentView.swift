@@ -157,13 +157,13 @@ struct ContentView: View {
             switch section {
             case .ringDesigner:
                 SavedPresetsView(store: presetStore, config: config, timelinePlayer: timelinePlayer, useCaseStore: useCaseStore)
-                    .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
+                    .listColumnWidth()
             case .cueLibrary:
                 CueListView(store: cueStore, selectedCueID: $selectedCueID, searchText: $cueSearchText)
-                    .navigationSplitViewColumnWidth(min: 260, ideal: 300)
+                    .listColumnWidth()
             case .useCases:
                 UseCaseListView(store: useCaseStore, selectedUseCaseID: $selectedUseCaseID)
-                    .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+                    .listColumnWidth()
             case .user(let id):
                 // The same list as Use Cases, over that section's own
                 // store. `.id(id)` so switching sections rebuilds it
@@ -173,7 +173,7 @@ struct ContentView: View {
                     selectedUseCaseID: binding(forSection: id)
                 )
                 .id(id)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+                .listColumnWidth()
             case .none:
                 ContentUnavailableView("Select a tool", systemImage: "sidebar.left")
             }

@@ -49,6 +49,7 @@ struct SavedPresetsView: View {
 
     @State private var importErrorMessage: String?
     @State private var importSuccessMessage: String?
+    @State private var showingBatchExport = false
 
     var body: some View {
         ListColumn {
@@ -107,6 +108,10 @@ struct SavedPresetsView: View {
                         .disabled(store.presets.isEmpty)
                     Button("Add from a JSON File…") { importPresets() }
                 }
+                Section("Render") {
+                    Button("Export All as GIF or Movie…") { showingBatchExport = true }
+                        .disabled(store.presets.isEmpty)
+                }
                 Section("Bring in a Design") {
                     Button("Read a Blender Script into the Ring…") { importBlenderScript() }
                     Button("Add a Pattern Folder to Use Cases…") { importPatternFolder() }
@@ -124,6 +129,13 @@ struct SavedPresetsView: View {
         // comment), so the alert version was simply unusable: nothing you
         // typed ever landed in the field. A plain sheet gives room for the
         // paste-workaround button alongside it.
+        .sheet(isPresented: $showingBatchExport) {
+            BatchExportView(
+                presets: store.presets,
+                sectionName: "Saved Animations",
+                colorScheme: .dark
+            ) { showingBatchExport = false }
+        }
         .sheet(isPresented: $showingSaveDialog) { saveDialog }
         .sheet(item: $blenderReport) { report in
             BlenderImportReportView(fileName: report.fileName, outcome: report.outcome) {

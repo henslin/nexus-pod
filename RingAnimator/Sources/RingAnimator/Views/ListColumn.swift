@@ -146,3 +146,16 @@ struct ColumnActionDivider: View {
             .padding(.horizontal, 1)
     }
 }
+
+extension View {
+    /// The one width every content column uses.
+    ///
+    /// They were 200/230/300, 260/300 and 220/260/320, so the column
+    /// resized every time you changed section — and the widest subtitle
+    /// ("Discovery design for the agentic tab · 2 saved") pushed its own
+    /// section wider still. Which column is showing shouldn't move the
+    /// furniture.
+    func listColumnWidth() -> some View {
+        navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 360)
+    }
+}
