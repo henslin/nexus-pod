@@ -53,26 +53,32 @@ struct ExportCanvasOptionsView: View {
     /// where nothing said which of them changed the picture and which
     /// changed the file.
     var body: some View {
-        Section("Appearance") {
-            // Radios, not a menu: "ring" and "app screen" are different
-            // kinds of output, and a menu shows you one of them while
-            // hiding the other behind a click.
-            Picker("Include UI", selection: $settings.includeAppUI) {
-                Text("Ring only").tag(false)
-                Text("App screen").tag(true)
+        Section("Background") {
+            // Its own section: it isn't a peer of GIF and Movie — those
+            // say which files to write, this says what's behind the ring.
+            Toggle("Transparent background", isOn: $settings.transparent)
+                .toggleStyle(.checkbox)
+                .disabled(settings.transparencyUnavailable)
+            if settings.transparencyUnavailable {
+                Text("A full app screen has no transparent edges to keep.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .pickerStyle(.radioGroup)
+        }
 
-            if settings.includeAppUI {
-                // A menu is right here: the tabs are four of the same kind
-                // of thing, and the list would otherwise crowd out the
-                // choices that change the shape of the export.
-                Picker("Tab", selection: $settings.tab) {
-                    ForEach(DemoTab.allCases) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
+        Section("Appearance") {
+            Toggle("Include UI", isOn: $settings.includeAppUI)
+                .toggleStyle(.checkbox)
+
+            // Present but inactive rather than absent, so the choice is
+            // visible before it applies — a control that appears out of
+            // nowhere is a control you didn't know you had.
+            Picker("Tab", selection: $settings.tab) {
+                ForEach(DemoTab.allCases) { tab in
+                    Text(tab.rawValue).tag(tab)
                 }
             }
+            .disabled(!settings.includeAppUI)
 
             Picker("Mode", selection: $settings.appearance) {
                 Text("Light").tag(ColorScheme.light)
@@ -81,22 +87,26 @@ struct ExportCanvasOptionsView: View {
             .pickerStyle(.radioGroup)
         }
 
-        // Only with the app screen: the frame wraps a screen, and there
-        // isn't one to wrap around a bare ring.
-        if settings.includeAppUI {
-            Section("iPhone") {
-                // A menu *is* right for this one — it's a finish, and one
-                // colour standing for the rest is exactly what it shows.
-                Picker("Device Frame", selection: $settings.deviceFinish) {
-                    Text("None").tag(AnimationExporter.DeviceFinish?.none)
-                    ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
-                        Text(finish.rawValue).tag(AnimationExporter.DeviceFinish?.some(finish))
-                    }
+        Section("iPhone") {
+            // A menu is right for a finish: one colour standing in for the
+            // rest is what its closed state should show.
+            Picker("Device Frame", selection: $settings.deviceFinish) {
+                Text("None").tag(AnimationExporter.DeviceFinish?.none)
+                ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
+                    Text(finish.rawValue).tag(AnimationExporter.DeviceFinish?.some(finish))
                 }
+            }
+            .disabled(!settings.includeAppUI)
+
+            if settings.includeAppUI {
                 Text(note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("A phone frames the app screen, so it needs Include UI.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

@@ -116,19 +116,12 @@ struct BatchExportView: View {
                 // having to exist as its own option.
                 Toggle("Animated GIF", isOn: $exportGIF)
                 Toggle("Movie (.mov)", isOn: $exportMovie)
-                Toggle("Transparent background", isOn: $canvasSettings.transparent)
-                    .disabled(canvasSettings.transparencyUnavailable)
-                if canvasSettings.transparencyUnavailable {
-                    Text("A full screen has no transparent edges to keep.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
             .toggleStyle(.checkbox)
 
             ExportCanvasOptionsView(settings: $canvasSettings)
 
-            Section("Length") {
+            Section("Duration") {
                 Stepper(value: $loopCount, in: 1...8) {
                     Text(loopCount == 1 ? "1 loop" : "\(loopCount) loops")
                 }
