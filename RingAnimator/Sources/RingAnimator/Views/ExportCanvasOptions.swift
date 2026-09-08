@@ -46,19 +46,6 @@ struct ExportCanvasSettings: Equatable {
     }
 }
 
-/// GIF, movie, or both. A selection rather than two switches — but with
-/// "Both" kept, because writing one of each in a pass is a real thing to
-/// want and a picker of two would have quietly removed it.
-enum ExportFileFormat: String, CaseIterable, Identifiable {
-    case gif = "GIF"
-    case movie = "Movie"
-    case both = "Both"
-
-    var id: String { rawValue }
-    var wantsGIF: Bool { self != .movie }
-    var wantsMovie: Bool { self != .gif }
-}
-
 struct ExportCanvasOptionsView: View {
     @Binding var settings: ExportCanvasSettings
     /// Emitted as `Section`s so both export sheets can put them in a
@@ -67,12 +54,19 @@ struct ExportCanvasOptionsView: View {
     /// changed the file.
     var body: some View {
         Section("Appearance") {
+            // Radios, not a menu: "ring" and "app screen" are different
+            // kinds of output, and a menu shows you one of them while
+            // hiding the other behind a click.
             Picker("Include UI", selection: $settings.includeAppUI) {
                 Text("Ring only").tag(false)
                 Text("App screen").tag(true)
             }
+            .pickerStyle(.radioGroup)
 
             if settings.includeAppUI {
+                // A menu is right here: the tabs are four of the same kind
+                // of thing, and the list would otherwise crowd out the
+                // choices that change the shape of the export.
                 Picker("Tab", selection: $settings.tab) {
                     ForEach(DemoTab.allCases) { tab in
                         Text(tab.rawValue).tag(tab)
@@ -84,13 +78,15 @@ struct ExportCanvasOptionsView: View {
                 Text("Light").tag(ColorScheme.light)
                 Text("Dark").tag(ColorScheme.dark)
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.radioGroup)
         }
 
         // Only with the app screen: the frame wraps a screen, and there
         // isn't one to wrap around a bare ring.
         if settings.includeAppUI {
             Section("iPhone") {
+                // A menu *is* right for this one — it's a finish, and one
+                // colour standing for the rest is exactly what it shows.
                 Picker("Device Frame", selection: $settings.deviceFinish) {
                     Text("None").tag(AnimationExporter.DeviceFinish?.none)
                     ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
