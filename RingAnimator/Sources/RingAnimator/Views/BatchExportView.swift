@@ -28,8 +28,7 @@ struct BatchExportView: View {
     var timelineFileName: ((RingPreset) -> String)?
     let onDismiss: () -> Void
 
-    @State private var exportGIF = true
-    @State private var exportMovie = false
+    @State private var format: ExportFileFormat = .gif
     /// The same canvas/appearance/transparency options the single export
     /// sheet has — one type, one control group, so the two can't drift.
     @State private var canvasSettings = ExportCanvasSettings()
@@ -99,7 +98,7 @@ struct BatchExportView: View {
                     Button("Choose Folder…") { start() }
                         .keyboardShortcut(.defaultAction)
                         .ringGlassButtonStyle()
-                        .disabled(!exportGIF && !exportMovie)
+                        .disabled(false)
                 }
             }
         }
@@ -109,9 +108,21 @@ struct BatchExportView: View {
 
     private var optionsSection: some View {
         Form {
-            Section("Files") {
-                Toggle("Animated GIF", isOn: $exportGIF)
-                Toggle("Movie (.mov)", isOn: $exportMovie)
+            Section("Animation Type") {
+                Picker("File", selection: $format) {
+                    ForEach(ExportFileFormat.allCases) { option in
+                        Text(option.rawValue).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Toggle("Transparent background", isOn: $canvasSettings.transparent)
+                    .disabled(canvasSettings.transparencyUnavailable)
+                if canvasSettings.transparencyUnavailable {
+                    Text("A full screen has no transparent edges to keep.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             ExportCanvasOptionsView(settings: $canvasSettings)
@@ -286,8 +297,8 @@ struct BatchExportView: View {
                             loopCount: loopCount,
                             transparent: canvasSettings.effectiveTransparent,
                             canvas: canvasSettings.canvas,
-                            gif: exportGIF ? base.appendingPathExtension("gif") : nil,
-                            movie: exportMovie ? base.appendingPathExtension("mov") : nil,
+                            gif: format.wantsGIF ? base.appendingPathExtension("gif") : nil,
+                            movie: format.wantsMovie ? base.appendingPathExtension("mov") : nil,
                             onProgress: onFrame
                         )
                     } else {
@@ -297,8 +308,8 @@ struct BatchExportView: View {
                             loopCount: loopCount,
                             transparent: canvasSettings.effectiveTransparent,
                             canvas: canvasSettings.canvas,
-                            gif: exportGIF ? base.appendingPathExtension("gif") : nil,
-                            movie: exportMovie ? base.appendingPathExtension("mov") : nil,
+                            gif: format.wantsGIF ? base.appendingPathExtension("gif") : nil,
+                            movie: format.wantsMovie ? base.appendingPathExtension("mov") : nil,
                             onProgress: onFrame
                         )
                     }

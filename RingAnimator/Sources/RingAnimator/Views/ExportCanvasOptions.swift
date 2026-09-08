@@ -9,22 +9,28 @@ import RingAnimatorCore
 /// the moment a seventh is added.
 @MainActor
 struct ExportCanvasSettings: Equatable {
-    var appearance: ColorScheme = .dark
+    /// Light by default, rather than inherited from the canvas: an export
+    /// usually lands in a deck or a doc, and those are light far more often
+    /// than the tool you made it in.
+    var appearance: ColorScheme = .light
     var transparent = false
     var includeAppUI = false
     var tab: DemoTab = .dashboard
-    var includeDeviceFrame = false
-    var finish: AnimationExporter.DeviceFinish = .silver
+    /// `nil` is no phone around the screen. One control instead of a
+    /// toggle plus a colour picker — "no frame" is just another choice of
+    /// frame, and splitting it across two rows made you set two things to
+    /// express one.
+    var deviceFinish: AnimationExporter.DeviceFinish?
 
     var canvas: AnimationExporter.Canvas {
         guard includeAppUI else { return .ring }
-        return .appUI(tab: tab, device: includeDeviceFrame ? finish : nil)
+        return .appUI(tab: tab, device: deviceFinish)
     }
 
     /// A bare phone screen is opaque edge to edge, so there's nothing for
     /// transparency to keep. Framed, there is: the rounded corners.
     var transparencyUnavailable: Bool {
-        includeAppUI && !includeDeviceFrame
+        includeAppUI && deviceFinish == nil
     }
 
     var effectiveTransparent: Bool {
@@ -40,50 +46,55 @@ struct ExportCanvasSettings: Equatable {
     }
 }
 
+/// GIF, movie, or both. A selection rather than two switches — but with
+/// "Both" kept, because writing one of each in a pass is a real thing to
+/// want and a picker of two would have quietly removed it.
+enum ExportFileFormat: String, CaseIterable, Identifiable {
+    case gif = "GIF"
+    case movie = "Movie"
+    case both = "Both"
+
+    var id: String { rawValue }
+    var wantsGIF: Bool { self != .movie }
+    var wantsMovie: Bool { self != .gif }
+}
+
 struct ExportCanvasOptionsView: View {
     @Binding var settings: ExportCanvasSettings
-    /// The single export sheet offers transparency next to its own format
-    /// toggles, where it reads as one list; the batch sheet has no such
-    /// list and shows it here.
-    var showsTransparency = true
-
     /// Emitted as `Section`s so both export sheets can put them in a
     /// grouped `Form` — the controls had grown to nine in one flat stack,
     /// where nothing said which of them changed the picture and which
     /// changed the file.
     var body: some View {
         Section("Appearance") {
-            Picker("Theme", selection: $settings.appearance) {
-                Text("Light").tag(ColorScheme.light)
-                Text("Dark").tag(ColorScheme.dark)
+            Picker("Include UI", selection: $settings.includeAppUI) {
+                Text("Ring only").tag(false)
+                Text("App screen").tag(true)
             }
-            .pickerStyle(.segmented)
 
-            if showsTransparency {
-                Toggle("Transparent background", isOn: $settings.transparent)
-                    .disabled(settings.transparencyUnavailable)
-                if settings.transparencyUnavailable {
-                    Text("A full screen has no transparent edges to keep.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-
-        Section("Frame it") {
-            Toggle("Show the app around it", isOn: $settings.includeAppUI)
             if settings.includeAppUI {
                 Picker("Tab", selection: $settings.tab) {
                     ForEach(DemoTab.allCases) { tab in
                         Text(tab.rawValue).tag(tab)
                     }
                 }
-                Toggle("Show the iPhone", isOn: $settings.includeDeviceFrame)
-                if settings.includeDeviceFrame {
-                    Picker("Finish", selection: $settings.finish) {
-                        ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
-                            Text(finish.rawValue).tag(finish)
-                        }
+            }
+
+            Picker("Mode", selection: $settings.appearance) {
+                Text("Light").tag(ColorScheme.light)
+                Text("Dark").tag(ColorScheme.dark)
+            }
+            .pickerStyle(.segmented)
+        }
+
+        // Only with the app screen: the frame wraps a screen, and there
+        // isn't one to wrap around a bare ring.
+        if settings.includeAppUI {
+            Section("iPhone") {
+                Picker("Device Frame", selection: $settings.deviceFinish) {
+                    Text("None").tag(AnimationExporter.DeviceFinish?.none)
+                    ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
+                        Text(finish.rawValue).tag(AnimationExporter.DeviceFinish?.some(finish))
                     }
                 }
                 Text(note)
@@ -97,7 +108,7 @@ struct ExportCanvasOptionsView: View {
     private var note: String {
         let size = settings.pixelSize
         let dimensions = "\(Int(size.width))×\(Int(size.height))"
-        if settings.includeDeviceFrame {
+        if settings.deviceFinish != nil {
             return "Exports the phone at \(dimensions). Turn on Transparent background to keep the rounded corners clear instead of filled."
         }
         return "Exports the phone screen at \(dimensions), square-cornered, ready to drop into a device frame. The screen is opaque, so there's no transparency to keep."

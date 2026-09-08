@@ -23,8 +23,7 @@ struct AnimationExportView: View {
     /// matching the "Exporting…" progress state below.
     let onDismiss: () -> Void
 
-    @State private var exportGIF = true
-    @State private var exportMovie = true
+    @State private var format: ExportFileFormat = .both
     @State private var loopCount = 2
     @State private var captureParticles = false
     /// Canvas, appearance and transparency — shared with the batch sheet
@@ -54,10 +53,11 @@ struct AnimationExportView: View {
         self.deviceFinish = deviceFinish
         self.onDismiss = onDismiss
         _source = State(initialValue: timeline.isEmpty ? .live : .timeline)
-        var settings = ExportCanvasSettings()
-        settings.appearance = colorScheme
-        settings.finish = deviceFinish
-        _canvasSettings = State(initialValue: settings)
+        // Deliberately not seeded from the canvas any more. An export
+        // mostly lands somewhere light, and starting from "ring only, no
+        // phone, light" is the plain result — the canvas's own dark
+        // preview and titanium finish are choices about *previewing*.
+        _canvasSettings = State(initialValue: ExportCanvasSettings())
     }
 
     private enum ExportSource: String, CaseIterable, Identifiable {
@@ -92,9 +92,9 @@ struct AnimationExportView: View {
     /// alpha, GIF has one transparent colour and nothing in between, so a
     /// GIF's glow and anti-aliased edges get a hard cut.
     private var transparencyNote: String {
-        if exportGIF && exportMovie {
+        if format == .both {
             return "The movie keeps soft edges and glow. GIF transparency is 1-bit, so its edges will be harder."
-        } else if exportGIF {
+        } else if format.wantsGIF {
             return "GIF transparency is 1-bit — the glow drops out and edges will be harder than on screen."
         } else {
             return "Written as HEVC with alpha — plays transparent in QuickTime, Keynote, and AVPlayer."
@@ -144,9 +144,21 @@ struct AnimationExportView: View {
             }
 
             Form {
-                Section("Files") {
-                    Toggle("Animated GIF", isOn: $exportGIF)
-                    Toggle("Movie (.mov)", isOn: $exportMovie)
+                Section("Animation Type") {
+                    Picker("File", selection: $format) {
+                        ForEach(ExportFileFormat.allCases) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Toggle("Transparent background", isOn: $canvasSettings.transparent)
+                        .disabled(canvasSettings.transparencyUnavailable)
+                    if canvasSettings.transparencyUnavailable {
+                        Text("A full screen has no transparent edges to keep.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 ExportCanvasOptionsView(settings: $canvasSettings)
@@ -198,7 +210,7 @@ struct AnimationExportView: View {
                     .ringGlassButtonStyle()
                 Button("Export…") { beginExport() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(isExporting || (!exportGIF && !exportMovie))
+                    .disabled(isExporting || (false))
                     .ringGlassButtonStyle()
             }
         }
@@ -224,9 +236,9 @@ struct AnimationExportView: View {
         // when both are requested, the second file is derived from
         // whatever base name/directory the user picks here (see below)
         // rather than prompting twice.
-        if exportGIF {
+        if format.wantsGIF {
             panel.allowedContentTypes = [.gif]
-        } else if exportMovie {
+        } else if format.wantsMovie {
             panel.allowedContentTypes = [.quickTimeMovie]
         }
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -237,8 +249,8 @@ struct AnimationExportView: View {
         progress = 0
 
         Task { @MainActor in
-            let gifURL = exportGIF ? baseURL.appendingPathExtension("gif") : nil
-            let movieURL = exportMovie ? baseURL.appendingPathExtension("mov") : nil
+            let gifURL = format.wantsGIF ? baseURL.appendingPathExtension("gif") : nil
+            let movieURL = format.wantsMovie ? baseURL.appendingPathExtension("mov") : nil
             // Rendering and encoding are one pass now, so the bar is the
             // real fraction rather than a guess split between two phases.
             let onProgress: @MainActor (Double) -> Void = { progress = $0 }
