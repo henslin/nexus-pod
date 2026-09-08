@@ -171,6 +171,45 @@ func run() -> Int32 {
         TimelinePlayer.deleteStore(fileName: name)
     }
 
+    // 7. Undo. A drag registers one step, not one per frame — otherwise
+    //    ⌘Z rewinds a resize a pixel at a time.
+    do {
+        let (player, _) = freshPlayer()
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        player.undoManager = undo
+
+        player.addSegment(from: a)
+        settle()
+        check("adding a step can be undone", undo.canUndo, "canUndo \(undo.canUndo)")
+
+        undo.undo()
+        settle()
+        check("undo takes the step back out", player.timeline.segments.isEmpty,
+              "\(player.timeline.segments.count) steps")
+
+        undo.redo()
+        settle()
+        check("redo puts it back", player.timeline.segments.count == 1,
+              "\(player.timeline.segments.count) steps")
+
+        // A drag: many updates between begin and end, one undo step.
+        guard let step = player.timeline.segments.first else { return 1 }
+        player.beginCoalescedEdit()
+        for tenths in 1...12 {
+            player.updateSegment(step.id) { $0.length = .seconds(Double(tenths) / 2) }
+        }
+        player.endCoalescedEdit(named: "Resize Step")
+        settle()
+        let resized = player.timeline.segments.first?.length.duration(speed: step.speed) ?? 0
+        undo.undo()
+        settle()
+        let restored = player.timeline.segments.first?.length.duration(speed: step.speed) ?? 0
+        check("a whole resize drag is one undo step",
+              abs(resized - 6.0) < 0.001 && abs(restored - 6.0) > 0.001,
+              String(format: "dragged to %.1fs, one undo returned it to %.1fs", resized, restored))
+    }
+
     TimelinePlayer.deleteStore(fileName: "timeline-check.json")
     return failed ? 1 : 0
 }

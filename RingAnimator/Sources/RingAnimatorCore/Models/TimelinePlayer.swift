@@ -207,6 +207,66 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     /// `TimelineCheck` reproduces it.
     private var configSourceSegmentID: UUID?
 
+    // MARK: - Undo
+
+    /// Set by the timeline strip from its environment. Weak: the window
+    /// owns it, this doesn't.
+    public weak var undoManager: UndoManager?
+
+    /// The timeline as it was when a coalesced edit began — a resize or a
+    /// reorder drag, which would otherwise register an undo step per
+    /// frame and make ⌘Z a way to rewind a drag one pixel at a time.
+    private var coalescedBaseline: RingTimeline?
+
+    public func beginCoalescedEdit() {
+        coalescedBaseline = timeline
+    }
+
+    public func endCoalescedEdit(named name: String) {
+        defer { coalescedBaseline = nil }
+        guard let baseline = coalescedBaseline, baseline != timeline else { return }
+        registerUndo(name: name, restoring: baseline)
+    }
+
+    /// Runs a mutation and makes it undoable, unless a drag is already
+    /// coalescing edits — in which case that drag registers the one step.
+    private func undoable(_ name: String, _ mutate: () -> Void) {
+        guard coalescedBaseline == nil else { return mutate() }
+        let before = timeline
+        mutate()
+        guard before != timeline else { return }
+        registerUndo(name: name, restoring: before)
+    }
+
+    /// Registers the inverse. Undoing runs this closure, which registers
+    /// *its* inverse — which is what the undo manager then offers as redo.
+    private func registerUndo(name: String, restoring snapshot: RingTimeline) {
+        guard let undoManager else { return }
+        // A manager that doesn't group by event throws on a bare
+        // registration. SwiftUI's does group, but crashing is a poor way
+        // to find out that something else doesn't.
+        let needsGroup = !undoManager.groupsByEvent
+        if needsGroup { undoManager.beginUndoGrouping() }
+        defer { if needsGroup { undoManager.endUndoGrouping() } }
+        undoManager.registerUndo(withTarget: self) { player in
+            // The undo manager calls back on the thread that registered,
+            // which is the main one — this states that rather than hopping
+            // and landing a frame later.
+            MainActor.assumeIsolated {
+            let current = player.timeline
+            player.timeline = snapshot
+            // Keep a selection only if it still refers to something.
+            if let id = player.selectedSegmentID,
+               !snapshot.segments.contains(where: { $0.id == id }) {
+                player.selectedSegmentID = snapshot.segments.first?.id
+            }
+            player.saveNow()
+            player.registerUndo(name: name, restoring: current)
+            }
+        }
+        undoManager.setActionName(name)
+    }
+
     public func bind(to config: RingConfig) {
         boundConfig = config
         configSourceSegmentID = nil
@@ -331,9 +391,11 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
             snapshot: RingPreset(name: segmentName, config: config),
             length: .seconds(1.5)
         )
-        timeline.segments.append(segment)
-        select(segment.id)
-        saveNow()
+        undoable("Add Step") {
+            timeline.segments.append(segment)
+            select(segment.id)
+            saveNow()
+        }
         return segment
     }
 
@@ -352,9 +414,11 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
             snapshot: preset,
             length: .seconds(Self.naturalLength(of: preset))
         )
-        timeline.segments.append(segment)
-        select(segment.id)
-        saveNow()
+        undoable("Paste Step") {
+            timeline.segments.append(segment)
+            select(segment.id)
+            saveNow()
+        }
         return segment
     }
 
@@ -399,6 +463,7 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
 
     public func deleteSegment(_ id: UUID) {
         guard let index = timeline.segments.firstIndex(where: { $0.id == id }) else { return }
+        undoable("Delete Step") {
         timeline.segments.remove(at: index)
         if selectedSegmentID == id {
             // Select the neighbor that slid into the removed slot, or the
@@ -409,6 +474,7 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
             select(timeline.segments.indices.contains(next) ? timeline.segments[next].id : nil)
         }
         saveNow()
+        }
     }
 
     /// Moves one step to an absolute position in the list.
@@ -425,6 +491,8 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
             timeline.segments.indices.contains(target),
             from != target
         else { return }
+        // Not wrapped: a reorder arrives one index at a time from a live
+        // drag, and the strip brackets the whole drag as one edit.
         let segment = timeline.segments.remove(at: from)
         timeline.segments.insert(segment, at: target)
         saveNow()
@@ -435,9 +503,11 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         var copy = timeline.segments[index]
         copy.id = UUID()
         copy.name = "\(copy.name) copy"
-        timeline.segments.insert(copy, at: index + 1)
-        select(copy.id)
-        saveNow()
+        undoable("Duplicate Step") {
+            timeline.segments.insert(copy, at: index + 1)
+            select(copy.id)
+            saveNow()
+        }
     }
 
     /// In-place edit of one segment's timeline-level fields (length, fades,
@@ -445,7 +515,9 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     /// snapshot, which the Controls panel owns.
     public func updateSegment(_ id: UUID, _ mutate: (inout TimelineSegment) -> Void) {
         guard let index = timeline.segments.firstIndex(where: { $0.id == id }) else { return }
-        mutate(&timeline.segments[index])
+        undoable("Edit Step") {
+            mutate(&timeline.segments[index])
+        }
     }
 
     public var selectedSegment: TimelineSegment? {

@@ -127,6 +127,11 @@ public struct TimelineStripView: View {
         // needs the explicit treatment (buttons inside a List/Form/toolbar
         // get System-applied glass for free; see `ringGlassButtonStyle`).
         .glassBackground(in: Rectangle())
+        #if os(macOS)
+        // The player registers timeline edits here, so ⌘Z is the ordinary
+        // Edit ▸ Undo rather than something this view reimplements.
+        .onAppear { player.undoManager = undoManager }
+        #endif
     }
 
     // MARK: - Transport
@@ -326,7 +331,12 @@ public struct TimelineStripView: View {
     private func reorderGesture(for segment: TimelineSegment, widths: [CGFloat]) -> some Gesture {
         DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.trackSpace))
             .onChanged { value in
+                #if os(macOS)
+                // A drag that started on the resize handle is a resize.
+                guard resizing == nil else { return }
+                #endif
                 if draggingID != segment.id {
+                    player.beginCoalescedEdit()
                     draggingID = segment.id
                     // Dragging a step also selects it, so the Controls
                     // panel follows what you're manipulating — same
@@ -340,6 +350,7 @@ public struct TimelineStripView: View {
             }
             .onEnded { _ in
                 draggingID = nil
+                player.endCoalescedEdit(named: "Move Step")
             }
     }
 
@@ -377,6 +388,24 @@ public struct TimelineStripView: View {
     private func blockWidths(in totalWidth: CGFloat) -> [CGFloat] {
         let segments = player.timeline.segments
         guard !segments.isEmpty else { return [] }
+
+        #if os(macOS)
+        // While a step is being resized, lay the track out at a *fixed*
+        // scale rather than fitting it to the width.
+        //
+        // Fitting means every width is a share of the total, so
+        // lengthening one step narrows all the others as you drag — the
+        // edge you're holding slides away from the pointer and every
+        // other block twitches. Pinning points-per-second to what it was
+        // when the drag began makes the edge follow the pointer exactly
+        // and leaves the rest alone. The track can overflow its width
+        // mid-drag; it settles back on release.
+        if let resizing {
+            return segments.map {
+                max(CGFloat($0.length.duration(speed: $0.speed)) * resizing.pointsPerSecond, Self.minBlockWidth)
+            }
+        }
+        #endif
 
         let spacing = CGFloat(max(segments.count - 1, 0)) * 4
         let available = max(totalWidth - spacing, Self.minBlockWidth)
@@ -433,6 +462,9 @@ public struct TimelineStripView: View {
     /// narrows the others *while you drag*. Reading the live scale would
     /// make the block chase the pointer at a changing rate.
     @State private var resizing: (id: UUID, seconds: Double, pointsPerSecond: CGFloat)?
+    /// The window's undo manager, handed to the player so timeline edits
+    /// land on the standard Edit ▸ Undo.
+    @Environment(\.undoManager) private var undoManager
 
     /// The trailing edge, draggable — the iMovie handle.
     private func resizeHandle(_ segment: TimelineSegment, width: CGFloat) -> some View {
@@ -456,6 +488,9 @@ public struct TimelineStripView: View {
                             let seconds = segment.length.duration(speed: segment.speed)
                             resizing = (id, seconds, max(width / CGFloat(max(seconds, 0.01)), 1))
                             player.select(id)
+                            // One undo step for the whole drag, not one
+                            // per frame.
+                            player.beginCoalescedEdit()
                         }
                         guard let resizing else { return }
                         let seconds = max(
@@ -464,7 +499,10 @@ public struct TimelineStripView: View {
                         )
                         setLength(seconds, for: segment)
                     }
-                    .onEnded { _ in resizing = nil }
+                    .onEnded { _ in
+                        resizing = nil
+                        player.endCoalescedEdit(named: "Resize Step")
+                    }
             )
     }
 
@@ -507,13 +545,13 @@ public struct TimelineStripView: View {
                 .fill(isSelected ? Color.accentColor.opacity(0.34) : Color.secondary.opacity(0.14))
         )
         .overlay(
-            // 1.5pt of accent against a coloured fill was too quiet to
-            // find at a glance in a row of blocks. The accent colour
-            // rather than a fixed blue or yellow: it's the selection
-            // colour the rest of the system is already using, including
-            // whatever the person set it to.
+            // Yellow, the way a video editor marks the clip you're
+            // holding. The accent colour was the system-consistent
+            // choice and it lost against blocks that are themselves
+            // coloured — the ring previews are every hue there is, and
+            // the selection has to win against all of them.
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 3)
+                .strokeBorder(isSelected ? Color.yellow : .clear, lineWidth: 3)
         )
         #if os(macOS)
         .contextMenu {

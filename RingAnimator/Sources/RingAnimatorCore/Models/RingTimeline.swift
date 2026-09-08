@@ -63,7 +63,7 @@ public enum SegmentLength: Codable, Equatable, Hashable, Sendable {
 /// config. Deltas are tidier on paper and much harder to reason about when
 /// you're looking at four blocks in a row trying to work out why the third
 /// one is green.
-public struct TimelineSegment: Identifiable, Codable, Equatable {
+public struct TimelineSegment: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
     /// Shown on the segment's block in the editor. Defaults to the
     /// snapshot's own name when created from a preset, but kept as its own
@@ -162,7 +162,7 @@ public struct TimelineSegment: Identifiable, Codable, Equatable {
 /// Every method here is a pure function of time, matching `RingView`'s own
 /// `overrideElapsed` contract — which is what lets `AnimationExporter`
 /// render a timeline to a movie frame-by-frame without a live clock.
-public struct RingTimeline: Codable, Equatable {
+public struct RingTimeline: Codable, Equatable, Sendable {
     public var segments: [TimelineSegment]
     /// When true, playback wraps back to 0 after `duration`. When false it
     /// holds on the final segment's last frame.
