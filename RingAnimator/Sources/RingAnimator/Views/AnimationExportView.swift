@@ -143,29 +143,27 @@ struct AnimationExportView: View {
                 .labelsHidden()
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Animated GIF", isOn: $exportGIF)
-                Toggle("Movie (.mov)", isOn: $exportMovie)
-            }
-            .toggleStyle(.checkbox)
+            Form {
+                Section("Files") {
+                    Toggle("Animated GIF", isOn: $exportGIF)
+                    Toggle("Movie (.mov)", isOn: $exportMovie)
+                }
 
-            ExportCanvasOptionsView(settings: $canvasSettings)
+                ExportCanvasOptionsView(settings: $canvasSettings)
 
-            if canvasSettings.effectiveTransparent {
-                Label(transparencyNote, systemImage: "square.on.square.dashed")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Stepper(value: $loopCount, in: 1...8) {
-                HStack {
-                    Text("Loops")
-                    Spacer()
-                    Text("\(loopCount) (\(String(format: "%.1f", totalDuration))s)")
-                        .foregroundStyle(.secondary)
+                Section("Length") {
+                    Stepper(value: $loopCount, in: 1...8) {
+                        Text("\(loopCount == 1 ? "1 loop" : "\(loopCount) loops") · \(String(format: "%.1f", totalDuration))s")
+                    }
+                    if canvasSettings.effectiveTransparent {
+                        Text(transparencyNote)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
+            .formStyle(.grouped)
 
             if particlesWillBeDropped {
                 VStack(alignment: .leading, spacing: 6) {

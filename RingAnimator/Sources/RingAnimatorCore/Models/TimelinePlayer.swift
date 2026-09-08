@@ -139,6 +139,40 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         "use-case-timeline-\(id.uuidString).json"
     }
 
+    /// The same idea for a Nexus saved animation: its own sequence, in its
+    /// own file, keyed by the animation's id.
+    ///
+    /// Nexus used to keep *one* timeline for the whole section — a saved
+    /// animation was a bookmark of the live config alone, and the sequence
+    /// was a separate shared document. That meant selecting a different
+    /// animation left the previous animation's steps in the strip, and a
+    /// brand-new animation opened with them too. Use cases never had that
+    /// problem, having always been keyed this way.
+    /// Reads a stored sequence without standing up a player.
+    ///
+    /// Exporting needs to know whether an animation *has* steps, for every
+    /// animation in a batch. Constructing a `TimelinePlayer` each time
+    /// would bring a playhead, a save debounce and a Combine binding along
+    /// for a question answered by one file read.
+    /// Posted after any sequence is written, carrying its `fileName`.
+    public static let didChange = Notification.Name("com.nexusringapp.timelineDidChange")
+
+    public static func storedTimeline(fileName: String) -> RingTimeline? {
+        guard
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first,
+            let data = try? Data(contentsOf: base
+                .appendingPathComponent("RingAnimator", isDirectory: true)
+                .appendingPathComponent(fileName)),
+            let decoded = try? JSONDecoder().decode(RingTimeline.self, from: data),
+            !decoded.isEmpty
+        else { return nil }
+        return decoded
+    }
+
+    public static func animationFileName(_ id: UUID) -> String {
+        "animation-timeline-\(id.uuidString).json"
+    }
+
     /// Deletes a timeline store. Called when its use case is deleted, so
     /// the file doesn't outlive what it belonged to.
     public static func deleteStore(fileName: String) {
@@ -459,6 +493,13 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     }
 
     private func save() {
+        defer {
+            // Rows elsewhere draw an animation's *first step* when it has
+            // one, and nothing else would tell them a step was just pasted.
+            NotificationCenter.default.post(
+                name: TimelinePlayer.didChange, object: nil, userInfo: ["fileName": fileName]
+            )
+        }
         guard let url = fileURL else { return }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

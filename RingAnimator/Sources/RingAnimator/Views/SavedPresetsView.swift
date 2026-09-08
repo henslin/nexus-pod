@@ -35,7 +35,9 @@ struct SavedPresetsView: View {
     /// the result somewhere else.
     @ObservedObject var useCaseStore: RingPresetStore
 
-    @State private var selectedPresetID: RingPreset.ID?
+    /// Owned by `ContentView`: the selected animation is what keys its own
+    /// timeline, so the selection can't live only in this column.
+    @Binding var selectedPresetID: RingPreset.ID?
 
     @State private var showingSaveDialog = false
     /// Non-nil while the Blender import report is up. A struct rather than a
@@ -77,7 +79,17 @@ struct SavedPresetsView: View {
                                     renamingPreset = preset
                                 },
                                 onExport: { exportSingle(preset) },
-                                onDelete: { store.delete(preset.id) }
+                                onDelete: {
+                                    store.delete(preset.id)
+                                    // Its sequence goes with it, the same
+                                    // way a deleted use case's does —
+                                    // otherwise every deleted animation
+                                    // leaves a file nothing will collect.
+                                    TimelinePlayer.deleteStore(
+                                        fileName: TimelinePlayer.animationFileName(preset.id)
+                                    )
+                                    if selectedPresetID == preset.id { selectedPresetID = nil }
+                                }
                             )
                             .tag(preset.id)
                         }
@@ -171,7 +183,8 @@ struct SavedPresetsView: View {
                 sectionName: renderTargets.count == 1
                     ? renderTargets[0].name
                     : "Saved Animations",
-                colorScheme: .dark
+                colorScheme: .dark,
+                timelineFileName: { TimelinePlayer.animationFileName($0.id) }
             ) { renderTargets = [] }
         }
         .sheet(isPresented: $showingSaveDialog) { saveDialog }
@@ -407,14 +420,13 @@ private struct SavedAnimationRow: View {
     /// saved settings into it on `.onAppear` and whenever the preset itself
     /// changes (e.g. after a rename), rather than needing this row to
     /// duplicate `RingPreset.apply(to:)`'s field-by-field copy.
-    @StateObject private var previewConfig = RingConfig()
-
     var body: some View {
         HStack(spacing: 10) {
-            RingView(config: previewConfig, diameter: 22, frameRate: RingView.thumbnailFrameRate)
-                .frame(width: 28, height: 28)
-                .onAppear { preset.apply(to: previewConfig) }
-                .onChange(of: preset) { _, newValue in newValue.apply(to: previewConfig) }
+            AnimationThumbnail(
+                preset: preset,
+                diameter: 22,
+                timelineFileName: TimelinePlayer.animationFileName(preset.id)
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text(preset.name)
                     .font(.body.weight(.medium))

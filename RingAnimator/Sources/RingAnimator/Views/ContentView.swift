@@ -26,7 +26,13 @@ struct ContentView: View {
     /// The sequencing document — see `TimelinePlayer`. Bound to `config`
     /// in `.onAppear` below, which is what makes the Controls panel edit
     /// the selected step in place rather than a detached scratch copy.
-    @StateObject private var timelinePlayer = TimelinePlayer()
+    /// The sequence for whichever saved animation is selected in Nexus —
+    /// or the scratch one when nothing is. See `TimelinePlayers`.
+    @StateObject private var timelinePlayers = TimelinePlayers()
+    /// Nexus's selected saved animation. Hoisted out of `SavedPresetsView`
+    /// because the timeline is keyed by it, and only `ContentView` can own
+    /// something both columns and the detail pane need.
+    @State private var selectedPresetID: RingPreset.ID?
     /// The stage's own state — zoom, pan, appearance, where Large Preview is
     /// parked. Owned here, one instance, and handed to whichever section is
     /// showing, so switching sections doesn't reset the canvas. See
@@ -159,7 +165,13 @@ struct ContentView: View {
         } content: {
             switch section {
             case .ringDesigner:
-                SavedPresetsView(store: presetStore, config: config, timelinePlayer: timelinePlayer, useCaseStore: useCaseStore)
+                SavedPresetsView(
+                    store: presetStore,
+                    config: config,
+                    timelinePlayer: timelinePlayer,
+                    useCaseStore: useCaseStore,
+                    selectedPresetID: $selectedPresetID
+                )
                     .listColumnWidth()
             case .cueLibrary:
                 CueListView(store: cueStore, selectedCueID: $selectedCueID, searchText: $cueSearchText)
@@ -260,6 +272,12 @@ struct ContentView: View {
             let outcome = UseCaseLibrary.sync(into: useCaseStore)
             if outcome.changedAnything { librarySync = outcome }
         }
+        .onChange(of: selectedPresetID) { _, _ in
+            // Each animation has its own player now, and a player that
+            // isn't bound can't load a step into the Controls panel — the
+            // strip would move while the ring stayed on the last one.
+            timelinePlayer.bind(to: config)
+        }
         .alert(
             "Animation Library Updated",
             isPresented: Binding(
@@ -346,6 +364,32 @@ struct ContentView: View {
     /// the window's lifetime. Rebuilding it on every redraw would drop the
     /// list's `@Published` identity and re-read the file each time.
     @MainActor
+    /// One `TimelinePlayer` per Nexus animation, made on demand and kept
+    /// for the window's lifetime — the same arrangement `SectionStores`
+    /// uses, and for the same reason: rebuilding one on every redraw would
+    /// re-read its file and drop the strip's selection.
+    ///
+    /// `nil` is the scratch sequence, which is what the ring has before
+    /// anything is saved.
+    private final class TimelinePlayers: ObservableObject {
+        private var players: [UUID: TimelinePlayer] = [:]
+        private let scratch = TimelinePlayer()
+
+        func player(for id: UUID?) -> TimelinePlayer {
+            guard let id else { return scratch }
+            if let existing = players[id] { return existing }
+            let made = TimelinePlayer(fileName: TimelinePlayer.animationFileName(id))
+            players[id] = made
+            return made
+        }
+
+        func forget(_ id: UUID) { players[id] = nil }
+    }
+
+    private var timelinePlayer: TimelinePlayer {
+        timelinePlayers.player(for: selectedPresetID)
+    }
+
     private final class SectionStores: ObservableObject {
         private var stores: [UUID: RingPresetStore] = [:]
 
@@ -407,6 +451,10 @@ struct ContentView: View {
     private var designerDetail: some View {
         DetailPane(tab: $designerTab) {
             PreviewTab(config: config, player: timelinePlayer, stageState: stageState)
+                // Rebuilt when the selected animation changes, so the strip
+                // and the player it drives belong to that animation —
+                // exactly what `.id(preset.id)` does for a use case.
+                .id(selectedPresetID)
         } code: {
             ExportView(config: config)
         }

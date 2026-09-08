@@ -17,6 +17,15 @@ struct BatchExportView: View {
     let presets: [RingPreset]
     let sectionName: String
     let colorScheme: ColorScheme
+    /// Where to look for an animation's own sequence, if the section it
+    /// came from keeps them. Nexus animations and use cases both do; cues
+    /// don't, and pass nothing.
+    ///
+    /// Without this, exporting a multi-step animation rendered its base
+    /// settings and silently dropped every step — which is what "it isn't
+    /// exporting the timeline" turned out to be. It affected the 22
+    /// imported use cases that came in as sequences, too.
+    var timelineFileName: ((RingPreset) -> String)?
     let onDismiss: () -> Void
 
     @State private var exportGIF = true
@@ -99,22 +108,27 @@ struct BatchExportView: View {
     }
 
     private var optionsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Toggle("GIF", isOn: $exportGIF)
-            Toggle("Movie (.mov)", isOn: $exportMovie)
+        Form {
+            Section("Files") {
+                Toggle("Animated GIF", isOn: $exportGIF)
+                Toggle("Movie (.mov)", isOn: $exportMovie)
+            }
 
             ExportCanvasOptionsView(settings: $canvasSettings)
 
-            Stepper(value: $loopCount, in: 1...8) {
-                Text("Loops per file: \(loopCount)")
+            Section("Length") {
+                Stepper(value: $loopCount, in: 1...8) {
+                    Text(loopCount == 1 ? "1 loop" : "\(loopCount) loops")
+                }
+                Text(canvasSettings.effectiveTransparent
+                     ? "Named after each animation; existing files are replaced. Movies keep soft edges; GIF transparency is 1-bit, so its edges are harder."
+                     : "Named after each animation; existing files are replaced.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(canvasSettings.effectiveTransparent
-                 ? "Files are named after each animation. Existing files with the same name are replaced. Movies are written as HEVC with alpha; GIF transparency is 1-bit, so its edges will be harder."
-                 : "Files are named after each animation. Existing files with the same name are replaced.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
+        .formStyle(.grouped)
     }
 
     @ViewBuilder
@@ -259,17 +273,34 @@ struct BatchExportView: View {
                     // A batch of framed-phone exports held frame by frame
                     // would be gigabytes of images waiting on an encoder
                     // that consumes them in order anyway.
-                    try await AnimationExporter.export(
-                        config: config,
-                        colorScheme: canvasSettings.appearance,
-                        loopCount: loopCount,
-                        transparent: canvasSettings.effectiveTransparent,
-                        canvas: canvasSettings.canvas,
-                        gif: exportGIF ? base.appendingPathExtension("gif") : nil,
-                        movie: exportMovie ? base.appendingPathExtension("mov") : nil
-                    ) { value in
+                    let sequence = timelineFileName
+                        .flatMap { TimelinePlayer.storedTimeline(fileName: $0(preset)) }
+                    let onFrame: @MainActor (Double) -> Void = { value in
                         frameProgress = value
                         items[index].state = .rendering(value)
+                    }
+                    if let sequence {
+                        try await AnimationExporter.export(
+                            timeline: sequence,
+                            colorScheme: canvasSettings.appearance,
+                            loopCount: loopCount,
+                            transparent: canvasSettings.effectiveTransparent,
+                            canvas: canvasSettings.canvas,
+                            gif: exportGIF ? base.appendingPathExtension("gif") : nil,
+                            movie: exportMovie ? base.appendingPathExtension("mov") : nil,
+                            onProgress: onFrame
+                        )
+                    } else {
+                        try await AnimationExporter.export(
+                            config: config,
+                            colorScheme: canvasSettings.appearance,
+                            loopCount: loopCount,
+                            transparent: canvasSettings.effectiveTransparent,
+                            canvas: canvasSettings.canvas,
+                            gif: exportGIF ? base.appendingPathExtension("gif") : nil,
+                            movie: exportMovie ? base.appendingPathExtension("mov") : nil,
+                            onProgress: onFrame
+                        )
                     }
                     items[index].state = .done
                 } catch {

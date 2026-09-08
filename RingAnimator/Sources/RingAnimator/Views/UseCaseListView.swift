@@ -179,7 +179,8 @@ struct UseCaseListView: View {
                 sectionName: renderTargets.count == 1
                     ? renderTargets[0].name
                     : "Use Cases",
-                colorScheme: .dark
+                colorScheme: .dark,
+                timelineFileName: { TimelinePlayer.useCaseFileName($0.id) }
             ) { renderTargets = [] }
         }
         .sheet(isPresented: $showingNewDialog) { newDialog }
@@ -368,8 +369,6 @@ private struct UseCaseRow: View {
     let onAddToTimeline: () -> Void
     let onDelete: () -> Void
 
-    @StateObject private var previewConfig = RingConfig()
-
     /// Whether this one shipped with the app, and whether it's been
     /// changed since. Recomputed when the preset changes rather than
     /// stored, so an edit updates the badge as soon as it's saved.
@@ -379,10 +378,11 @@ private struct UseCaseRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            RingView(config: previewConfig, diameter: 22, frameRate: RingView.thumbnailFrameRate)
-                .frame(width: 28, height: 28)
-                .onAppear { preset.apply(to: previewConfig) }
-                .onChange(of: preset) { _, newValue in newValue.apply(to: previewConfig) }
+            AnimationThumbnail(
+                preset: preset,
+                diameter: 22,
+                timelineFileName: TimelinePlayer.useCaseFileName(preset.id)
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text(preset.name)
                     .font(.body.weight(.medium))

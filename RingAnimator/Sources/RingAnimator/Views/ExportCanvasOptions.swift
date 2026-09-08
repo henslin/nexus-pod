@@ -47,48 +47,46 @@ struct ExportCanvasOptionsView: View {
     /// list and shows it here.
     var showsTransparency = true
 
+    /// Emitted as `Section`s so both export sheets can put them in a
+    /// grouped `Form` — the controls had grown to nine in one flat stack,
+    /// where nothing said which of them changed the picture and which
+    /// changed the file.
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
-                if showsTransparency {
-                    Toggle("Transparent background", isOn: $settings.transparent)
-                        .disabled(settings.transparencyUnavailable)
-                }
-                Toggle("Include the app UI", isOn: $settings.includeAppUI)
-                if settings.includeAppUI {
-                    Toggle("Include the iPhone frame", isOn: $settings.includeDeviceFrame)
-                        .padding(.leading, 18)
+        Section("Appearance") {
+            Picker("Theme", selection: $settings.appearance) {
+                Text("Light").tag(ColorScheme.light)
+                Text("Dark").tag(ColorScheme.dark)
+            }
+            .pickerStyle(.segmented)
+
+            if showsTransparency {
+                Toggle("Transparent background", isOn: $settings.transparent)
+                    .disabled(settings.transparencyUnavailable)
+                if settings.transparencyUnavailable {
+                    Text("A full screen has no transparent edges to keep.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .toggleStyle(.checkbox)
+        }
 
+        Section("Frame it") {
+            Toggle("Show the app around it", isOn: $settings.includeAppUI)
             if settings.includeAppUI {
                 Picker("Tab", selection: $settings.tab) {
                     ForEach(DemoTab.allCases) { tab in
                         Text(tab.rawValue).tag(tab)
                     }
                 }
-                .pickerStyle(.menu)
-
+                Toggle("Show the iPhone", isOn: $settings.includeDeviceFrame)
                 if settings.includeDeviceFrame {
                     Picker("Finish", selection: $settings.finish) {
                         ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
                             Text(finish.rawValue).tag(finish)
                         }
                     }
-                    .pickerStyle(.menu)
                 }
-            }
-
-            Picker("Appearance", selection: $settings.appearance) {
-                Text("Light").tag(ColorScheme.light)
-                Text("Dark").tag(ColorScheme.dark)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            if settings.includeAppUI {
-                Label(note, systemImage: "iphone")
+                Text(note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

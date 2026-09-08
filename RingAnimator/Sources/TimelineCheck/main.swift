@@ -113,6 +113,64 @@ func run() -> Int32 {
               "speed \(player.timeline.segments.first?.snapshot.speed ?? -1)")
     }
 
+    // 5. Each Nexus animation has its own sequence.
+    //
+    //    It used to have one shared document: selecting a different saved
+    //    animation left the previous one's steps in the strip, and a new
+    //    animation opened holding them.
+    do {
+        let first = UUID(), second = UUID()
+        for id in [first, second] {
+            TimelinePlayer.deleteStore(fileName: TimelinePlayer.animationFileName(id))
+        }
+        let one = TimelinePlayer(fileName: TimelinePlayer.animationFileName(first))
+        one.bind(to: RingConfig())
+        one.addSegment(from: a)
+        settle()
+
+        let two = TimelinePlayer(fileName: TimelinePlayer.animationFileName(second))
+        check("a different animation starts with an empty sequence",
+              two.timeline.segments.isEmpty,
+              "\(two.timeline.segments.count) steps")
+
+        two.bind(to: RingConfig())
+        two.addSegment(from: b)
+        settle()
+
+        let reloaded = TimelinePlayer(fileName: TimelinePlayer.animationFileName(first))
+        check("each animation keeps its own steps",
+              reloaded.timeline.segments.count == 1
+                  && reloaded.timeline.segments.first?.snapshot.firmwarePatternStream == a.firmwarePatternStream,
+              "first animation holds \(reloaded.timeline.segments.map(\.name).joined(separator: ", "))")
+
+        for id in [first, second] {
+            TimelinePlayer.deleteStore(fileName: TimelinePlayer.animationFileName(id))
+        }
+    }
+
+    // 6. What batch export asks before it renders: does this animation
+    //    have a sequence? Getting `nil` here is what made exporting a
+    //    multi-step animation quietly render its base settings instead.
+    do {
+        let id = UUID()
+        let name = TimelinePlayer.animationFileName(id)
+        TimelinePlayer.deleteStore(fileName: name)
+        check("an animation with no sequence reports none",
+              TimelinePlayer.storedTimeline(fileName: name) == nil, "nil")
+
+        let player = TimelinePlayer(fileName: name)
+        player.bind(to: RingConfig())
+        player.addSegment(from: a)
+        player.addSegment(from: b)
+        settle()
+
+        let found = TimelinePlayer.storedTimeline(fileName: name)
+        check("an animation with steps hands them to the exporter",
+              found?.segments.count == 2,
+              "\(found?.segments.count ?? 0) steps, \(String(format: "%.1f", found?.duration ?? 0))s")
+        TimelinePlayer.deleteStore(fileName: name)
+    }
+
     TimelinePlayer.deleteStore(fileName: "timeline-check.json")
     return failed ? 1 : 0
 }
