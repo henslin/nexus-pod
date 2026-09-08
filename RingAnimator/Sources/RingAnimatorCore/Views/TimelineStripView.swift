@@ -127,11 +127,6 @@ public struct TimelineStripView: View {
         // needs the explicit treatment (buttons inside a List/Form/toolbar
         // get System-applied glass for free; see `ringGlassButtonStyle`).
         .glassBackground(in: Rectangle())
-        #if os(macOS)
-        // The player registers timeline edits here, so ⌘Z is the ordinary
-        // Edit ▸ Undo rather than something this view reimplements.
-        .onAppear { player.undoManager = undoManager }
-        #endif
     }
 
     // MARK: - Transport
@@ -447,10 +442,6 @@ public struct TimelineStripView: View {
     }
 
     #if os(macOS)
-    /// The window's undo manager, handed to the player so timeline edits
-    /// land on the standard Edit ▸ Undo.
-    @Environment(\.undoManager) private var undoManager
-
     /// A resize in progress: the block it started on, the width that
     /// block had, how far the pointer has moved, and what a second was
     /// worth on the track when the drag began.

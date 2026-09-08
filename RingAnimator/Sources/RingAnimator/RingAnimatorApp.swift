@@ -6,9 +6,20 @@ import AppKit
 struct RingPodApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    /// Owned here, because nothing else provides one.
+    ///
+    /// SwiftUI puts an `UndoManager` in the environment for document
+    /// scenes. This is a plain `WindowGroup`, so `\.undoManager` was nil,
+    /// every timeline edit registered its undo against nothing, and there
+    /// was no Edit ▸ Undo item for ⌘Z to hit either — two halves of the
+    /// same gap, which is why undo looked wired up and did nothing.
+    @State private var undoManager = UndoManager()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // Passed rather than put in the environment: `\.undoManager`
+            // is read-only, so a non-document app can't install one there.
+            ContentView(undoManager: undoManager)
                 .frame(minWidth: 1040, minHeight: 720)
                 // TipKit keeps its own record of which tips have been shown
                 // and dismissed, which is why nothing here owns a
@@ -26,6 +37,15 @@ struct RingPodApp: App {
         // notification is what `ContentView` listens for — a command can't
         // reach into the window's own state directly.
         .commands {
+            // The standard Edit ▸ Undo pair, which a document scene would
+            // have brought along.
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") { undoManager.undo() }
+                    .keyboardShortcut("z", modifiers: .command)
+                Button("Redo") { undoManager.redo() }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
+
             CommandGroup(replacing: .help) {
                 Button("What's New in Nexus Pod") {
                     NotificationCenter.default.post(name: .showWhatsNew, object: nil)

@@ -29,6 +29,10 @@ struct ContentView: View {
     /// The sequence for whichever saved animation is selected in Nexus —
     /// or the scratch one when nothing is. See `TimelinePlayers`.
     @StateObject private var timelinePlayers = TimelinePlayers()
+    /// The app's undo manager — see `RingPodApp`, which owns it and puts
+    /// Undo/Redo in the Edit menu.
+    let undoManager: UndoManager
+
     /// Nexus's selected saved animation. Hoisted out of `SavedPresetsView`
     /// because the timeline is keyed by it, and only `ContentView` can own
     /// something both columns and the detail pane need.
@@ -266,6 +270,7 @@ struct ContentView: View {
             // `@StateObject`s aren't guaranteed to be constructed until the
             // view first appears, and binding needs both objects to exist.
             timelinePlayer.bind(to: config)
+            timelinePlayer.undoManager = undoManager
             // Reconcile the use cases with whatever library this build
             // ships — see `UseCaseLibrary.sync` for what it will and won't
             // overwrite. Silent unless something actually moved.
@@ -277,6 +282,7 @@ struct ContentView: View {
             // isn't bound can't load a step into the Controls panel — the
             // strip would move while the ring stayed on the last one.
             timelinePlayer.bind(to: config)
+            timelinePlayer.undoManager = undoManager
         }
         .alert(
             "Animation Library Updated",
