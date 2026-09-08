@@ -175,7 +175,7 @@ for (name, reference) in recorded.sorted(by: { $0.key < $1.key }) {
         // One pass only. The wrap point is a boundary the two sides define
         // differently and it isn't part of the animation.
         guard frame.t < reference.total_ms else { continue }
-        let mine = stream.frame(atSeconds: frame.t / 1000, ledCount: ringLEDs)
+        let mine = stream.commandedFrame(atSeconds: frame.t / 1000, ledCount: ringLEDs)
         for led in 0..<ringLEDs {
             let explicit = frame.rgb?[led]
             let expected: [Int]? = explicit ?? (frame.sel[led] == 0
@@ -193,9 +193,62 @@ for (name, reference) in recorded.sorted(by: { $0.key < $1.key }) {
 
 print("\(ledFrames) LED-frames across \(recorded.count) recorded streams")
 
+// MARK: - The fade engine
+//
+// The commands above are only half the picture. The ring holds two colour
+// registers, so any pattern showing more than two colours at once builds
+// them out of the fade engine: Color1 is rewritten every tick, and each LED
+// that drops out ramps toward black along a hue-preserving line, freezing at
+// whatever was live when it was deselected. Ignoring that — which the
+// replay used to — rendered a 120-hue rainbow as two colours.
+//
+// So: the rainbows have to show a rainbow, and the patterns that switch
+// pixels off still have to go dark.
+
+@MainActor
+func distinctLitColours(_ stream: FirmwarePatternStream, atMs t: Double) -> Int {
+    let frame = stream.frame(atSeconds: t / 1000, ledCount: ringLEDs)
+    var seen: Set<String> = []
+    for led in frame.leds {
+        guard let led, let parts = channels(led) as [Int]? else { continue }
+        seen.insert(parts.map(String.init).joined(separator: ","))
+    }
+    return seen.count
+}
+
+var fadeFailures = 0
+@MainActor
+func fadeCheck(_ label: String, _ ok: Bool, _ detail: String) {
+    print("\(ok ? "✅" : "❌") \(label) — \(detail)")
+    if !ok { fadeFailures += 1 }
+}
+
+for name in ["spinning_rainbow", "spinning_rainbow_quad"] {
+    guard let stream = FirmwarePatternStream.stream(named: name) else { continue }
+    let total = Double(stream.totalMs)
+    let peak = stride(from: 0.0, to: total, by: 100).map { distinctLitColours(stream, atMs: $0) }.max() ?? 0
+    let registers = Set(stream.events.filter { $0.kind == 1 }.map { "\($0.a),\($0.b),\($0.c)" }).count
+    fadeCheck("\(name) shows its hues", peak > 2,
+              "\(peak) colours lit at once, out of \(registers) the pattern walks through")
+}
+
+// The other direction: a pattern built on hard on/off edges must still go
+// fully dark, or "fade" has become "everything smears".
+if let alarm = FirmwarePatternStream.stream(named: "alarm_sos") {
+    let total = Double(alarm.totalMs)
+    let darkFrames = stride(from: 0.0, to: total, by: 50)
+        .filter { distinctLitColours(alarm, atMs: $0) == 0 }.count
+    fadeCheck("alarm_sos still goes dark between flashes", darkFrames > 0,
+              "\(darkFrames) fully dark frames")
+}
+
+if fadeFailures > 0 { failures += fadeFailures }
+
+
 if failures == 0 && streamFailures == 0 {
     print("\n✅ every field and every stream reproduces the firmware exactly")
     exit(0)
 }
 print("\n❌ \(failures) field(s) and \(streamFailures) stream(s) no longer match the firmware")
 exit(1)
+
