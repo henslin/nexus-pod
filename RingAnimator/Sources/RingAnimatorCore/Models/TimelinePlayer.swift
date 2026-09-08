@@ -161,8 +161,21 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
 
     /// Wires this player to the app's live `RingConfig`. Call once, from
     /// the view that owns both.
+    /// Which segment the bound config was last loaded *from*.
+    ///
+    /// The capture below writes the live config into the selected step, and
+    /// on its own that is only correct while the two agree. If the config
+    /// is holding one animation and a different step is selected, the next
+    /// edit silently overwrites that step with the other one's settings —
+    /// keeping its name and length, so the block still reads correctly
+    /// while its contents are somebody else's. That is not hypothetical:
+    /// it is what pasting several use cases and then editing produced, and
+    /// `TimelineCheck` reproduces it.
+    private var configSourceSegmentID: UUID?
+
     public func bind(to config: RingConfig) {
         boundConfig = config
+        configSourceSegmentID = nil
         cancellables.removeAll()
 
         config.objectWillChange
@@ -170,6 +183,21 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
                 self?.scheduleCaptureIntoSelectedSegment()
             }
             .store(in: &cancellables)
+    }
+
+    /// Say that something has loaded a *different* animation into the
+    /// bound config — loading a saved animation into the ring, say.
+    ///
+    /// Without this the next edit captures that animation into whichever
+    /// step happens to be selected, overwriting it while leaving its name
+    /// and length in place, so the block still reads correctly and its
+    /// contents are somebody else's. There are two such callers, both in
+    /// `SavedPresetsView`; anything new that replaces the live config
+    /// wholesale belongs here too.
+    public func noteConfigReplaced() {
+        configSourceSegmentID = nil
+        pendingCapture?.cancel()
+        pendingCapture = nil
     }
 
     /// Loads a segment's snapshot into the bound config and marks it as the
@@ -180,8 +208,13 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
             return
         }
         selectedSegmentID = id
+        // A capture queued under the previous selection must not land now
+        // that the selection has moved.
+        pendingCapture?.cancel()
+        pendingCapture = nil
 
         if let config = boundConfig {
+            configSourceSegmentID = id
             isApplyingSnapshot = true
             segment.snapshot.apply(to: config)
             // Cleared on the next runloop turn, not synchronously: the
@@ -210,6 +243,10 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
             let config = boundConfig,
             let index = timeline.segments.firstIndex(where: { $0.id == id })
         else { return }
+        // Only write back into the step this config was loaded from.
+        // Anything else is one animation's settings landing on another
+        // step — see `configSourceSegmentID`.
+        guard configSourceSegmentID == id else { return }
 
         // Only the snapshot is replaced — the segment's own identity, name,
         // length and fades are timeline-level properties that the Controls

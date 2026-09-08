@@ -206,6 +206,15 @@ struct AnimationExportView: View {
         }
         .padding(20)
         .frame(width: 360)
+        .onAppear {
+            // The default belongs to *this* opening of the sheet, not to
+            // whenever the view was first constructed. `@State`'s initial
+            // value is applied once; open Export while the sequence is
+            // empty, then build one and open it again, and the picker is
+            // still sitting on Live Ring — so Export quietly writes the
+            // selected step instead of the sequence you just built.
+            source = timeline.isEmpty ? .live : .timeline
+        }
     }
 
 

@@ -85,6 +85,13 @@ step "The exported diode field computes what the app computes"
 swift run --scratch-path "$SCRATCH" DiffCheck 2>&1 | grep -E '^(exported|  )'
 result "${PIPESTATUS[0]}" "DiffCheck"
 
+# Silently rewriting a step someone built is data loss with a friendly
+# face — the block keeps its name while its contents become another
+# animation.
+step "The Controls panel writes back into the right timeline step"
+swift run --scratch-path "$SCRATCH" TimelineCheck 2>&1 | grep -E '^(timeline|  )'
+result "${PIPESTATUS[0]}" "TimelineCheck"
+
 # The one piece of the app that runs unattended over someone's own work.
 # Every branch, including the ones whose correct behaviour is to do
 # nothing.

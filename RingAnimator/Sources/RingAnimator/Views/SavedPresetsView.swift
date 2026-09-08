@@ -66,7 +66,12 @@ struct SavedPresetsView: View {
                         ForEach(store.presets) { preset in
                             SavedAnimationRow(
                                 preset: preset,
-                                onLoad: { preset.apply(to: config) },
+                                onLoad: {
+                                    preset.apply(to: config)
+                                    // Controls is now showing this saved
+                                    // animation, not the selected step.
+                                    timelinePlayer.noteConfigReplaced()
+                                },
                                 onRename: {
                                     renameText = preset.name
                                     renamingPreset = preset
@@ -86,6 +91,11 @@ struct SavedPresetsView: View {
             .onChange(of: selectedPresetID) { _, newValue in
                 guard let id = newValue, let preset = store.presets.first(where: { $0.id == id }) else { return }
                 preset.apply(to: config)
+                // Same as `onLoad` above, and the easier one to trip:
+                // clicking a saved animation loads it into the ring, and
+                // without this the next edit writes it over whichever
+                // timeline step was selected.
+                timelinePlayer.noteConfigReplaced()
             }
         } actions: {
             ColumnActionGroup {

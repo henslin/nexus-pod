@@ -131,6 +131,14 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/SyncCheck"
         ),
+        // The Controls panel writes back into the selected timeline step;
+        // this checks it writes into the right one — see the header
+        // comment in Sources/TimelineCheck/main.swift.
+        .executableTarget(
+            name: "TimelineCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/TimelineCheck"
+        ),
         // Proves a transparent export really carries alpha all the way to
         // the file — see the header comment in Sources/AlphaCheck/main.swift.
         // Not part of the app; `swift run AlphaCheck` before a release.
