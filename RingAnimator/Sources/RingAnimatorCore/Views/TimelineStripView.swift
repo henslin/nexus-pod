@@ -217,23 +217,12 @@ public struct TimelineStripView: View {
             }
             #endif
 
-            if let selected = player.selectedSegmentID {
-                Button {
-                    player.duplicateSegment(selected)
-                } label: {
-                    Image(systemName: "plus.square.on.square")
-                }
-                .help("Duplicate the selected step")
-                .ringGlassButtonStyle()
-
-                Button(role: .destructive) {
-                    player.deleteSegment(selected)
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .help("Delete the selected step")
-                .ringGlassButtonStyle()
-            }
+            // Duplicate and Delete used to sit here, next to Add Step, as
+            // two icons that only meant anything once something was
+            // selected. They act *on a step*, so they live on the step now
+            // — right-click a block. What stays here is what's always
+            // available: adding one, and pasting animations in from
+            // elsewhere, which isn't duplication and isn't per-step.
         }
     }
 
@@ -435,6 +424,65 @@ public struct TimelineStripView: View {
         return 0
     }
 
+    #if os(macOS)
+    /// Which step is being resized, what it measured when the drag began,
+    /// and how many points a second was worth at that moment.
+    ///
+    /// The scale is captured once rather than recomputed: blocks are laid
+    /// out as a proportion of the whole timeline, so lengthening one
+    /// narrows the others *while you drag*. Reading the live scale would
+    /// make the block chase the pointer at a changing rate.
+    @State private var resizing: (id: UUID, seconds: Double, pointsPerSecond: CGFloat)?
+
+    /// The trailing edge, draggable — the iMovie handle.
+    private func resizeHandle(_ segment: TimelineSegment, width: CGFloat) -> some View {
+        let id = segment.id
+        let isSelected = player.selectedSegmentID == id
+        return Capsule()
+            .fill(Color.primary.opacity(isSelected ? 0.55 : 0.22))
+            .frame(width: 3, height: 20)
+            .padding(.trailing, 3)
+            .frame(width: 12, height: Self.trackHeight)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            // High priority so it wins over the block's own reorder drag,
+            // which starts from anywhere on the block including here.
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        if resizing?.id != id {
+                            let seconds = segment.length.duration(speed: segment.speed)
+                            resizing = (id, seconds, max(width / CGFloat(max(seconds, 0.01)), 1))
+                            player.select(id)
+                        }
+                        guard let resizing else { return }
+                        let seconds = max(
+                            resizing.seconds + Double(value.translation.width / resizing.pointsPerSecond),
+                            0.1
+                        )
+                        setLength(seconds, for: segment)
+                    }
+                    .onEnded { _ in resizing = nil }
+            )
+    }
+
+    /// Writes a duration back in whichever unit the step is measured in,
+    /// so resizing a step counted in rotations doesn't silently convert it
+    /// to seconds.
+    private func setLength(_ seconds: Double, for segment: TimelineSegment) {
+        let id = segment.id
+        switch segment.length {
+        case .seconds:
+            player.updateSegment(id) { $0.length = .seconds(seconds) }
+        case .rotations:
+            let speed = max(segment.speed, 0.05)
+            player.updateSegment(id) { $0.length = .rotations(max(seconds * speed, 0.05)) }
+        }
+    }
+    #endif
+
     private func block(_ segment: TimelineSegment, width: CGFloat) -> some View {
         let isSelected = player.selectedSegmentID == segment.id
         return VStack(alignment: .leading, spacing: 3) {
@@ -456,12 +504,26 @@ public struct TimelineStripView: View {
         .frame(width: width, height: Self.trackHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.28) : Color.secondary.opacity(0.14))
+                .fill(isSelected ? Color.accentColor.opacity(0.34) : Color.secondary.opacity(0.14))
         )
         .overlay(
+            // 1.5pt of accent against a coloured fill was too quiet to
+            // find at a glance in a row of blocks. The accent colour
+            // rather than a fixed blue or yellow: it's the selection
+            // colour the rest of the system is already using, including
+            // whatever the person set it to.
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
+                .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 3)
         )
+        #if os(macOS)
+        .contextMenu {
+            Button("Duplicate") { player.duplicateSegment(segment.id) }
+            Button("Copy") { AnimationPasteboard.copy([segment.snapshot]) }
+            Divider()
+            Button("Delete", role: .destructive) { player.deleteSegment(segment.id) }
+        }
+        .overlay(alignment: .trailing) { resizeHandle(segment, width: width) }
+        #endif
         // Lifted while dragging. Deliberately a scale/shadow rather than
         // following the pointer with an offset: the block is already being
         // reordered live, so it's under the pointer anyway, and an offset
@@ -600,36 +662,59 @@ public struct TimelineStripView: View {
         }
     }
 
+    /// Type it or step it.
+    ///
+    /// The stepper alone meant 0.1 at a time — forty clicks to say four
+    /// seconds, and no way to say 12.5 without holding it down and
+    /// overshooting. The field takes a number directly; the stepper stays
+    /// for nudging.
     @ViewBuilder
     private func lengthField(for segment: TimelineSegment) -> some View {
         let id = segment.id
         switch segment.length {
         case .seconds(let value):
-            Stepper(
-                value: Binding(
+            durationRow(
+                label: "Length",
+                unit: "s",
+                range: 0.1...600,
+                binding: Binding(
                     get: { value },
-                    set: { newValue in player.updateSegment(id) { $0.length = .seconds(max(newValue, 0)) } }
-                ),
-                in: 0.1...60,
-                step: 0.1
-            ) {
-                Text(String(format: "Length %.1fs", value))
-                    .font(.caption)
-                    .monospacedDigit()
-            }
+                    set: { new in player.updateSegment(id) { $0.length = .seconds(max(new, 0.1)) } }
+                )
+            )
         case .rotations(let value):
-            Stepper(
-                value: Binding(
+            durationRow(
+                label: "Rotations",
+                unit: "×",
+                range: 0.25...100,
+                binding: Binding(
                     get: { value },
-                    set: { newValue in player.updateSegment(id) { $0.length = .rotations(max(newValue, 0)) } }
-                ),
-                in: 0.25...100,
-                step: 0.25
-            ) {
-                Text(String(format: "Rotations %.2g", value))
-                    .font(.caption)
-                    .monospacedDigit()
-            }
+                    set: { new in player.updateSegment(id) { $0.length = .rotations(max(new, 0.25)) } }
+                )
+            )
+        }
+    }
+
+    private func durationRow(
+        label: String,
+        unit: String,
+        range: ClosedRange<Double>,
+        binding: Binding<Double>
+    ) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.caption)
+            TextField(label, value: binding, format: .number.precision(.fractionLength(0...2)))
+                .labelsHidden()
+                .multilineTextAlignment(.trailing)
+                .monospacedDigit()
+                .font(.caption)
+                .frame(width: 46)
+            Text(unit)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Stepper(label, value: binding, in: range, step: 0.1)
+                .labelsHidden()
         }
     }
 }
