@@ -304,7 +304,17 @@ public struct TimelineStripView: View {
                 ZStack(alignment: .topLeading) {
                     HStack(spacing: 4) {
                         ForEach(Array(player.timeline.segments.enumerated()), id: \.element.id) { index, segment in
-                            block(segment, width: widths[index])
+                            block(
+                                segment,
+                                width: widths[index],
+                                // The track's real scale, not this block's
+                                // own width over its own duration — a
+                                // short step is floored at `minBlockWidth`
+                                // and would report a scale nothing else
+                                // shares.
+                                pointsPerSecond: widths.reduce(0, +)
+                                    / CGFloat(max(player.timeline.duration, 0.01))
+                            )
                                 .gesture(reorderGesture(for: segment, widths: widths))
                         }
                     }
@@ -389,23 +399,6 @@ public struct TimelineStripView: View {
         let segments = player.timeline.segments
         guard !segments.isEmpty else { return [] }
 
-        #if os(macOS)
-        // While a step is being resized, lay the track out at a *fixed*
-        // scale rather than fitting it to the width.
-        //
-        // Fitting means every width is a share of the total, so
-        // lengthening one step narrows all the others as you drag — the
-        // edge you're holding slides away from the pointer and every
-        // other block twitches. Pinning points-per-second to what it was
-        // when the drag began makes the edge follow the pointer exactly
-        // and leaves the rest alone. The track can overflow its width
-        // mid-drag; it settles back on release.
-        if let resizing {
-            return segments.map {
-                max(CGFloat($0.length.duration(speed: $0.speed)) * resizing.pointsPerSecond, Self.minBlockWidth)
-            }
-        }
-        #endif
 
         let spacing = CGFloat(max(segments.count - 1, 0)) * 4
         let available = max(totalWidth - spacing, Self.minBlockWidth)
@@ -454,20 +447,23 @@ public struct TimelineStripView: View {
     }
 
     #if os(macOS)
-    /// Which step is being resized, what it measured when the drag began,
-    /// and how many points a second was worth at that moment.
-    ///
-    /// The scale is captured once rather than recomputed: blocks are laid
-    /// out as a proportion of the whole timeline, so lengthening one
-    /// narrows the others *while you drag*. Reading the live scale would
-    /// make the block chase the pointer at a changing rate.
-    @State private var resizing: (id: UUID, seconds: Double, pointsPerSecond: CGFloat)?
     /// The window's undo manager, handed to the player so timeline edits
     /// land on the standard Edit ▸ Undo.
     @Environment(\.undoManager) private var undoManager
 
+    /// A resize in progress: the block it started on, the width that
+    /// block had, how far the pointer has moved, and what a second was
+    /// worth on the track when the drag began.
+    ///
+    /// Nothing is written to the timeline until the drag ends. Writing per
+    /// frame meant every block was re-laid-out on every tick — the widths
+    /// are shares of the whole, so lengthening one narrowed the rest and
+    /// the edge crawled away from the pointer. Now the only thing that
+    /// moves during a drag is the width of the block being dragged.
+    @State private var resizing: (id: UUID, startWidth: CGFloat, translation: CGFloat, pointsPerSecond: CGFloat)?
+
     /// The trailing edge, draggable — the iMovie handle.
-    private func resizeHandle(_ segment: TimelineSegment, width: CGFloat) -> some View {
+    private func resizeHandle(_ segment: TimelineSegment, width: CGFloat, pointsPerSecond: CGFloat) -> some View {
         let id = segment.id
         let isSelected = player.selectedSegmentID == id
         return Capsule()
@@ -480,31 +476,42 @@ public struct TimelineStripView: View {
                 if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
             }
             // High priority so it wins over the block's own reorder drag,
-            // which starts from anywhere on the block including here.
+            // which can start from anywhere on the block including here.
             .highPriorityGesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
                         if resizing?.id != id {
-                            let seconds = segment.length.duration(speed: segment.speed)
-                            resizing = (id, seconds, max(width / CGFloat(max(seconds, 0.01)), 1))
+                            resizing = (id, width, 0, max(pointsPerSecond, 1))
                             player.select(id)
-                            // One undo step for the whole drag, not one
-                            // per frame.
-                            player.beginCoalescedEdit()
                         }
-                        guard let resizing else { return }
-                        let seconds = max(
-                            resizing.seconds + Double(value.translation.width / resizing.pointsPerSecond),
-                            0.1
-                        )
-                        setLength(seconds, for: segment)
+                        resizing?.translation = value.translation.width
                     }
                     .onEnded { _ in
-                        resizing = nil
+                        defer { resizing = nil }
+                        guard let resizing, resizing.id == id else { return }
+                        let points = max(resizing.startWidth + resizing.translation, Self.minBlockWidth)
+                        let seconds = max(Double(points / resizing.pointsPerSecond), 0.1)
+                        // Bracketed so the whole drag reads as one action
+                        // with a name, rather than "Edit Step".
+                        player.beginCoalescedEdit()
+                        setLength(seconds, for: segment)
                         player.endCoalescedEdit(named: "Resize Step")
                     }
             )
     }
+
+    /// What this block should be drawn at right now — its laid-out width,
+    /// or the live drag width while it's the one being resized.
+    private func displayWidth(_ segment: TimelineSegment, width: CGFloat) -> CGFloat {
+        guard let resizing, resizing.id == segment.id else { return width }
+        return max(resizing.startWidth + resizing.translation, Self.minBlockWidth)
+    }
+    #else
+    /// No resize handle on iOS, so the laid-out width is the width.
+    private func displayWidth(_ segment: TimelineSegment, width: CGFloat) -> CGFloat { width }
+    #endif
+
+    #if os(macOS)
 
     /// Writes a duration back in whichever unit the step is measured in,
     /// so resizing a step counted in rotations doesn't silently convert it
@@ -521,8 +528,9 @@ public struct TimelineStripView: View {
     }
     #endif
 
-    private func block(_ segment: TimelineSegment, width: CGFloat) -> some View {
+    private func block(_ segment: TimelineSegment, width laidOutWidth: CGFloat, pointsPerSecond: CGFloat) -> some View {
         let isSelected = player.selectedSegmentID == segment.id
+        let width = displayWidth(segment, width: laidOutWidth)
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
                 StepPreview(snapshot: segment.snapshot)
@@ -560,7 +568,9 @@ public struct TimelineStripView: View {
             Divider()
             Button("Delete", role: .destructive) { player.deleteSegment(segment.id) }
         }
-        .overlay(alignment: .trailing) { resizeHandle(segment, width: width) }
+        .overlay(alignment: .trailing) {
+            resizeHandle(segment, width: width, pointsPerSecond: pointsPerSecond)
+        }
         #endif
         // Lifted while dragging. Deliberately a scale/shadow rather than
         // following the pointer with an offset: the block is already being
