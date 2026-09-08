@@ -14,6 +14,10 @@ import RingAnimatorCore
 struct UseCaseListView: View {
     @ObservedObject var store: RingPresetStore
     @Binding var selectedUseCaseID: RingPreset.ID?
+    /// Nexus's timeline, so an animation here can be sent there as a step.
+    /// Passed in rather than reached for: this column is also every
+    /// user-made section, and all of them build into the same sequence.
+    @ObservedObject var nexusTimeline: TimelinePlayer
 
     /// Local rather than hoisted into `ContentView` the way the Cue
     /// Library's is: this view is also every user-made section, keyed by
@@ -58,6 +62,8 @@ struct UseCaseListView: View {
                     renamingUseCase = preset
                 },
                 onExport: { exportSingle(preset) },
+                onCopy: { AnimationPasteboard.copy([preset]) },
+                onAddToTimeline: { nexusTimeline.addSegment(from: preset) },
                 onDelete: {
                     store.delete(preset.id)
                     // A use case's timeline lives in its own store file
@@ -358,6 +364,8 @@ private struct UseCaseRow: View {
     let preset: RingPreset
     let onRename: () -> Void
     let onExport: () -> Void
+    let onCopy: () -> Void
+    let onAddToTimeline: () -> Void
     let onDelete: () -> Void
 
     @StateObject private var previewConfig = RingConfig()
@@ -403,6 +411,12 @@ private struct UseCaseRow: View {
         .contextMenu {
             Button("Rename…", action: onRename)
             Button("Share…", action: onExport)
+            Divider()
+            // Both routes to the same place. "Add to Nexus Timeline" is
+            // one click when you know you want it; Copy is for building a
+            // sequence out of several, or for pasting somewhere else.
+            Button("Add to Nexus Timeline", action: onAddToTimeline)
+            Button("Copy", action: onCopy)
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
         }

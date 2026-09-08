@@ -80,6 +80,14 @@ public struct TimelineStripView: View {
     private var isCompact: Bool { false }
     #endif
 
+    #if os(macOS)
+    /// Read on appearance and when the app comes back to the front rather
+    /// than polled: `NSPasteboard` has no change notification, and asking
+    /// it on every redraw would decode JSON behind a strip that repaints
+    /// with the playhead.
+    @State private var pasteboardAnimations: [RingPreset] = []
+    #endif
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
@@ -168,11 +176,46 @@ public struct TimelineStripView: View {
             }
             .help("Add the current ring settings as a new step")
             .ringGlassButtonStyle()
+            #if os(macOS)
+            // On the always-present button, not the paste one — that
+            // appears only once there's something to paste, so it can't be
+            // what notices.
+            .onAppear { pasteboardAnimations = AnimationPasteboard.presets() }
+            .onReceive(NotificationCenter.default.publisher(
+                for: NSApplication.didBecomeActiveNotification
+            )) { _ in
+                pasteboardAnimations = AnimationPasteboard.presets()
+            }
+            #endif
             // A real popover, so it can extend past this pane's bounds and
             // position itself. The hand-rolled overlay this replaced was
             // clipped by the pane edge and sat too low — both of them
             // things a popover gets right for free.
             .popoverTip(addStepTip, arrowEdge: .bottom)
+
+            #if os(macOS)
+            // Appears only when there's something to paste, so it isn't a
+            // permanently dimmed button. Several at once land in the order
+            // they were copied, which is the point: a sequence is built
+            // out of animations that already exist.
+            if !pasteboardAnimations.isEmpty {
+                Button {
+                    for preset in pasteboardAnimations {
+                        player.addSegment(from: preset)
+                    }
+                    pasteboardAnimations = []
+                } label: {
+                    Label(
+                        pasteboardAnimations.count == 1
+                            ? "Paste Step"
+                            : "Paste \(pasteboardAnimations.count) Steps",
+                        systemImage: "doc.on.clipboard"
+                    )
+                }
+                .help("Add the copied animation to the sequence")
+                .ringGlassButtonStyle()
+            }
+            #endif
 
             if let selected = player.selectedSegmentID {
                 Button {

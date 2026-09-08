@@ -266,6 +266,42 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         return segment
     }
 
+    /// Appends a *saved* animation as a step — the path for building one
+    /// sequence out of several use cases.
+    ///
+    /// Unlike `addSegment(from config:)` this keeps the animation's own
+    /// name, because "Wifi Pairing" is what you want to see on the block
+    /// rather than "Step 4", and takes its length from the animation
+    /// rather than the 1.5s default: pasting a 17-second pairing sequence
+    /// and getting a second and a half of it is not what anyone means.
+    @discardableResult
+    public func addSegment(from preset: RingPreset) -> TimelineSegment {
+        let segment = TimelineSegment(
+            name: preset.name,
+            snapshot: preset,
+            length: .seconds(Self.naturalLength(of: preset))
+        )
+        timeline.segments.append(segment)
+        select(segment.id)
+        saveNow()
+        return segment
+    }
+
+    /// How long an animation runs before it repeats.
+    ///
+    /// A recorded stream knows exactly — that's its own recorded length.
+    /// Everything else loops once per cycle at its own speed, clamped to
+    /// the same 1...8 second range `AnimationExporter` uses when it picks
+    /// an export length, for the same reason: a very slow animation would
+    /// otherwise occupy the timeline for a minute.
+    static func naturalLength(of preset: RingPreset) -> Double {
+        if let name = preset.firmwarePatternStream,
+           let stream = FirmwarePatternStream.stream(named: name) {
+            return max(Double(stream.totalMs) / 1000, 0.1)
+        }
+        return min(max(1 / max(preset.speed, 0.05), 1), 8)
+    }
+
     /// Replaces the whole timeline with one an importer built, and
     /// selects its first step.
     ///

@@ -165,7 +165,11 @@ struct ContentView: View {
                 CueListView(store: cueStore, selectedCueID: $selectedCueID, searchText: $cueSearchText)
                     .listColumnWidth()
             case .useCases:
-                UseCaseListView(store: useCaseStore, selectedUseCaseID: $selectedUseCaseID)
+                UseCaseListView(
+                    store: useCaseStore,
+                    selectedUseCaseID: $selectedUseCaseID,
+                    nexusTimeline: timelinePlayer
+                )
                     .listColumnWidth()
             case .user(let id):
                 // The same list as Use Cases, over that section's own
@@ -173,7 +177,8 @@ struct ContentView: View {
                 // against the new store rather than keeping the old one.
                 UseCaseListView(
                     store: store(forSection: id),
-                    selectedUseCaseID: binding(forSection: id)
+                    selectedUseCaseID: binding(forSection: id),
+                    nexusTimeline: timelinePlayer
                 )
                 .id(id)
                 .listColumnWidth()
