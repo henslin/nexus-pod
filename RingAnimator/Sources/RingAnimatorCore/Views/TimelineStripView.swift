@@ -478,7 +478,16 @@ public struct TimelineStripView: View {
             // High priority so it wins over the block's own reorder drag,
             // which can start from anywhere on the block including here.
             .highPriorityGesture(
-                DragGesture(minimumDistance: 1)
+                // In the *track's* space, not the handle's own.
+                //
+                // A drag reports translation as the distance between two
+                // points measured in the given space — and `.local` is the
+                // handle, which slides right as the block it sits on grows.
+                // So the space moved with the thing the drag was moving,
+                // each event measured against a shifted origin, and the
+                // translation fed back into itself. The reorder gesture
+                // has always used the track for the same reason.
+                DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.trackSpace))
                     .onChanged { value in
                         if resizing?.id != id {
                             resizing = (id, width, 0, max(pointsPerSecond, 1))
