@@ -34,6 +34,7 @@ public enum ControlsSectionReset {
             config.smoothingEnabled = d.smoothingEnabled
             config.smoothingGradientRing = d.smoothingGradientRing
             config.smoothingSpread = d.smoothingSpread
+            config.smoothingColorBlend = d.smoothingColorBlend
             config.smoothingTrail = d.smoothingTrail
             config.smoothingFluidTime = d.smoothingFluidTime
 
@@ -57,6 +58,7 @@ public enum ControlsSectionReset {
 
         case "shape":
             config.lineWidth = d.lineWidth
+            config.ringScale = d.ringScale
             config.previewDiameter = d.previewDiameter
             config.diodeModeEnabled = d.diodeModeEnabled
             config.diodeCount = d.diodeCount

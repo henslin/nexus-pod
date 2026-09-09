@@ -147,6 +147,13 @@ let package = Package(
             dependencies: ["RingAnimatorCore"],
             path: "Sources/AlphaCheck"
         ),
+        // Proves Blend mixes colour without touching edges or brightness —
+        // see the header comment in Sources/BlendCheck/main.swift.
+        .executableTarget(
+            name: "BlendCheck",
+            dependencies: ["RingAnimatorCore"],
+            path: "Sources/BlendCheck"
+        ),
         // macOS design tool: sidebar controls + tab bar mockup + code export.
         .executableTarget(
             name: "RingAnimator",

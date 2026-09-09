@@ -25,6 +25,7 @@ struct AnimationExportView: View {
 
     @State private var exportGIF = true
     @State private var exportMovie = true
+    @State private var gifDither = false
     @State private var loopCount = 2
     @State private var captureParticles = false
     /// Canvas, appearance and transparency — shared with the batch sheet
@@ -151,6 +152,13 @@ struct AnimationExportView: View {
                     // both keeps the one-of-each pass without "Both"
                     // having to exist as its own option.
                     Toggle("Animated GIF", isOn: $exportGIF)
+                    // A GIF-only refinement, so it sits under the GIF it
+                    // refines and greys out with it — the same shape as
+                    // Include UI enabling the tab picker.
+                    Toggle("Smooth GIF gradients", isOn: $gifDither)
+                        .disabled(!exportGIF)
+                        .padding(.leading, 18)
+                        .help("Dithers the frames so gradients don't band on GIF's 256-colour palette. Roughly a third larger.")
                     Toggle("Movie (.mov)", isOn: $exportMovie)
                 }
                 .toggleStyle(.checkbox)
@@ -235,7 +243,13 @@ struct AnimationExportView: View {
         } else if exportMovie {
             panel.allowedContentTypes = [.quickTimeMovie]
         }
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        ExportLog.note("single sheet: gif=\(exportGIF) movie=\(exportMovie) dither=\(gifDither) particles=\(captureParticles) transparent=\(canvasSettings.effectiveTransparent) loops=\(loopCount)")
+        let response = panel.runModal()
+        ExportLog.note("  panel returned \(response.rawValue) (OK is \(NSApplication.ModalResponse.OK.rawValue)), url=\(panel.url?.path ?? "nil")")
+        guard response == .OK, let url = panel.url else {
+            ExportLog.note("  bailed out before writing anything")
+            return
+        }
 
         let baseURL = url.deletingPathExtension()
         errorMessage = nil
@@ -248,6 +262,7 @@ struct AnimationExportView: View {
             // Rendering and encoding are one pass now, so the bar is the
             // real fraction rather than a guess split between two phases.
             let onProgress: @MainActor (Double) -> Void = { progress = $0 }
+            ExportLog.note("  gif=\(gifURL?.path ?? "nil") movie=\(movieURL?.path ?? "nil") timeline=\(isTimelineExport)")
 
             do {
                 if captureParticles && canCaptureParticles {
@@ -264,7 +279,8 @@ struct AnimationExportView: View {
                     )
                     try await AnimationExporter.write(
                         frames: frames, gif: gifURL, movie: movieURL,
-                        transparent: canvasSettings.effectiveTransparent
+                        transparent: canvasSettings.effectiveTransparent,
+                        gifDither: gifURL != nil && gifDither
                     )
                 } else if isTimelineExport {
                     try await AnimationExporter.export(
@@ -274,6 +290,7 @@ struct AnimationExportView: View {
                         transparent: canvasSettings.effectiveTransparent,
                         canvas: canvasSettings.canvas,
                         gif: gifURL, movie: movieURL,
+                        gifDither: gifURL != nil && gifDither,
                         onProgress: onProgress
                     )
                 } else {
@@ -284,12 +301,18 @@ struct AnimationExportView: View {
                         transparent: canvasSettings.effectiveTransparent,
                         canvas: canvasSettings.canvas,
                         gif: gifURL, movie: movieURL,
+                        gifDither: gifURL != nil && gifDither,
                         onProgress: onProgress
                     )
+                }
+                for written in [gifURL, movieURL].compactMap({ $0 }) {
+                    let size = (try? written.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? nil
+                    ExportLog.note("  wrote \(written.lastPathComponent): \(size.map(String.init) ?? "MISSING") bytes")
                 }
                 isExporting = false
                 onDismiss()
             } catch {
+                ExportLog.note("  THREW: \(error)")
                 errorMessage = error.localizedDescription
                 isExporting = false
             }

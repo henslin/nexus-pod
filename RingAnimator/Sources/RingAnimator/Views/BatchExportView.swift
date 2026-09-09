@@ -30,6 +30,7 @@ struct BatchExportView: View {
 
     @State private var exportGIF = true
     @State private var exportMovie = false
+    @State private var gifDither = false
     /// The same canvas/appearance/transparency options the single export
     /// sheet has — one type, one control group, so the two can't drift.
     @State private var canvasSettings = ExportCanvasSettings()
@@ -115,6 +116,13 @@ struct BatchExportView: View {
                 // both keeps the one-of-each pass without "Both"
                 // having to exist as its own option.
                 Toggle("Animated GIF", isOn: $exportGIF)
+                // A GIF-only refinement, so it sits under the GIF it
+                // refines and greys out with it — the same shape as
+                // Include UI enabling the tab picker.
+                Toggle("Smooth GIF gradients", isOn: $gifDither)
+                    .disabled(!exportGIF)
+                    .padding(.leading, 18)
+                    .help("Dithers the frames so gradients don't band on GIF's 256-colour palette. Roughly a third larger.")
                 Toggle("Movie (.mov)", isOn: $exportMovie)
             }
             .toggleStyle(.checkbox)
@@ -250,7 +258,13 @@ struct BatchExportView: View {
         panel.allowsMultipleSelection = false
         panel.prompt = "Export Here"
         panel.message = "Choose a folder for \(presets.count) animation\(presets.count == 1 ? "" : "s")"
-        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        ExportLog.note("batch sheet: \(presets.count) presets, gif=\(exportGIF) movie=\(exportMovie) dither=\(gifDither) transparent=\(canvasSettings.effectiveTransparent) loops=\(loopCount)")
+        let response = panel.runModal()
+        ExportLog.note("  panel returned \(response.rawValue) (OK is \(NSApplication.ModalResponse.OK.rawValue)), folder=\(panel.url?.path ?? "nil")")
+        guard response == .OK, let folder = panel.url else {
+            ExportLog.note("  bailed out before writing anything")
+            return
+        }
 
         isExporting = true
         completed = 0
@@ -293,6 +307,7 @@ struct BatchExportView: View {
                             canvas: canvasSettings.canvas,
                             gif: exportGIF ? base.appendingPathExtension("gif") : nil,
                             movie: exportMovie ? base.appendingPathExtension("mov") : nil,
+                            gifDither: exportGIF && gifDither,
                             onProgress: onFrame
                         )
                     } else {
@@ -304,11 +319,16 @@ struct BatchExportView: View {
                             canvas: canvasSettings.canvas,
                             gif: exportGIF ? base.appendingPathExtension("gif") : nil,
                             movie: exportMovie ? base.appendingPathExtension("mov") : nil,
+                            gifDither: exportGIF && gifDither,
                             onProgress: onFrame
                         )
                     }
                     items[index].state = .done
+                    let gifPath = base.appendingPathExtension("gif")
+                    let size = (try? gifPath.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? nil
+                    ExportLog.note("  \(preset.name): gif \(size.map(String.init) ?? "MISSING") bytes")
                 } catch {
+                    ExportLog.note("  \(preset.name) THREW: \(error)")
                     failures.append(preset.name)
                     items[index].state = .failed
                 }

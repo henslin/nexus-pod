@@ -26,8 +26,25 @@ import Foundation
 /// main-thread `objectWillChange`, and these `.main`-targeted deferrals.
 public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     @Published public var timeline: RingTimeline {
-        didSet { scheduleSave() }
+        didSet {
+            timelineRevision &+= 1
+            scheduleSave()
+        }
     }
+
+    /// Bumped on every timeline mutation, including the write-back that
+    /// captures a config edit into the selected step.
+    ///
+    /// `prepareForPlayback` used to re-apply only when the playhead crossed
+    /// into a *different* segment, which was correct while the preview
+    /// only rendered `playbackConfig` during playback — nobody edits mid-
+    /// play. Once the paused preview started rendering it too, that guard
+    /// meant no edit ever reached the picture: you'd drag a slider, the
+    /// capture would land in the segment a runloop later, and
+    /// `playbackConfig` would keep serving the snapshot it took when the
+    /// playhead arrived. Every control looked dead.
+    private var timelineRevision = 0
+    private var lastAppliedRevision: Int?
 
     /// Which segment the Controls panel is currently editing. `nil` means
     /// "not editing any segment" — the live config is its own thing again,
@@ -85,10 +102,33 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
 
     /// Resolved frame for a given instant, or nil when nothing should
     /// override the ring's own clock.
+    /// The frame the playhead is parked on — **playing or not**.
+    ///
+    /// Gated on `isPlaying` until now, which meant the playhead and the
+    /// picture parted company the moment you stopped: pausing snapped away
+    /// from the frame you were watching, and scrubbing moved a value
+    /// nothing followed. Nil only when there is no sequence to follow at
+    /// all, which is the plain single-animation case.
     public func playback(at date: Date) -> TimelinePlayback? {
-        guard isPlaying, let resolved = timeline.resolve(at: currentTime(at: date)) else { return nil }
+        guard let resolved = timeline.resolve(at: currentTime(at: date)) else { return nil }
         prepareForPlayback(resolved)
         return TimelinePlayback(resolved)
+    }
+
+    /// What a preview should render at that instant.
+    ///
+    /// Lives here rather than in each pane because it was written twice —
+    /// once in `PreviewTab`, once in `UseCaseDetailView` — and the two
+    /// drifted, so a fix to one left the other showing the wrong
+    /// animation. One implementation, both callers.
+    ///
+    /// The snapshot trails `fallback` by a runloop while you drag a slider
+    /// (`captureIntoSelectedSegment` writes it back on the next turn),
+    /// which at 60fps is 16ms. Rendering `fallback` for the selected step
+    /// instead would put that one step on its own free clock while every
+    /// other step obeyed the playhead.
+    public func displayConfig(for playback: TimelinePlayback?, fallback: RingConfig) -> RingConfig {
+        playback == nil ? fallback : playbackConfig
     }
 
     /// The config the preview renders *while playing*, kept separate from
@@ -365,8 +405,11 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     /// boundary crossing lands one frame late, which is ~16ms and not
     /// perceivable.
     public func prepareForPlayback(_ resolved: RingTimeline.Resolved) {
-        guard lastAppliedPlaybackSegmentID != resolved.segment.id else { return }
+        guard lastAppliedPlaybackSegmentID != resolved.segment.id
+            || lastAppliedRevision != timelineRevision
+        else { return }
         lastAppliedPlaybackSegmentID = resolved.segment.id
+        lastAppliedRevision = timelineRevision
         let snapshot = resolved.segment.snapshot
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -375,6 +418,16 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
             // Leaving the snapshot's own single-segment Playback envelope
             // switched on would multiply the two together and double-fade.
             self.playbackConfig.sequencePlaybackEnabled = false
+            // Preview size is a property of the workspace, not of the
+            // animation: it's the "Preview size" slider, and `RingPreset`
+            // deliberately doesn't carry it. Without this line
+            // `playbackConfig` keeps `RingConfig`'s default 160 while the
+            // live config holds whatever the slider says, so the ring
+            // visibly jumps size the moment the preview starts rendering
+            // from a segment and jumps back when it stops.
+            if let bound = self.boundConfig {
+                self.playbackConfig.previewDiameter = bound.previewDiameter
+            }
         }
     }
 

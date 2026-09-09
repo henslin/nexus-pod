@@ -32,6 +32,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     public var patternStyle: LEDPatternStyle?
     public var flashCount: Int
     public var speed: Double
+    /// See `RingConfig.ringScale`.
+    public var ringScale: Double?
     public var lineWidth: Double
     public var trailFraction: Double
     public var chasingFillStyle: ChasingFillStyle
@@ -51,6 +53,8 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     public var smoothingGradientRing: Bool?
     /// See `RingConfig.smoothingSpread`.
     public var smoothingSpread: Double?
+    /// See `RingConfig.smoothingColorBlend`.
+    public var smoothingColorBlend: Double?
     /// See `RingConfig.smoothingTrail`.
     public var smoothingTrail: Double?
     /// See `RingConfig.smoothingFluidTime`.
@@ -153,6 +157,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         patternStyle = config.patternStyle
         flashCount = config.flashCount
         speed = config.speed
+        ringScale = config.ringScale
         lineWidth = config.lineWidth
         trailFraction = config.trailFraction
         chasingFillStyle = config.chasingFillStyle
@@ -162,6 +167,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         smoothingEnabled = config.smoothingEnabled
         smoothingGradientRing = config.smoothingGradientRing
         smoothingSpread = config.smoothingSpread
+        smoothingColorBlend = config.smoothingColorBlend
         smoothingTrail = config.smoothingTrail
         smoothingFluidTime = config.smoothingFluidTime
         firmwareLevelField = config.firmwareLevelField
@@ -245,6 +251,10 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.patternStyle = patternStyle
         config.flashCount = flashCount
         config.speed = speed
+        // Falls back to the app's default rather than to 1, so every
+        // preset written before Ring Size existed adopts it.
+        config.ringScale = ringScale
+            ?? (RingConfig.defaultRingDiameterPoints / RingConfig.tabBarRingDiameter)
         config.lineWidth = lineWidth
         config.trailFraction = trailFraction
         config.chasingFillStyle = chasingFillStyle
@@ -254,6 +264,7 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.smoothingEnabled = smoothingEnabled ?? false
         config.smoothingGradientRing = smoothingGradientRing ?? true
         config.smoothingSpread = smoothingSpread ?? 1.4
+        config.smoothingColorBlend = smoothingColorBlend ?? 0
         config.smoothingTrail = smoothingTrail ?? 0.3
         config.smoothingFluidTime = smoothingFluidTime ?? true
         config.firmwareLevelField = firmwareLevelField

@@ -262,12 +262,12 @@ public struct UseCaseDetailView: View {
                     // than Nexus's for no visible reason.
                     if let code {
                         DetailPane(tab: $tab) {
-                            stage(displayConfig, playback, player.timeline)
+                            stage(displayConfig(for: playback), playback, player.timeline)
                         } code: {
                             code(editingConfig)
                         }
                     } else {
-                        stage(displayConfig, playback, player.timeline)
+                        stage(displayConfig(for: playback), playback, player.timeline)
                     }
                 } else {
                     ScrollView {
@@ -308,12 +308,10 @@ public struct UseCaseDetailView: View {
         }
     }
 
-    /// What the preview renders — the player's read-only playback config
-    /// while a sequence runs, the live editing config otherwise. Same split
-    /// as `PreviewTab.displayConfig`: while paused the editing config
-    /// already *is* the selected step.
-    private var displayConfig: RingConfig {
-        player.isPlaying ? player.playbackConfig : editingConfig
+    /// What the preview renders — see `TimelinePlayer.displayConfig`,
+    /// which both panes now share rather than each keeping its own copy.
+    private func displayConfig(for playback: TimelinePlayback?) -> RingConfig {
+        player.displayConfig(for: playback, fallback: editingConfig)
     }
 
     private var controlsPanel: some View {
@@ -410,8 +408,12 @@ public struct UseCaseDetailView: View {
 
     private func centeredPreview(playback: TimelinePlayback?) -> some View {
         VStack(spacing: 12) {
-            LargePreviewCard(diameter: 200) {
-                RingView(config: displayConfig, diameter: 200, overrideElapsed: playback?.elapsed)
+            // Ring Size, not a hardcoded 200 — the fallback pane used to
+            // ignore the slider entirely, so the one place without a stage
+            // was also the one place the control didn't work.
+            LargePreviewCard(diameter: editingConfig.previewDiameter) {
+                RingView(config: displayConfig(for: playback), diameter: editingConfig.previewDiameter,
+                         overrideElapsed: playback?.elapsed)
                     .opacity(playback?.opacity ?? 1)
             }
             VStack(spacing: 4) {

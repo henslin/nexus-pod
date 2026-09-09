@@ -210,6 +210,92 @@ func run() -> Int32 {
               String(format: "dragged to %.1fs, one undo returned it to %.1fs", resized, restored))
     }
 
+    // What the paused preview renders.
+    //
+    // The preview used to read the live config whenever playback was
+    // stopped, which meant the playhead and the picture disagreed the
+    // moment you stopped moving: pausing snapped away from the frame you
+    // were watching, and scrubbing moved a playhead nothing followed.
+    // These assert the two pieces `ContentView.displayConfig(for:)` now
+    // depends on.
+    do {
+        let live = RingConfig()
+        live.previewDiameter = 260
+        let player = TimelinePlayer(fileName: "timeline-preview-check.json")
+        player.bind(to: live)
+
+        let first = RingConfig()
+        first.primaryColor = .red
+        let second = RingConfig()
+        second.primaryColor = .green
+        player.addSegment(from: first, named: "One")
+        player.addSegment(from: second, named: "Two")
+
+        // A playhead inside the second step has to resolve to the second
+        // step — this is what the preview follows while paused.
+        let firstLength = player.timeline.segments[0].length.duration(speed: first.speed)
+        let resolved = player.timeline.resolve(at: firstLength + 0.1)
+        check("the playhead resolves to the step it's over",
+              resolved?.segment.name == "Two",
+              resolved?.segment.name ?? "nothing")
+
+        if let resolved {
+            player.prepareForPlayback(resolved)
+            // The apply is deferred one runloop on purpose (see
+            // `prepareForPlayback`), so let it land.
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+            check("preview size survives the switch to a segment",
+                  player.playbackConfig.previewDiameter == 260,
+                  "\(player.playbackConfig.previewDiameter) vs the workspace's 260")
+        }
+        TimelinePlayer.deleteStore(fileName: "timeline-preview-check.json")
+    }
+
+    // An edit has to reach the paused preview.
+    //
+    // The preview renders `playbackConfig` whenever a sequence is loaded,
+    // stopped or not. `prepareForPlayback` used to re-apply only when the
+    // playhead crossed into a different segment — fine while the config was
+    // only read during playback, and fatal once it was read while editing:
+    // every control in the app looked dead, because the picture was serving
+    // the snapshot taken when the playhead arrived.
+    do {
+        let live = RingConfig()
+        let player = TimelinePlayer(fileName: "timeline-live-edit-check.json")
+        player.bind(to: live)
+
+        let step = RingConfig()
+        step.ringScale = 1
+        player.addSegment(from: step, named: "Only")
+        guard let id = player.timeline.segments.first?.id else {
+            print("  ✗ no segment to edit")
+            return 1
+        }
+        player.select(id)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+
+        guard let resolved = player.timeline.resolve(at: 0.1) else {
+            print("  ✗ nothing resolved at the playhead")
+            return 1
+        }
+        player.prepareForPlayback(resolved)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        let before = player.playbackConfig.ringScale
+
+        // The edit, exactly as a slider drag makes it.
+        live.ringScale = 0.5
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        if let again = player.timeline.resolve(at: 0.1) {
+            player.prepareForPlayback(again)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        }
+
+        check("an edit reaches the paused preview",
+              player.playbackConfig.ringScale == 0.5,
+              "playbackConfig holds \(player.playbackConfig.ringScale), was \(before)")
+        TimelinePlayer.deleteStore(fileName: "timeline-live-edit-check.json")
+    }
+
     TimelinePlayer.deleteStore(fileName: "timeline-check.json")
     return failed ? 1 : 0
 }

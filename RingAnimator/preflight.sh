@@ -106,6 +106,13 @@ step "Transparent export really carries alpha"
 swift run --scratch-path "$SCRATCH" AlphaCheck 2>&1 | grep -E '^(transparent|  )'
 result "${PIPESTATUS[0]}" "AlphaCheck"
 
+# Blend's whole promise is a negative one — the colours run together and
+# nothing else moves — and the failure mode (a ring that dims at its own
+# edges) is easy to miss in a screenshot and obvious in a deck.
+step "Blend mixes colour cleanly, and GIFs do not band"
+swift run --scratch-path "$SCRATCH" BlendCheck 2>&1 | grep -E '^(  )'
+result "${PIPESTATUS[0]}" "BlendCheck"
+
 step "Every animation and cue style has a Blender branch"
 swift run --scratch-path "$SCRATCH" BlenderCheck "$SCRATCH/blender-scripts" 2>&1 | tail -2
 result "${PIPESTATUS[0]}" "BlenderCheck"

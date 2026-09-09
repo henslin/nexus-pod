@@ -349,7 +349,7 @@ ZStack {
 import SwiftUI
 
 struct ThinkingRingView: View {
-    var diameter: CGFloat = \(Int(config.previewDiameter))
+    var diameter: CGFloat = \(Int(RingConfig.tabBarRingDiameter * config.ringScale))
     var lineWidth: CGFloat = \(config.lineWidth)
     var speed: Double = \(config.speed) // cycles per second
     var trailFraction: Double = \(config.trailFraction)
@@ -1041,7 +1041,7 @@ private fun pseudoRandom2(a: Int, b: Int): Double {
 @Composable
 fun ThinkingRingView(
     modifier: Modifier = Modifier,
-    diameterDp: Int = \(Int(config.previewDiameter)),
+    diameterDp: Int = \(Int(RingConfig.tabBarRingDiameter * config.ringScale)),
     lineWidthDp: Float = \(config.lineWidth)f,
     speed: Double = \(config.speed), // cycles per second
     trailFraction: Double = \(config.trailFraction),
@@ -1503,7 +1503,7 @@ ctx.stroke();
   Needs a browser with conic-gradient canvas support (Chrome 90+, Safari
   16.4+, Firefox 113+) for the Wave/Chasing/Pulse color sweep.
 -->
-<div id="thinking-ring" style="width: \(Int(config.previewDiameter))px; height: \(Int(config.previewDiameter))px;">
+<div id="thinking-ring" style="width: \(Int(RingConfig.tabBarRingDiameter * config.ringScale))px; height: \(Int(RingConfig.tabBarRingDiameter * config.ringScale))px;">
   <canvas id="thinking-ring-canvas"></canvas>
 </div>
 
@@ -1515,7 +1515,7 @@ ctx.stroke();
 <script>
 (function () {
   const config = {
-    diameter: \(Int(config.previewDiameter)),
+    diameter: \(Int(RingConfig.tabBarRingDiameter * config.ringScale)),
     lineWidth: \(config.lineWidth),
     speed: \(config.speed), // cycles per second
     trailFraction: \(config.trailFraction),

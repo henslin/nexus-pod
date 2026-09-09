@@ -292,6 +292,35 @@ struct ShapeSection: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // Ring Size and Preview Size are genuinely different questions,
+        // and conflating them is what made this section confusing: one is
+        // how big the ring is drawn inside its pod, the other is how close
+        // you are standing to the pod. Ring Size sits first because it is
+        // the design decision; Preview Size is a viewing one.
+        // Points on the *device*, not points in the preview.
+        //
+        // Measured against the tab bar's own 34pt ring, so the number means
+        // something outside this app: set 34 and you are drawing what the
+        // hardware draws. Expressed against the preview instead — which is
+        // what it used to do — it moved every time you zoomed, which is no
+        // use at all for deciding how big a ring should be in a real tab
+        // bar.
+        //
+        // Nothing about the rendering changes: every pod is drawn at the
+        // same 34/62 ratio, so the Large Preview is a magnified tab bar and
+        // a fraction of one is the same fraction of the other.
+        //
+        // The range runs past 34 because the pod is 62pt and a designer may
+        // well want to try a ring that fills more of it.
+        LabeledSlider(
+            title: "Ring Size",
+            value: Binding(
+                get: { config.ringDiameterPoints },
+                set: { config.ringDiameterPoints = $0 }
+            ),
+            range: 12...200,
+            format: "%.0f pt"
+        )
         LabeledSlider(title: "Preview Size", value: $config.previewDiameter, range: 80...220, format: "%.0f pt")
     }
 }
@@ -882,6 +911,13 @@ public struct SmoothingSection: View {
                 range: 0...3,
                 format: "%.1f"
             )
+            LabeledSlider(
+                title: "Blend",
+                value: $config.smoothingColorBlend,
+                range: 0...6,
+                format: "%.1f"
+            )
+            .help("Mix each diode's colour into its neighbours', without changing how bright anything is")
             LabeledSlider(
                 title: "Persistence",
                 value: $config.smoothingTrail,

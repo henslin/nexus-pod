@@ -47,6 +47,19 @@ struct RingStage: View {
     /// stage would have given.
     @ObservedObject var state: StageState
 
+    /// Preview size, when the caller has to supply it separately.
+    ///
+    /// Everything else the stage draws is a property of the *animation*, so
+    /// it rightly comes from whichever config is resolved for the playhead.
+    /// Preview size isn't: it's the "Preview Size" slider, a property of the
+    /// workspace, and `RingPreset` deliberately doesn't carry it. Once the
+    /// stage started rendering from a segment's snapshot, reading it off
+    /// that config meant the slider moved a value nothing displayed.
+    ///
+    /// Nil — the Cue Library and Use Cases, which have no timeline swapping
+    /// underneath them — keeps the old behavior of reading it off `config`.
+    var previewDiameter: Double?
+
     /// Live finger-follow offset while a drag is in progress, added on top
     /// of the resting corner position and reset to `.zero` the instant the
     /// drag ends. Genuinely transient — a drag can't still be in progress
@@ -280,7 +293,7 @@ struct RingStage: View {
     private var largePreview: some View {
         glassRing(
             outerDiameter: previewOuterDiameter,
-            ringDiameter: CGFloat(config.previewDiameter)
+            ringDiameter: CGFloat(previewDiameter ?? config.previewDiameter)
         )
     }
 
@@ -288,7 +301,7 @@ struct RingStage: View {
     /// comment there) to pin the collapse button to the ring's actual
     /// right edge instead of the whole canvas's.
     private var previewOuterDiameter: CGFloat {
-        CGFloat(config.previewDiameter) * (podFrameDiameter / podDiameter)
+        CGFloat(previewDiameter ?? config.previewDiameter) * (podFrameDiameter / podDiameter)
     }
 
     /// Shared by `largePreview` (sized off the "Preview size" slider) and

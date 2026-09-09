@@ -417,12 +417,13 @@ public enum AnimationExporter {
         canvas: Canvas = .ring,
         gif gifURL: URL? = nil,
         movie movieURL: URL? = nil,
+        gifDither: Bool = false,
         onProgress: @MainActor (Double) -> Void = { _ in }
     ) async throws {
         let export = exportConfig(from: config)
         let loopDuration = naturalLoopDuration(for: config)
         let frameCount = frameCount(duration: loopDuration, loopCount: loopCount)
-        let sink = try makeSink(canvas: canvas, transparent: transparent, frameCount: frameCount, gif: gifURL, movie: movieURL)
+        let sink = try makeSink(canvas: canvas, transparent: transparent, frameCount: frameCount, gif: gifURL, movie: movieURL, gifDither: gifDither)
 
         for index in 0..<frameCount {
             guard let image = render(
@@ -445,6 +446,7 @@ public enum AnimationExporter {
         canvas: Canvas = .ring,
         gif gifURL: URL? = nil,
         movie movieURL: URL? = nil,
+        gifDither: Bool = false,
         onProgress: @MainActor (Double) -> Void = { _ in }
     ) async throws {
         guard !timeline.isEmpty, timeline.duration > 0 else { throw ExportError.noFrames }
@@ -460,7 +462,7 @@ public enum AnimationExporter {
         }
 
         let frameCount = frameCount(duration: timeline.duration, loopCount: loopCount)
-        let sink = try makeSink(canvas: canvas, transparent: transparent, frameCount: frameCount, gif: gifURL, movie: movieURL)
+        let sink = try makeSink(canvas: canvas, transparent: transparent, frameCount: frameCount, gif: gifURL, movie: movieURL, gifDither: gifDither)
 
         for index in 0..<frameCount {
             guard
@@ -484,13 +486,15 @@ public enum AnimationExporter {
         frames: [CGImage],
         gif gifURL: URL? = nil,
         movie movieURL: URL? = nil,
-        transparent: Bool = false
+        transparent: Bool = false,
+        gifDither: Bool = false
     ) async throws {
         guard let first = frames.first else { throw ExportError.noFrames }
         let sink = try ExportSink(
             gif: gifURL, movie: movieURL,
             size: CGSize(width: first.width, height: first.height),
-            fps: fps, transparent: transparent, frameCount: frames.count
+            fps: fps, transparent: transparent, frameCount: frames.count,
+            gifDither: gifDither
         )
         for frame in frames { try await sink.append(frame) }
         try await sink.finish()
@@ -501,13 +505,15 @@ public enum AnimationExporter {
     }
 
     private static func makeSink(
-        canvas: Canvas, transparent: Bool, frameCount: Int, gif: URL?, movie: URL?
+        canvas: Canvas, transparent: Bool, frameCount: Int, gif: URL?, movie: URL?,
+        gifDither: Bool = false
     ) throws -> ExportSink {
         let size = canvasSize(canvas)
         return try ExportSink(
             gif: gif, movie: movie,
             size: CGSize(width: size.width * renderScale, height: size.height * renderScale),
-            fps: fps, transparent: transparent, frameCount: frameCount
+            fps: fps, transparent: transparent, frameCount: frameCount,
+            gifDither: gifDither
         )
     }
 

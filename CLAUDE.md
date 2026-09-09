@@ -413,6 +413,261 @@ A single render reuses `BatchExportView` with a one-item list, which is
 also how single-animation GIF export came to exist outside the phone
 mockup's own button.
 
+## GIF bands on gradients, and it isn't the renderer
+
+Measured, because it looks like a bug in Blend and isn't. One frame of a
+blended ring, exported both ways:
+
+| | distinct colours in the lit ring |
+| --- | --- |
+| rendered frame | 2,876 |
+| same frame as GIF | 111 |
+| same frame as *transparent* GIF | 58 |
+
+GIF is 8-bit indexed — 256 entries for the whole frame, of which only
+about 110 land on the ring once the backdrop and the glow have taken
+theirs. Twenty-six times fewer colours than the source is what banding
+*is*.
+
+Two things this rules out, both of which were checked rather than assumed:
+
+- **It isn't a stale global palette.** ImageIO writes a local colour table
+  per frame — frame 0 had 111 colours, frame 12 had 107 — so a hue-shifting
+  animation isn't being quantized against the first frame's palette.
+- **Transparency makes it worse, not better.** The intuition is that a
+  clear backdrop frees palette entries for the ring. It doesn't: GIF alpha
+  is 1-bit, so the soft glow gets thresholded away entirely and the ring
+  ends up with 58 colours instead of 111.
+
+### Measuring it, and the metric that lied
+
+Worth recording because the obvious measurement says there is no problem.
+
+Mean colour error between the render and its GIF is **0.64 of 255** — by
+any error metric the GIF is near-perfect. It is also visibly striped. Both
+are true: banding is a *contour*, not an error magnitude. The palette turns
+a shallow gradient into wide flat plateaus, and what the eye catches is the
+seam between two plateaus one level apart, which costs almost nothing in
+average error.
+
+The metric that actually tracks it is plateau **length** — walk outward
+through the glow and record how far you travel before the colour changes:
+
+| | mean plateau run |
+| --- | --- |
+| the render | 4.2 px |
+| its GIF | 22.3 px |
+| its GIF, dithered | 3.0 px |
+
+### The dither, and its strength
+
+`ExportSink.dithered` applies an 8×8 ordered (Bayer) dither before the
+encoder picks its palette, so neighbouring pixels in a flat band round to
+different entries and the eye averages back the colour that wasn't
+available. **Ordered, not error-diffused**: Floyd-Steinberg propagates each
+pixel's error to its neighbours, so a one-level change anywhere reshuffles
+everything downstream of it — between consecutive frames that is a crawling
+texture over the whole ring. A Bayer matrix is a pure function of (x, y),
+so the noise sits still. Alpha is left alone; GIF alpha is 1-bit, so
+perturbing it punches holes rather than shading edges.
+
+`ditherStrength` is 1.5, and it has been re-derived twice. The first guess
+was 14 — seven times too strong. Measured across the range on the current
+render:
+
+| strength | plateau run | mean error | size |
+| --- | --- | --- | --- |
+| 0 | 22.3 px | 1.87 | 598 KB |
+| 1.0 | 8.5 px | 1.91 | 642 KB |
+| **1.5** | **3.0 px** | **2.26** | **976 KB** |
+| 2.0 | 2.7 px | 2.42 | 859 KB |
+
+The target is the render's own texture (4.2 px), not the absence of
+plateaus. At 1.0 the plateaus are still twice the source's, so the bands
+survive; past 1.5 they go finer than the render, which means the dither has
+stopped hiding bands and started being the texture.
+
+**The second re-derivation is the instructive one.** The calibration first
+landed on 2, measured against a render whose halo was a flat default blue —
+the `emittedColor` bug below. Colouring the halo correctly put real
+gradients where there had been one flat wash, which changed what there was
+to quantize and moved the answer. This constant is a property of the
+pictures, not of GIF.
+
+Opt-in per export ("Smooth GIF gradients", under Animated GIF in both
+export sheets) rather than always on, because the size cost is real and a
+sparse pattern has no gradients to fix. `BlendCheck` gates all of it,
+including an assertion that undithered GIFs still band — so if ImageIO ever
+improves, the fix fails loudly instead of silently becoming a no-op.
+
+## Ring Size and Preview Size are different questions
+
+They sound alike, which is why the Shape section was confusing enough that
+the ring's own diameter read as missing.
+
+- **Preview Size** (`previewDiameter`) moves the camera. It scales the pod
+  — ring and surrounding space together — and never changes the design, so
+  `RingPreset` leaves it out.
+- **Ring Size** (`ringScale`, 0...1) changes the design: how much of that
+  footprint the ring occupies, with the footprint staying put. Part of the
+  animation, so the preset carries it.
+
+Applied once, in `RingView`, to `size` — everything downstream (stroke
+width, glow radius, particle velocities, diode geometry) is derived from
+`scale = size / referenceDiameter`, so it all follows for free. A ring at
+60% is the same design drawn smaller, not a thick ring squeezed into a
+small circle; Ring Width is still there for that. Generated code multiplies
+the two, since exported code has no pod and its `diameter` is the ring's.
+
+`BlendCheck` asserts the band radius halves while the canvas stays 960px —
+the one measurement that tells the two controls apart in a rendered frame.
+
+### What Ring Size promises
+
+**The primary ring — the stroke, not the light around it — is exactly as
+many points across as Ring Size says.** Effects spill outside it or bleed
+inside it and don't count toward the number. Blur, glow and Scale Pulse all
+deliberately exceed it.
+
+Measured on a 480pt canvas at the app's own 34/62 pod ratio, so the nominal
+ring is 263pt:
+
+| | width 2 | width 16 |
+| --- | --- | --- |
+| Diode Mode | 264.0 pt | 263.0 pt |
+| continuous | 264.0 pt | 263.0 pt |
+| both, at 50% | 132.0 pt | 132.0 pt |
+
+Gated in `BlendCheck` with glow, blur and Scale Pulse switched off — the
+assertion is about the ring, and anything measuring the halo is measuring
+something the control never claimed to describe. Stated in points rather
+than fractions of the canvas, because points are what the control says and
+a fraction can quietly disagree with them.
+
+For what the halo does instead, measured with everything else held
+constant: Blur 8 widens the visible edge by **42%**, Scale Pulse by 11%,
+Diode Mode's brighter glow by 5%, particles not at all. That spread is why
+two animations at the same Ring Size can still look different sizes — and
+it is the halo differing, not the ring.
+
+### The pod crops everything, and Ring Size is in device points
+
+Ring Size is the ring's diameter **in the real tab bar** — 34pt at rest,
+which is what the device draws — not a fraction of however far you happen
+to be zoomed in. `RingConfig.ringDiameterPoints` converts; `ringScale`
+stays the stored form, because the same `RingView` draws this ring at 34pt
+in the tab bar and magnified in the Large Preview, and only a fraction
+scales correctly in both. The code generators emit the device size too:
+they used to emit `previewDiameter`, i.e. the designer's zoom level, as
+production code's ring diameter.
+
+The slider runs to 200pt, well past the 62pt pod, so a ring can animate up
+*into* the crop. **The crop is absolute** — the pod bounds ring, glow and
+particles alike, the way a real LED ring behind a slot is bounded. Letting
+a big ring overflow instead was tried and read as flaky: the same ring bled
+past the glass in one surface and was contained in another, so which
+surface you were looking at decided what you saw. `BlendCheck` asserts
+containment — a 170pt ring differs from the 34pt one only in the bottom 8%
+of the screen, which is the tab bar itself.
+
+### The two renderers disagreed about how big a ring is
+
+Not a per-animation problem — measured across all 78 bundled presets, the
+band radius is identical (0.274 of the canvas) for every one of them. The
+disagreement is between the two *renderers*:
+
+| | outer edge, width 6 | width 16 |
+| --- | --- | --- |
+| Diode Mode | 0.274 | 0.274 |
+| continuous, before | 0.323 | **0.403** |
+| continuous, after | 0.275 | 0.274 |
+
+`diodeRadius` is `size / 2 - band / 2`, so the diode band's outer edge lands
+exactly on `size` and stays there at any width. `Circle().stroke(...)`
+centres the line on its path, so the outer half hangs outside the frame —
+18% bigger at the default width, and growing with it, which made Ring Width
+a second, silent size control.
+
+Fixed by padding the continuous branch by half a line width in `content`,
+rather than swapping a dozen `.stroke` calls for `.strokeBorder`: one place,
+and it catches the variants that stroke something other than a plain circle.
+Pulse still runs slightly over (0.285) because it modulates the stroke up to
+1.3x as it breathes — that one is the animation, not the geometry.
+
+### The check that could not read half its own renders
+
+Worth remembering: `ImageRenderer` does not return one pixel layout.
+The same export path handed back 8-bit/32bpp for one config and
+**16-bit/64bpp wide-gamut** for another, and the byte-reading helper in
+`BlendCheck` rejected everything that wasn't the former — by returning nil,
+which made the assertions silently not run. `Pixels.normalized(_:)` redraws
+into a known layout first. Any pixel measurement added here should go
+through it.
+
+## A transparent GIF's hole, and who picks the cutoff
+
+GIF transparency is one bit: a pixel is there or it isn't. The ring's glow
+is the opposite — a wide, soft wash of low alpha. Measured on the render,
+**every** pixel inside the ring's own hole carries partial alpha (5,949 of
+them in the sampled frame).
+
+Something has to decide where "visible" starts. Left alone, the encoder
+decides per pixel as a side effect of choosing palette entries, so patches
+of glow snap fully opaque while their neighbours vanish — a blotchy disc
+floating in the middle of a ring that should be empty. One exported frame
+came back with 10% of the hole solid.
+
+`ExportSink.hardAlpha` picks the cutoff instead, for GIF only and only when
+the export is transparent:
+
+| cutoff | blob in the hole | ring band |
+| --- | --- | --- |
+| none | 1,056 px | 4,603 px |
+| 64 | 1,056 px | 4,603 px |
+| 96 | 0 | 4,524 px |
+| **128** | **0** | **4,858 px** |
+| 192 | 0 | 4,754 px |
+
+64 doesn't reach the glow at all. 128 clears it with margin and leaves the
+ring *wider*, not thinner — the stroke's soft edge hardens outward to the
+cutoff contour rather than eroding. Dither runs first and the cutoff
+second, since the cutoff zeroes the colour of whatever it clears.
+
+`BlendCheck` gates it with the render as its own control: it first asserts
+the glow really does fill the hole, so the check can't pass for the wrong
+reason if the glow ever goes away.
+
+**The movie remains the better format for anything with a glow** — it keeps
+real per-pixel alpha and needs none of this.
+
+## The halo was always the palette's colour
+
+The glow around the ring is a `.shadow` in `RingView.glow(_:color:...)`,
+and the diode path passed it `activeColors[0]` — the palette's Primary.
+For anything authored in this app that is also what is on the ring, so it
+looked correct and went unquestioned for the life of the feature.
+
+For an *imported* pattern it is simply wrong. A recorded stream carries its
+own packed RGB per LED and a ported firmware field computes its own;
+neither has anything to do with the palette. Sampled across the library,
+every pattern glowed the same default cyan-blue:
+
+| pattern | band | halo, before | halo, after |
+| --- | --- | --- | --- |
+| `arm_away` | rgb(98, 0, 0) | rgb(5, 17, 34) | rgb(10, 0, 0) |
+| `arm_home` | rgb(87, 29, 0) | rgb(5, 17, 34) | rgb(9, 3, 0) |
+
+It reads as a stale second ring sitting behind the real one — most
+obviously through Liquid Glass, where the halo is most of what the material
+has to refract, and where it looked like the pod was failing to update.
+
+`emittedColor(of:fallback:)` averages the lit diodes weighted by how lit
+each one is, which is what spilled light is: a two-colour ring haloes
+purple and the brightest arc dominates. Gated in `BlendCheck` by asserting
+the band and the halo agree about which channel dominates — hue agreement
+rather than equality, since the halo is an average over the whole ring and
+much dimmer.
+
 ## Exporting a whole list at once
 
 `BatchExportView` renders every animation in a list to GIF and/or movie

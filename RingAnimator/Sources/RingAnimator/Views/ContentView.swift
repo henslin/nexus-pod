@@ -509,90 +509,36 @@ private struct PreviewTab: View {
     /// `ParameterEditWatcher`.
     @StateObject private var editWatcher = ParameterEditWatcher()
 
-    /// Where the playhead sits when the clock isn't running. Playback
-    /// itself is computed from `TimelineView`'s own date (see
-    /// `currentTime(at:)`) rather than accumulated into state frame by
-    /// frame — writing state sixty times a second would both fight
-    /// SwiftUI's render pass and republish through `player` for no reason.
-    @State private var pausedPlayhead: Double = 0
-    /// Wall-clock instant playback started, paired with the playhead
-    /// position it started from. Rebuilt whenever play is pressed or the
-    /// user scrubs mid-playback.
-    @State private var playAnchor: (date: Date, offset: Double)?
-
-    /// What the previews actually render. While a sequence is playing
-    /// that's the player's own read-only config (see
-    /// `TimelinePlayer.playbackConfig`); otherwise it's the live config,
-    /// which — thanks to the Controls⇄segment binding — already *is* the
-    /// selected step. So editing shows the step you're editing and playing
-    /// shows the sequence, with no third state to keep in sync.
-    private var displayConfig: RingConfig {
-        player.isPlaying ? player.playbackConfig : config
-    }
-
     var body: some View {
         // One clock for the whole tab. `paused:` stops it dead when not
         // playing, so a parked timeline costs nothing.
         TimelineView(.animation(paused: !player.isPlaying)) { context in
-            let now = currentTime(at: context.date)
-            let resolved = player.timeline.resolve(at: now)
-            let playback = playbackFrame(for: resolved)
+            let now = player.currentTime(at: context.date)
+            let playback = player.playback(at: context.date)
 
             VStack(spacing: 0) {
                 // The canvas itself lives in `RingStage` — shared with the
                 // Cue Library and Use Cases panes, which used to each have
                 // their own lesser version of it.
                 RingStage(
-                    config: displayConfig,
+                    config: player.displayConfig(for: playback, fallback: config),
                     playback: playback,
                     timeline: player.timeline,
-                    state: stageState
+                    state: stageState,
+                    // From the live config, never the resolved one — see
+                    // `RingStage.previewDiameter`.
+                    previewDiameter: config.previewDiameter
                 )
                 Divider()
                 TimelineStripView(
                     player: player,
                     config: config,
                     playhead: now,
-                    onScrub: { scrub(to: $0) }
+                    onScrub: { player.scrub(to: $0) }
                 )
             }
         }
         .onAppear { editWatcher.watch(config) }
-        .onChange(of: player.isPlaying) { _, isPlaying in
-            if isPlaying {
-                playAnchor = (date: Date(), offset: pausedPlayhead)
-            } else {
-                // Freeze wherever the playhead had got to, so pressing play
-                // again resumes instead of restarting.
-                playAnchor.map { pausedPlayhead = $0.offset + Date().timeIntervalSince($0.date) }
-                playAnchor = nil
-            }
-        }
-    }
-
-    /// Seconds into the timeline at a given wall-clock instant.
-    private func currentTime(at date: Date) -> Double {
-        guard let anchor = playAnchor else { return pausedPlayhead }
-        return anchor.offset + date.timeIntervalSince(anchor.date)
-    }
-
-    private func scrub(to time: Double) {
-        let clamped = max(time, 0)
-        pausedPlayhead = clamped
-        // Re-anchor rather than stop: scrubbing mid-playback should jump
-        // and keep running, the way a video scrubber does.
-        if player.isPlaying {
-            playAnchor = (date: Date(), offset: clamped)
-        }
-    }
-
-    /// Nil whenever nothing should override the ring's own clock — an
-    /// empty timeline, or simply not playing. `TabBarPreview`/`RingView`
-    /// both treat nil as "behave exactly as you always did".
-    private func playbackFrame(for resolved: RingTimeline.Resolved?) -> TimelinePlayback? {
-        guard player.isPlaying, let resolved else { return nil }
-        player.prepareForPlayback(resolved)
-        return TimelinePlayback(resolved)
     }
 }
 

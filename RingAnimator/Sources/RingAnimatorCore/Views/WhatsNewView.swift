@@ -154,33 +154,33 @@ public enum WhatsNew {
     /// Bump this when the notes change. The screen shows itself once per
     /// value, so editing the copy without bumping it means nobody who has
     /// already dismissed the old notes ever sees the new ones.
-    public static let version = "3.0"
+    public static let version = "3.5"
 
     public static let current: [WhatsNewItem] = [
         WhatsNewItem(
-            symbol: "iphone",
-            title: "Export With the App Around It",
-            detail: "Put the animation on a real phone screen — your choice of tab, light or dark, and Apple's iPhone 17 Pro in Silver, Deep Blue or Cosmic Orange. Drops straight into a deck."
+            symbol: "circle.dashed",
+            title: "Ring Size, in Real Points",
+            detail: "How big the ring is, measured against the tab bar's own — so a number here means something on a device, not just in the preview. Every animation now starts at 44pt, and code exports carry that size instead of your zoom level."
         ),
         WhatsNewItem(
-            symbol: "square.on.square.dashed",
-            title: "Transparent Backgrounds",
-            detail: "Export the ring with a real alpha channel — no black square around it in Figma, and it plays transparent in Keynote or in an app."
+            symbol: "drop.halffull",
+            title: "Blend",
+            detail: "Bleed spreads light; Blend mixes colour. A red arc meeting a blue one now runs red through purple to blue instead of meeting at a seam — and only the colour moves, so brightness and the ring's clean edges stay exactly where they were."
         ),
         WhatsNewItem(
-            symbol: "sparkles",
-            title: "Particles You Can Export",
-            detail: "Particles are simulated where nothing can render them frame by frame, so the app records them from the live preview instead."
+            symbol: "sun.max",
+            title: "The Glow Finally Matches",
+            detail: "Every imported pattern used to glow the same default blue no matter what colour it was, which read as a stale ring sitting behind the real one. The halo now takes its colour from the light the ring is actually emitting."
         ),
         WhatsNewItem(
-            symbol: "square.stack.3d.up",
-            title: "Apply to All",
-            detail: "Change one animation — Smooth, particles, speed, anything — and push exactly those changes onto the whole list in one go."
+            symbol: "slider.horizontal.below.rectangle",
+            title: "Scrub Frame by Frame",
+            detail: "The playhead is the clock now, stopped or not: pause holds the exact frame you were watching, and dragging the scrubber moves through the animation the way a video scrubber does."
         ),
         WhatsNewItem(
-            symbol: "shippingbox",
-            title: "The Library Comes With the App",
-            detail: "Every use case ships inside, dated so you can see how current it is. A new version adds what's new and updates what you haven't touched — anything you've edited is left exactly as you left it."
+            symbol: "square.grid.3x3.square",
+            title: "Smoother GIFs",
+            detail: "GIF has 256 colours to spend, which turns a gradient into visible bands. \"Smooth GIF gradients\" dithers them away for about a third more file. Transparent GIFs also stop growing a blotchy disc in the middle of the ring."
         ),
     ]
 }

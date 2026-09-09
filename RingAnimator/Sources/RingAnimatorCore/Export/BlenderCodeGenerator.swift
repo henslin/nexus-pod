@@ -64,7 +64,7 @@ public extension CodeGenerators {
             "animation_type": "\(config.animationType.rawValue)",
             "easing": "\(config.easingStyle.rawValue)",
             "speed": \(config.speed),
-            "diameter": \(config.previewDiameter),
+            "diameter": \(RingConfig.tabBarRingDiameter * config.ringScale),
             "line_width": \(config.lineWidth),
             "trail_fraction": \(config.trailFraction),
             "diode_count": \(Int(config.diodeCount.rounded())),

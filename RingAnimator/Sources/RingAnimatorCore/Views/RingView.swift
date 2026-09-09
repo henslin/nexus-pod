@@ -139,7 +139,7 @@ public struct RingView: View {
     /// same `RingView`. See `cueParameters(style:scale:)`.
     private func patternStyleBody(style: LEDPatternStyle) -> some View {
         GeometryReader { geo in
-            let size = diameter ?? min(geo.size.width, geo.size.height)
+            let size = (diameter ?? min(geo.size.width, geo.size.height)) * ringScale
             let scale = size / referenceDiameter
             LEDCuePreviewView(parameters: cueParameters(style: style, scale: scale), diameter: size, lineWidth: lw(scale), overrideElapsed: overrideElapsed, frameRate: frameRate)
                 .frame(width: geo.size.width, height: geo.size.height)
@@ -264,7 +264,13 @@ public struct RingView: View {
         let envelopeOpacity = sequenceEnvelopeOpacity(elapsed: elapsed)
 
         GeometryReader { geo in
-            let size = diameter ?? min(geo.size.width, geo.size.height)
+            // `ringScale` shrinks the ring inside the footprint it was
+            // given rather than the footprint itself — see
+            // `RingConfig.ringScale`. Applied here, once, so everything
+            // downstream (stroke width, glow radius, particle velocities,
+            // diode geometry) scales with it for free: they are all
+            // derived from `scale`, which is derived from this.
+            let size = (diameter ?? min(geo.size.width, geo.size.height)) * ringScale
             let scale = size / referenceDiameter
             // The container SwiftUI actually gave this view — usually
             // bigger than `size` itself (the tab bar pod is a 34pt ring
@@ -309,6 +315,15 @@ public struct RingView: View {
             // glow, blur — contained to the same round silhouette the
             // Liquid Glass pod itself uses, instead of a stray square
             // haze poking out past the glass edge.
+            //
+            // The boundary is absolute, and deliberately so. A ring larger
+            // than its pod is cropped by the pod rather than spilling over
+            // the tab bar — the way a real LED ring behind a slot is — so
+            // Ring Size past 62pt is an animation that grows *into* the
+            // crop, not one that escapes it. Letting it overflow was tried
+            // and read as flaky: the same ring bled past the glass in one
+            // surface and was contained in another, so which one you were
+            // looking at decided what you saw.
             .clipShape(Circle())
         }
     }
@@ -413,7 +428,29 @@ public struct RingView: View {
             // their dedicated renderers use.
             diodeFieldRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         } else {
+            // Inset by half the stroke, so the two renderers agree on what
+            // Ring Size means.
+            //
+            // The diode path already lands its band's outer edge exactly on
+            // `size` — `diodeRadius` is `size / 2 - band / 2` on purpose.
+            // The continuous path draws `Circle().stroke(...)`, and SwiftUI
+            // centres a stroke on its path, so the outer half of the line
+            // hangs *outside* the circle that inscribes the frame. The ring
+            // therefore came out `lineWidth` wider than the diode one at
+            // the same setting — 0.323 of the canvas against 0.274, an 18%
+            // difference — and, worse, it grew as you thickened the stroke:
+            // width 16 reached 0.403 while the diode ring stayed put.
+            //
+            // Measured, not assumed. Two animations set to the same Ring
+            // Size were visibly different sizes, and the only thing
+            // separating them was which renderer drew them.
+            //
+            // Padding here rather than swapping a dozen `.stroke` calls for
+            // `.strokeBorder`: one place, and it catches every variant —
+            // including the ones that stroke something other than a plain
+            // circle.
             continuousContent(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
+                .padding(lw(scale) / 2)
         }
     }
 
@@ -584,6 +621,10 @@ public struct RingView: View {
     }
 
     private func lw(_ scale: CGFloat) -> CGFloat { CGFloat(config.lineWidth) * scale }
+
+    /// Clamped rather than trusted: a zero or negative scale would collapse
+    /// `scale` to 0 and take every derived dimension with it.
+    private var ringScale: CGFloat { CGFloat(min(max(config.ringScale, 0.05), 6)) }
 
     // MARK: - Animation variants
 
@@ -1268,7 +1309,44 @@ public struct RingView: View {
                 states.indices.contains(i) ? states[i] : DiodeState(color: all[0], opacity: 0)
             })
 
-        return glow(ring, color: all[0], boost: voiceLevel, scale: scale)
+        return glow(ring, color: emittedColor(of: states, fallback: all[0]),
+                    boost: voiceLevel, scale: scale)
+    }
+
+    /// The colour the ring is actually emitting, for the halo around it.
+    ///
+    /// The halo used to be drawn in `activeColors[0]` — the palette's
+    /// Primary. For everything this app authors that is also the colour on
+    /// the ring, so it looked right and was never questioned. For an
+    /// *imported* pattern it is simply wrong: a recorded stream carries its
+    /// own packed RGB per LED and a ported firmware field computes its own,
+    /// so neither has anything to do with the palette. Measured across the
+    /// library, every pattern glowed the same default cyan-blue —
+    /// `arm_away` is red on the band with a blue halo, `arm_home` orange
+    /// with a blue halo — which reads as a stale second ring sitting behind
+    /// the real one, especially through Liquid Glass, where the halo is
+    /// most of what the material has to refract.
+    ///
+    /// Averaged over the lit diodes and weighted by how lit each one is,
+    /// which is what spilled light is: a two-colour ring haloes purple, and
+    /// the brightest arc dominates. Falls back to the palette when nothing
+    /// is lit at all, so a dark frame doesn't halo black.
+    private func emittedColor(of states: [DiodeState], fallback: Color) -> Color {
+        var red = 0.0
+        var green = 0.0
+        var blue = 0.0
+        var total = 0.0
+        for state in states {
+            let weight = min(max(state.opacity, 0), 1)
+            guard weight > 0 else { continue }
+            let rgb = state.color.rgbComponents
+            red += rgb.red * weight
+            green += rgb.green * weight
+            blue += rgb.blue * weight
+            total += weight
+        }
+        guard total > 0 else { return fallback }
+        return Color(red: red / total, green: green / total, blue: blue / total)
     }
 
     /// The ring as one continuous stroke, colored by an `AngularGradient`
@@ -1527,6 +1605,14 @@ public struct RingView: View {
             field = spatiallySpread(field, spread: spread)
         }
 
+        // After the dilation, never before it: the dilation re-picks a
+        // winner per diode, so anything mixed first would simply be
+        // overwritten by whichever neighbour was brightest.
+        let blend = config.smoothingEnabled ? max(config.smoothingColorBlend, 0) : 0
+        if blend > 0.01 {
+            field = angularBlend(field, sigma: blend)
+        }
+
         let floor = min(max(config.diodeFloor, 0), 1)
         return field.map { sample in
             let level = floor + (1 - floor) * min(max(sample.level, 0), 1)
@@ -1690,6 +1776,74 @@ public struct RingView: View {
                 accumulator.add(field[neighbour], scaledBy: weight)
             }
             return accumulator.resolved
+        }
+    }
+
+    /// Mixes each diode's colour with its neighbours', leaving the
+    /// brightness envelope untouched.
+    ///
+    /// `spatiallySpread` above is a dilation: every diode takes the
+    /// strongest thing near it and that contribution's colour comes along
+    /// with it. That's what keeps a lone lit diode at full brightness — but
+    /// it also means two colours never actually meet. Widen the bleed on a
+    /// red arc next to a blue one and you get two wider arcs and the same
+    /// hard seam. This is the missing half: a genuine weighted average, so
+    /// the seam becomes red → purple → blue.
+    ///
+    /// Two things it deliberately doesn't do.
+    ///
+    /// **It never touches `level`.** Averaging brightness is exactly the
+    /// smudge the dilation exists to avoid, and one pass of it would undo
+    /// Bleed's whole reason for being a max. Brightness stays where Bleed
+    /// and Persistence put it; only the hue travels. So this can be pushed
+    /// to the top of its range without the pattern fading out, which is the
+    /// point — "blur the colours more" shouldn't mean "dim everything".
+    ///
+    /// **It works on the ring's samples, not on pixels.** A `.blur` masked
+    /// back to the band is the obvious implementation and it's the wrong
+    /// one twice over: a Gaussian across a thin stroke pulls in the
+    /// transparency either side of it, so the ring dims at its own edges,
+    /// and the mask that squares those edges back up crops the bleed
+    /// instead of restoring the brightness it lost. Blending *along* the
+    /// ring means the inner and outer edges are never part of the
+    /// calculation — they stay as crisp as the stroke that drew them at any
+    /// blend amount, there's no offscreen render pass per frame, and the
+    /// exporter reproduces it from the timestamp like everything else.
+    ///
+    /// Neighbours are weighted by their own level as well as by distance, so
+    /// colour comes from what's actually lit: a dark diode between two arcs
+    /// contributes nothing rather than dragging both toward black.
+    private func angularBlend(_ field: [FieldSample], sigma: Double) -> [FieldSample] {
+        let n = field.count
+        guard n > 1, sigma > 0.01 else { return field }
+        // Same two-sigma reach as the dilation, and the same wrap guard: on
+        // a twenty-diode ring anything wider starts folding onto itself.
+        let radius = min(max(Int(ceil(sigma * 2)), 1), n / 2)
+
+        return (0..<n).map { index in
+            var red = 0.0
+            var green = 0.0
+            var blue = 0.0
+            var total = 0.0
+            for offset in -radius...radius {
+                let neighbour = ((index + offset) % n + n) % n
+                let sample = field[neighbour]
+                let weight = exp(-Double(offset * offset) / (2 * sigma * sigma))
+                    * min(max(sample.level, 0), 1)
+                guard weight > 0 else { continue }
+                red += sample.red * weight
+                green += sample.green * weight
+                blue += sample.blue * weight
+                total += weight
+            }
+            // Nothing lit within reach: leave the diode exactly as it was
+            // rather than dividing by zero into black.
+            guard total > 0 else { return field[index] }
+            var out = field[index]
+            out.red = red / total
+            out.green = green / total
+            out.blue = blue / total
+            return out
         }
     }
 

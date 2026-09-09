@@ -58,7 +58,73 @@ public final class RingConfig: ObservableObject {
     @Published public var lineWidth: Double = 6
 
     /// Diameter used in the large preview (the tab bar preview has its own fixed size).
+    /// How big the preview *pod* is drawn, in points — "Preview Size".
+    ///
+    /// A viewing knob, which is why `RingPreset` leaves it out: how large
+    /// you happen to be looking at the ring isn't part of the animation.
+    /// `ringScale` is the one that is.
     @Published public var previewDiameter: Double = 160
+
+    /// The ring's diameter in the real tab bar, in points, at 100%.
+    ///
+    /// The device's own geometry: a 34pt ring inside a 62pt pod. Every
+    /// surface that draws the pod works to this ratio — the tab bar mockup
+    /// draws it literally, the Large Preview and the exporter draw it
+    /// magnified — so it lives here rather than as a literal in each.
+    ///
+    /// It is also what makes Ring Size mean something outside this app.
+    /// `ringScale` is a fraction, but a fraction of *what* was the
+    /// question: expressed against the preview it moved whenever you zoomed
+    /// in, which is useless for deciding how big to draw a ring in a real
+    /// tab bar. Against this it is an absolute number of device points.
+    public static let tabBarRingDiameter: Double = 34
+    public static let tabBarPodDiameter: Double = 62
+
+    /// What a ring is, unless something says otherwise: 44pt.
+    ///
+    /// Not 34. The device's own ring is 34pt and that is what
+    /// `tabBarRingDiameter` measures against, but 44 is the size this app's
+    /// work is designed at — it reads better in the pod and it is the size
+    /// every animation in the library should share so they can be compared
+    /// against each other rather than against their own settings.
+    ///
+    /// Presets written before Ring Size existed carry no value for it and
+    /// therefore land here, which is the point: changing this number
+    /// restyles the whole bundled library at once, and anything a designer
+    /// has explicitly set keeps what they set.
+    public static let defaultRingDiameterPoints: Double = 44
+
+    /// How much of that footprint the ring itself takes up, 0...1.
+    ///
+    /// Preview Size zooms the whole pod — ring and surrounding space
+    /// together — so it moves the picture closer without ever changing the
+    /// design. This is the other axis: the ring's own diameter inside a
+    /// footprint that stays put, the difference between a ring that fills
+    /// its pod and one that sits as a smaller disc in the middle of it.
+    ///
+    /// Scales the stroke with it, because `lw(_:)` and every particle and
+    /// glow dimension are derived from `size / referenceDiameter`. A ring
+    /// at 60% is the same design drawn smaller, not a thick ring squeezed
+    /// into a small circle — Ring Width is still there for that.
+    ///
+    /// Defaults to `defaultRingDiameterPoints` (44pt), not to the device's
+    /// own 34.
+    @Published public var ringScale: Double =
+        RingConfig.defaultRingDiameterPoints / RingConfig.tabBarRingDiameter
+
+    /// `ringScale` expressed as the tab bar ring's diameter in points.
+    ///
+    /// What the Ring Size control reads and writes. The rendering is
+    /// unchanged either way: every pod is drawn at the same 34/62 ratio, so
+    /// the Large Preview is a magnification of the tab bar rather than a
+    /// different shape, and a fraction of one is the same fraction of the
+    /// other. Only the number the designer is given changes — from "some
+    /// proportion of however far you happen to be zoomed in" to "this many
+    /// points on the device".
+    public var ringDiameterPoints: Double {
+        get { ringScale * Self.tabBarRingDiameter }
+        set { ringScale = max(newValue, 1) / Self.tabBarRingDiameter }
+    }
 
     /// Fraction of the circle (0...1) the bright arc covers in "Chasing"
     /// mode — the constant tail length in `.trailingTail` style, or the
@@ -165,6 +231,33 @@ public final class RingConfig: ObservableObject {
     /// spills into the interpolated stretch either side of it — the
     /// difference between a tight bright band and a soft wash.
     @Published public var smoothingSpread: Double = 1.4
+
+    /// How far a diode's *colour* mixes with its neighbours', in diodes.
+    ///
+    /// The other half of Bleed. `RingView.spatiallySpread` is a dilation —
+    /// each diode takes the strongest thing near it, and that contribution's
+    /// colour travels with it — which is what keeps a lone lit diode at full
+    /// brightness. The cost is that two colours never actually meet: widen
+    /// the bleed on a red arc next to a blue one and you get two wider arcs
+    /// with the same hard seam between them.
+    ///
+    /// This mixes them. Brightness is left exactly where Bleed and
+    /// Persistence put it and only the hue travels, so blending can go as
+    /// far as you like without the pattern washing out.
+    ///
+    /// 0 by default: it changes how every existing pattern reads, and that
+    /// should be a decision rather than an upgrade.
+    ///
+    /// The useful range depends entirely on how fast the pattern's colours
+    /// change around the ring, which is worth knowing before wondering why
+    /// the slider "stops working". On a pattern that alternates colour every
+    /// diode — the fastest a twenty-diode ring can carry — a sigma of 1
+    /// already flattens it completely and everything above does nothing. On
+    /// long arcs it keeps working out to about 6, which is why the range
+    /// ends there: at that width the kernel reaches the `n / 2` cap in
+    /// `RingView.angularBlend`, and half the ring is as far as anything can
+    /// reach on a circle.
+    @Published public var smoothingColorBlend: Double = 0
 
     /// Seconds of persistence after a diode goes dark.
     ///
