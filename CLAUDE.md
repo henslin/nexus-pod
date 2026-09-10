@@ -1378,12 +1378,19 @@ folder.** `firmware-streams.json` ships **72** animations;
 
 They are real and in use — they appear in `use-case-library.json`, and
 `BlendCheck` names one of them. `record_streams.py` only walks `patterns/`,
-so **a plain re-record writes 69 entries over a 72-entry fixture and
-silently drops them.** `FirmwareFieldCheck` iterates the *fixture*, so its
-coverage would fall from 72 to 69 with nothing failing.
-`library_manifest.py` does not catch this either — it hashes `patterns/`,
-never the fixture. Merge the three through, or accept the coverage loss
-deliberately.
+so **a plain re-record writes 69 entries over a 72-entry fixture and drops
+them.** `FirmwareFieldCheck` iterates the *fixture*, so its coverage would
+fall from 72 to 69. `library_manifest.py` does not catch this — it hashes
+`patterns/`, never the fixture.
+
+**This now fails loudly rather than silently (2026-09-10).**
+`FirmwareFieldCheck` asserts that the shipped library and the recordings
+describe the same set, in both directions, and its summary line reads
+`(72 shipped, all covered)` or `(72 shipped, 3 UNCOVERED)`. Verified by
+deleting the three from the fixture and watching it fail, then restoring —
+a coverage assertion nobody has seen fail is not yet an assertion. So after
+a swap you will be told what is missing; merge the three through, or drop
+them from `firmware-streams.json` deliberately.
 
 **The swap procedure**, from `Sources/FirmwareFieldCheck/`:
 

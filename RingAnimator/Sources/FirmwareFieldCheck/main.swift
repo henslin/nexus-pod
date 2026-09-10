@@ -170,12 +170,37 @@ func channels(_ rgb: RGB) -> [Int] {
 var streamFailures = 0
 var ledFrames = 0
 
+// MARK: - The recordings must cover the whole shipped library
+//
+// This check takes its worklist from the *recordings*, not from the library
+// it is checking — so anything shipped without a recording is not verified,
+// and nothing below would say so. That is a check which can quietly get
+// weaker while still printing a pass.
+//
+// It is a live risk, not a theoretical one: `record_streams.py` walks
+// `patterns/`, which holds 69 source scripts, while the shipped library has
+// 72 streams. Three of them (`braided_twist_blue_purple`,
+// `listen_rainbow_twin_pulse`, `speaking_response_waveform_blue_purple`)
+// have no source script, so a plain re-record writes a 69-entry fixture over
+// a 72-entry one and drops them. `library_manifest.py` cannot catch it —
+// it hashes `patterns/` and never looks at the fixture.
+//
+// So: assert the two sets are equal, and name what is missing from which.
+let shippedNames = Set(FirmwarePatternStream.library.keys)
+let recordedNames = Set(recorded.keys)
+
+for name in shippedNames.subtracting(recordedNames).sorted() {
+    print("❌ \(name): shipped, but has no recording — it would go unverified")
+    streamFailures += 1
+}
+for name in recordedNames.subtracting(shippedNames).sorted() {
+    print("❌ \(name): recorded, but missing from the shipped stream library")
+    streamFailures += 1
+}
+
 for (name, reference) in recorded.sorted(by: { $0.key < $1.key }) {
-    guard let stream = FirmwarePatternStream.stream(named: name) else {
-        print("❌ \(name): missing from the shipped stream library")
-        streamFailures += 1
-        continue
-    }
+    // Already reported by the coverage assertion above; don't count it twice.
+    guard let stream = FirmwarePatternStream.stream(named: name) else { continue }
     var mismatches = 0
     for frame in reference.frames {
         // One pass only. The wrap point is a boundary the two sides define
@@ -197,7 +222,10 @@ for (name, reference) in recorded.sorted(by: { $0.key < $1.key }) {
     }
 }
 
-print("\(ledFrames) LED-frames across \(recorded.count) recorded streams")
+let uncovered = shippedNames.subtracting(recordedNames).count
+print("\(ledFrames) LED-frames across \(recorded.count) recorded streams"
+      + " (\(shippedNames.count) shipped, "
+      + (uncovered == 0 ? "all covered)" : "\(uncovered) UNCOVERED)"))
 
 // MARK: - The fade engine
 //
