@@ -24,6 +24,13 @@ import Foundation
 /// to be `Sendable`. Every mutation stays on the main thread already: the
 /// only callers are SwiftUI views, a Combine sink on the config's own
 /// main-thread `objectWillChange`, and these `.main`-targeted deferrals.
+/// `@MainActor` states what the paragraph above already claimed. It was
+/// documented as main-thread-only and not declared as such, which left
+/// five warnings on the `UndoManager` calls — those methods are
+/// main-actor-isolated, and the compiler had no way to know these callers
+/// always are too. Declaring it turns a promise in a comment into one the
+/// compiler keeps.
+@MainActor
 public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     @Published public var timeline: RingTimeline {
         didSet {
@@ -175,7 +182,7 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     /// `RingPreset` a timeline of its own would let a step contain a
     /// timeline containing steps — recursion the type system would happily
     /// allow and nothing would stop.
-    public static func useCaseFileName(_ id: UUID) -> String {
+    nonisolated public static func useCaseFileName(_ id: UUID) -> String {
         "use-case-timeline-\(id.uuidString).json"
     }
 
@@ -197,7 +204,7 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
     /// Posted after any sequence is written, carrying its `fileName`.
     public static let didChange = Notification.Name("com.nexusringapp.timelineDidChange")
 
-    public static func storedTimeline(fileName: String) -> RingTimeline? {
+    nonisolated public static func storedTimeline(fileName: String) -> RingTimeline? {
         guard
             let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first,
             let data = try? Data(contentsOf: base
@@ -209,13 +216,13 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         return decoded
     }
 
-    public static func animationFileName(_ id: UUID) -> String {
+    nonisolated public static func animationFileName(_ id: UUID) -> String {
         "animation-timeline-\(id.uuidString).json"
     }
 
     /// Deletes a timeline store. Called when its use case is deleted, so
     /// the file doesn't outlive what it belonged to.
-    public static func deleteStore(fileName: String) {
+    nonisolated public static func deleteStore(fileName: String) {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return
         }

@@ -152,12 +152,18 @@ guard let frameData = try? Data(contentsOf: framesFixture),
     exit(1)
 }
 
-func channels(_ color: Color) -> [Int] {
-    let resolved = NSColor(color).usingColorSpace(.sRGB) ?? .black
+/// Takes components directly now that `Frame` carries them.
+///
+/// It used to build an `NSColor` and convert to sRGB. The components were
+/// already sRGB — `FirmwarePatternStream` writes them as
+/// `Color(red:green:blue:)`, which is sRGB — so the round trip was
+/// identity, and this comparison is against committed fixtures, which is
+/// what would say so if it weren't.
+func channels(_ rgb: RGB) -> [Int] {
     return [
-        Int((resolved.redComponent * 255).rounded()),
-        Int((resolved.greenComponent * 255).rounded()),
-        Int((resolved.blueComponent * 255).rounded()),
+        Int((rgb.red * 255).rounded()),
+        Int((rgb.green * 255).rounded()),
+        Int((rgb.blue * 255).rounded()),
     ]
 }
 

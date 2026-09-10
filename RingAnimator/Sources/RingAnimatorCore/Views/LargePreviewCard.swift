@@ -64,8 +64,12 @@ public struct LargePreviewCard<RingContent: View>: View {
     // The tab bar's ring pod: a 34pt ring centered in a 62pt circle (see
     // `TabBarPreview.ringPod`) — the same proportion `PreviewTab.largePreview`
     // scales its own margin by, reused verbatim here.
-    private let podDiameter: CGFloat = 34
-    private let podFrameDiameter: CGFloat = 62
+    // The device's own geometry, from the one place that owns it — see
+    // `RingConfig.tabBarRingDiameter`. It was a pair of literals in five
+    // files, which is four too many for a number the whole app's
+    // proportions are built on.
+    private let podDiameter = CGFloat(RingConfig.tabBarRingDiameter)
+    private let podFrameDiameter = CGFloat(RingConfig.tabBarPodDiameter)
 
     private var outerDiameter: CGFloat {
         diameter * (podFrameDiameter / podDiameter)

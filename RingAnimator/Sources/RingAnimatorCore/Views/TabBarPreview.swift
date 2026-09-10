@@ -132,8 +132,8 @@ public struct TabBarPreview: View {
     }
 
     private var ringPodBackgroundDuplicate: some View {
-        RingView(config: config, diameter: 34, overrideElapsed: playback?.elapsed)
-            .frame(width: 62, height: 62)
+        RingView(config: config, diameter: CGFloat(RingConfig.tabBarRingDiameter), overrideElapsed: playback?.elapsed)
+            .frame(width: CGFloat(RingConfig.tabBarPodDiameter), height: CGFloat(RingConfig.tabBarPodDiameter))
             .blur(radius: 4)
             // Multiplied into the existing 0.8, not replacing it — this
             // layer is deliberately dimmer than the pod itself (see
@@ -167,8 +167,8 @@ public struct TabBarPreview: View {
     }
 
     private var ringPod: some View {
-        RingView(config: config, diameter: 34, overrideElapsed: playback?.elapsed)
-            .frame(width: 62, height: 62)
+        RingView(config: config, diameter: CGFloat(RingConfig.tabBarRingDiameter), overrideElapsed: playback?.elapsed)
+            .frame(width: CGFloat(RingConfig.tabBarPodDiameter), height: CGFloat(RingConfig.tabBarPodDiameter))
             .opacity(playback?.opacity ?? 1)
     }
 

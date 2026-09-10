@@ -1041,6 +1041,42 @@ public struct RingView: View {
         /// that scale individual diodes (Sparkle). Ignored by `.segment`,
         /// which always fills the band.
         var sizeScale: CGFloat = 1
+
+        /// The colour's components, when whoever built this already had
+        /// them — which on the hot path they always do.
+        ///
+        /// `smoothedStates` computes each diode's colour as three Doubles
+        /// and wraps them in a `Color`; `ringGradient` and `emittedColor`
+        /// then unwrap them again through
+        /// `NSColor(_:).usingColorSpace(.deviceRGB)`, twice per frame per
+        /// ring. That is an object allocation and a colour-space
+        /// conversion per diode, to recover numbers the caller had a
+        /// moment earlier — and a sidebar of twenty rows pays it 4,800
+        /// times a second.
+        ///
+        /// Deliberately not a cache keyed by `Color`: these colours are
+        /// interpolated per diode per frame, so they are nearly all
+        /// distinct and a memo would grow without ever hitting.
+        private var components: (red: Double, green: Double, blue: Double)?
+
+        init(color: Color, opacity: Double, sizeScale: CGFloat = 1) {
+            self.color = color
+            self.opacity = opacity
+            self.sizeScale = sizeScale
+            self.components = nil
+        }
+
+        init(red: Double, green: Double, blue: Double, opacity: Double) {
+            self.color = Color(red: red, green: green, blue: blue)
+            self.opacity = opacity
+            self.sizeScale = 1
+            self.components = (red, green, blue)
+        }
+
+        /// The components, without a round trip when one isn't needed.
+        var rgb: (red: Double, green: Double, blue: Double) {
+            components ?? color.rgbComponents
+        }
     }
 
     /// Draws a full ring of `count` diodes, asking `state(_:)` what each
@@ -1233,6 +1269,11 @@ public struct RingView: View {
     /// form hardware needs anyway.
     private func diodeFieldRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let all = activeColors(elapsed: elapsed)
+        // Converted once per frame, here, and never again. Everything
+        // downstream — the field, every temporal tap, the smoothing and
+        // the halo — works in components from this point on. See `RGB`
+        // for what the old per-diode, per-tap conversion cost.
+        let palette = all.map(RGB.init)
         let count = max(Int(config.diodeCount.rounded()), 2)
         // Quantize once, here, so every diode in a frame agrees on the
         // time — and so `phase` (already derived from the unquantized
@@ -1264,7 +1305,7 @@ public struct RingView: View {
                 count: count,
                 elapsed: elapsed,
                 voiceLevel: voiceLevel,
-                colors: all,
+                colors: palette,
                 rippleNorm: rippleNorm
             )
             : (0..<count).map { i in
@@ -1276,7 +1317,7 @@ public struct RingView: View {
                     phase: tickedPhase,
                     elapsed: tickedElapsed,
                     voiceLevel: voiceLevel,
-                    colors: all,
+                    colors: palette,
                     rippleNorm: rippleNorm,
                     streamFrame: streamFrame
                 )
@@ -1284,10 +1325,11 @@ public struct RingView: View {
                 // low end keeps its shape — see `RingConfig.diodeFloor`.
                 let floor = min(max(config.diodeFloor, 0), 1)
                 let level = floor + (1 - floor) * lit.brightness
+                let rgb = config.diodeColorMode == .byLevel
+                    ? levelColor(level, colors: palette)
+                    : lit.color
                 return DiodeState(
-                    color: config.diodeColorMode == .byLevel
-                        ? levelColor(level, colors: all)
-                        : lit.color,
+                    red: rgb.red, green: rgb.green, blue: rgb.blue,
                     opacity: level * blinkMultiplier(index: i, elapsed: tickedElapsed)
                 )
             }
@@ -1339,7 +1381,7 @@ public struct RingView: View {
         for state in states {
             let weight = min(max(state.opacity, 0), 1)
             guard weight > 0 else { continue }
-            let rgb = state.color.rgbComponents
+            let rgb = state.rgb
             red += rgb.red * weight
             green += rgb.green * weight
             blue += rgb.blue * weight
@@ -1385,7 +1427,7 @@ public struct RingView: View {
         // `rgbComponents` goes through NSColor/UIColor, and the loop below
         // emits several stops per diode.
         let samples = states.map { state -> (r: Double, g: Double, b: Double, a: Double) in
-            let rgb = state.color.rgbComponents
+            let rgb = state.rgb
             return (rgb.red, rgb.green, rgb.blue, min(max(state.opacity, 0), 1))
         }
 
@@ -1489,7 +1531,7 @@ public struct RingView: View {
     private func rawField(
         at time: Double,
         count: Int,
-        colors all: [Color],
+        colors all: [RGB],
         rippleNorm: Double,
         voiceLevel: Double
     ) -> [FieldSample] {
@@ -1519,9 +1561,12 @@ public struct RingView: View {
             // folding it in here would let the trail decay *from* the floor
             // instead of to it.
             let level = lit.brightness * blinkMultiplier(index: i, elapsed: time)
-            let rgb = (config.diodeColorMode == .byLevel
-                       ? levelColor(level, colors: all)
-                       : lit.color).rgbComponents
+            // No conversion here any more, which is the whole point — see
+            // `RGB`. `all` arrives as components and `diodeIntensity`
+            // returns them, so the field is numbers end to end.
+            let rgb = config.diodeColorMode == .byLevel
+                ? levelColor(level, colors: all)
+                : lit.color
             return FieldSample(red: rgb.red, green: rgb.green, blue: rgb.blue, level: level)
         }
     }
@@ -1536,7 +1581,7 @@ public struct RingView: View {
         count: Int,
         elapsed: Double,
         voiceLevel: Double,
-        colors all: [Color],
+        colors all: [RGB],
         rippleNorm: Double
     ) -> [DiodeState] {
         // A thumbnail takes the spatial pass and skips the temporal one.
@@ -1617,7 +1662,7 @@ public struct RingView: View {
         return field.map { sample in
             let level = floor + (1 - floor) * min(max(sample.level, 0), 1)
             return DiodeState(
-                color: Color(red: sample.red, green: sample.green, blue: sample.blue),
+                red: sample.red, green: sample.green, blue: sample.blue,
                 opacity: level
             )
         }
@@ -2010,10 +2055,10 @@ public struct RingView: View {
         phase: Double,
         elapsed: Double,
         voiceLevel: Double,
-        colors all: [Color],
+        colors all: [RGB],
         rippleNorm: Double,
         streamFrame: FirmwarePatternStream.Frame? = nil
-    ) -> (color: Color, brightness: Double) {
+    ) -> (color: RGB, brightness: Double) {
         // A recorded command stream outranks everything: it isn't a model
         // of the device's output, it is the device's output. A dark LED is
         // genuinely dark here — these patterns turn pixels off as well as
@@ -2251,20 +2296,13 @@ public struct RingView: View {
     /// Interpolation is in plain sRGB components. Not perceptually
     /// uniform, but it's what the hardware crossfade does too, so matching
     /// it is the point rather than a shortcut.
-    private func levelColor(_ level: Double, colors: [Color]) -> Color {
-        guard colors.count > 1 else { return colors.first ?? .white }
+    private func levelColor(_ level: Double, colors: [RGB]) -> RGB {
+        guard colors.count > 1 else { return colors.first ?? RGB(red: 1, green: 1, blue: 1) }
         let clamped = min(max(level, 0), 1)
         let scaled = clamped * Double(colors.count - 1)
         let index = min(Int(scaled), colors.count - 2)
         let t = scaled - Double(index)
-
-        let low = colors[index].rgbComponents
-        let high = colors[index + 1].rgbComponents
-        return Color(
-            red: low.red + (high.red - low.red) * t,
-            green: low.green + (high.green - low.green) * t,
-            blue: low.blue + (high.blue - low.blue) * t
-        )
+        return colors[index].mixed(with: colors[index + 1], amount: t)
     }
 
     /// `BlinkPattern` as a 0...1 multiplier on a diode's brightness.
@@ -2448,7 +2486,7 @@ extension RingView {
     public static func probeBrightnesses(config: RingConfig, elapsed: Double) -> [Double] {
         let view = RingView(config: config, diameter: 160)
         let count = max(Int(config.diodeCount.rounded()), 2)
-        let all = view.activeColors(elapsed: elapsed)
+        let all = view.activeColors(elapsed: elapsed).map(RGB.init)
         let phase = view.easedPhaseValue(elapsed: elapsed)
         let rippleNorm = view.rippleNormalization()
         return (0..<count).map { i in

@@ -269,7 +269,7 @@ struct GrowFromRingModifier: ViewModifier {
     /// if the row's width ever changes.
     var rowWidth: CGFloat
 
-    private static let ringPodWidth: CGFloat = 62
+    private static let ringPodWidth = CGFloat(RingConfig.tabBarPodDiameter)
     private static let ringCenterYOffset: CGFloat = 41 // spacing (10) + half the row height (31)
 
     func body(content: Content) -> some View {

@@ -67,6 +67,14 @@ func run() -> Int32 {
     }
 
     print("  \(checked) animation types compared at \(sampleTimes.count) instants each")
+    // Derived from the enum rather than hard-coded, so adding an animation
+    // type without a comparison fails here instead of passing quietly. The
+    // loop above already fails on a broken export; this catches the other
+    // shape — a `continue` that forgets to.
+    if checked != RingAnimationType.allCases.count {
+        print("  ✗ compared \(checked) of \(RingAnimationType.allCases.count) animation types")
+        failed = true
+    }
     return failed ? 1 : 0
 }
 

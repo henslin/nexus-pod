@@ -263,8 +263,8 @@ struct RingStage: View {
     // The tab bar's ring pod: a 34pt ring centered in a 62pt circle (see
     // TabBarPreview.ringPod) — the proportions the large preview's margin
     // should match at any size.
-    private let podDiameter: CGFloat = 34
-    private let podFrameDiameter: CGFloat = 62
+    private let podDiameter = CGFloat(RingConfig.tabBarRingDiameter)
+    private let podFrameDiameter = CGFloat(RingConfig.tabBarPodDiameter)
 
     /// `RingView` scales its own stroke/glow/blur/particle sizes internally
     /// based on the `diameter` you pass it (relative to the pod's 34pt

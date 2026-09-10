@@ -19,7 +19,9 @@ import RingAnimatorCore
 @MainActor
 func run() async -> Int32 {
     var failed = false
+    var ran = 0
     func check(_ label: String, _ ok: Bool, _ detail: String) {
+        ran += 1
         print("  \(ok ? "✓" : "✗") \(label) — \(detail)")
         if !ok { failed = true }
     }
@@ -200,8 +202,31 @@ func run() async -> Int32 {
         check("streaming export", false, error.localizedDescription)
     }
 
+    if ran != expectedAssertions {
+        print("  ✗ ran \(ran) assertions, expected \(expectedAssertions) — "
+              + (ran < expectedAssertions
+                 ? "one skipped itself because its inputs came back nil"
+                 : "update expectedAssertions"))
+        failed = true
+    }
+
     return failed ? 1 : 0
 }
+
+/// How many assertions this check is supposed to run.
+///
+/// Every one of these targets builds its own inputs — render a frame,
+/// write a GIF, decode it back — and every one of those steps is an
+/// optional that can come back nil. Where that happens inside an `if let`
+/// or a `guard ... else { continue }`, the assertions underneath simply
+/// don't run and the gate still reports green. That is not hypothetical:
+/// `Pixels` rejected wide-gamut renders for a while, and two assertions
+/// about Ring Size quietly did nothing.
+///
+/// Counting them closes the whole class at once, including the paths
+/// nobody has thought of yet. Adding an assertion without bumping this
+/// fails too, which is the right direction to fail in.
+let expectedAssertions = 13
 
 func fileSize(_ url: URL) -> Int {
     ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int) ?? 0

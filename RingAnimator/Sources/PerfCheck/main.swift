@@ -76,6 +76,64 @@ func run() -> Int32 {
             .frame(width: 240, height: 240))
     }
 
+    // A real library pattern, not a Blender import.
+    //
+    // Everything above builds its config from spinning_rainbow.py, which
+    // is a parametric animation — no recorded stream. The 78 patterns the
+    // app actually ships are the other kind: a recorded command stream
+    // replayed per frame, which is a completely different cost. Measuring
+    // only the first kind is measuring the case nobody has on screen.
+    let bundledConfig: RingConfig = {
+        let c = RingConfig()
+        if let preset = UseCaseLibrary.bundled?.presets.first(where: {
+            $0.firmwarePatternStream != nil
+        }) {
+            preset.apply(to: c)
+        }
+        return c
+    }()
+    print("  (library pattern: stream = \(bundledConfig.firmwarePatternStream ?? "none"))")
+    timeFrames("row 22pt, real library pattern", count: 1, fps: 12) { i in
+        AnyView(RingView(config: bundledConfig, diameter: 22, overrideElapsed: Double(i) / 12,
+                         frameRate: RingView.thumbnailFrameRate)
+            .frame(width: 28, height: 28))
+    }
+    let bundledSmooth: RingConfig = {
+        let c = RingConfig()
+        if let preset = UseCaseLibrary.bundled?.presets.first(where: {
+            $0.firmwarePatternStream != nil
+        }) {
+            preset.apply(to: c)
+        }
+        c.smoothingEnabled = true
+        return c
+    }()
+    timeFrames("stage ring, real library pattern", count: 1, fps: 60) { i in
+        AnyView(RingView(config: bundledSmooth, diameter: 200, overrideElapsed: Double(i) / 60)
+            .frame(width: 240, height: 240))
+    }
+
+    // The worst case in the library: 3,359 recorded events, replayed from
+    // the beginning on every sample.
+    let heaviest: RingConfig = {
+        let c = RingConfig()
+        if let preset = UseCaseLibrary.bundled?.presets.first(where: {
+            $0.firmwarePatternStream == "spinning_rainbow_quad"
+        }) { preset.apply(to: c) }
+        c.smoothingEnabled = true
+        return c
+    }()
+    print("  (heaviest: stream = \(heaviest.firmwarePatternStream ?? "none"))")
+    timeFrames("stage ring, heaviest pattern", count: 1, fps: 60) { i in
+        AnyView(RingView(config: heaviest, diameter: 200, overrideElapsed: Double(i) / 60)
+            .frame(width: 240, height: 240))
+    }
+    timeFrames("row 22pt, heaviest pattern", count: 20, fps: 12) { i in
+        AnyView(RingView(config: heaviest, diameter: 22, overrideElapsed: Double(i) / 12,
+                         frameRate: RingView.thumbnailFrameRate)
+            .frame(width: 28, height: 28))
+    }
+
     let thumb = config { _ in }
     timeFrames("one list row, 22pt", count: 1, fps: 12) { i in
         AnyView(RingView(config: thumb, diameter: 22, overrideElapsed: Double(i) / 12, frameRate: RingView.thumbnailFrameRate)

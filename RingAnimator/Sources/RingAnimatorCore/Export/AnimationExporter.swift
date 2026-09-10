@@ -148,8 +148,8 @@ public enum AnimationExporter {
     // renders Large Preview at — keeps an exported clip's proportions
     // (ring thickness/glow relative to its round glass backing) consistent
     // with what you see in the app rather than introducing a third ratio.
-    private static let podDiameter: CGFloat = 34
-    private static let podFrameDiameter: CGFloat = 62
+    private static let podDiameter = CGFloat(RingConfig.tabBarRingDiameter)
+    private static let podFrameDiameter = CGFloat(RingConfig.tabBarPodDiameter)
 
     /// Builds a standalone `RingConfig` snapshot of `source` — via
     /// `RingPreset`, which already knows how to copy every animation-

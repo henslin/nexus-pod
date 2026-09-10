@@ -51,10 +51,15 @@ public struct FirmwarePatternStream: Sendable {
 
     /// The ring state at one instant.
     public struct Frame: Sendable {
-        public var color0: Color
-        public var color1: Color
+        public var color0: RGB
+        public var color1: RGB
         /// Per LED: nil when dark, otherwise the color it is showing.
-        public var leds: [Color?]
+        ///
+        /// Components rather than `Color`. `resolve` computes these as
+        /// three Doubles and the field wants them as three Doubles; wrapping
+        /// them in between cost a colour-space conversion per LED per
+        /// sample — see `RGB`.
+        public var leds: [RGB?]
     }
 
     public var name: String
@@ -146,7 +151,7 @@ public struct FirmwarePatternStream: Sendable {
     /// check.
     public func commandedFrame(atSeconds seconds: Double, ledCount: Int = 16) -> Frame {
         let state = resolve(atSeconds: seconds, ledCount: ledCount)
-        let leds = (0..<ledCount).map { i -> Color? in
+        let leds = (0..<ledCount).map { i -> RGB? in
             if let color = state.explicit[i] { return Self.color(color) }
             guard state.selected[i] else { return nil }
             return Self.color(state.bits[i] == 0 ? state.color0 : state.color1)
@@ -161,7 +166,7 @@ public struct FirmwarePatternStream: Sendable {
         // patterns turn pixels off" true rather than leaving a ring of
         // imperceptible embers lit forever.
         let floor = 0.5 / 255
-        let leds = state.emitted.map { component -> Color? in
+        let leds = state.emitted.map { component -> RGB? in
             guard component.0 > floor || component.1 > floor || component.2 > floor else { return nil }
             return Self.color(component)
         }
@@ -293,8 +298,8 @@ public struct FirmwarePatternStream: Sendable {
         (Double(r) / 255, Double(g) / 255, Double(b) / 255)
     }
 
-    private static func color(_ c: (Double, Double, Double)) -> Color {
-        Color(red: c.0, green: c.1, blue: c.2)
+    private static func color(_ c: (Double, Double, Double)) -> RGB {
+        RGB(red: c.0, green: c.1, blue: c.2)
     }
 
     private static func rgb(_ r: Int, _ g: Int, _ b: Int) -> Color {
