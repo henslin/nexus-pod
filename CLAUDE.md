@@ -1360,26 +1360,54 @@ One thing the count change surfaced that is worth carrying forward:
   except `FirmwareFieldCheck`. It's now kept as the expression. If you port
   another field, check whether its constants are literals or derived.
 
-### The app depends on `patterns/` but must not own it
+### `patterns/` is a swappable folder, and swapping it has one trap
 
-`patterns/` is an *extract* of a firmware repo, not a standalone library: it
-imports `led_ring_core` and `ktd2064_ring_model`, which aren't in the folder
-and live upstream next to `agw_ringled_patterns_harpy.c`. Vendoring a copy
-here would fork the source of truth for the device's behavior, which is a
-worse problem than depending on it. So changes to pattern behavior belong
-upstream, in the firmware repo — not in this one.
+`patterns/` is a folder of firmware pattern scripts that lives in this repo
+and gets replaced wholesale from time to time. It's an *extract* of a
+firmware repo — it imports `led_ring_core` and `ktd2064_ring_model`, which
+aren't in the folder — so behaviour changes still belong upstream. But the
+folder itself is just an input: swap it, re-record, commit.
 
-What this repo owns is **provenance**. `firmware-streams.json` and both check
-fixtures are generated from one specific state of that library, and without a
-record of which, "are our recordings stale?" can only be answered by
-re-recording and diffing.
+**Before swapping, know that the shipped library is bigger than the source
+folder.** `firmware-streams.json` ships **72** animations;
+`patterns/` holds **69** source scripts. These three ship with no source:
 
-    python3 library_manifest.py verify <patterns-dir>
+- `braided_twist_blue_purple`
+- `listen_rainbow_twin_pulse`
+- `speaking_response_waveform_blue_purple`
 
-exits non-zero listing every changed, added and removed file. Run it before a
-release; run `write` after re-recording. The manifest is a sha256 per file
-plus a combined snapshot id, so a pattern edited upstream and synced down can
-never silently invalidate the committed recordings.
+They are real and in use — they appear in `use-case-library.json`, and
+`BlendCheck` names one of them. `record_streams.py` only walks `patterns/`,
+so **a plain re-record writes 69 entries over a 72-entry fixture and
+silently drops them.** `FirmwareFieldCheck` iterates the *fixture*, so its
+coverage would fall from 72 to 69 with nothing failing.
+`library_manifest.py` does not catch this either — it hashes `patterns/`,
+never the fixture. Merge the three through, or accept the coverage loss
+deliberately.
+
+**The swap procedure**, from `Sources/FirmwareFieldCheck/`:
+
+```
+# 1. replace patterns/
+# 2. re-record both fixtures
+python3 dump_reference.py firmware-levels.json
+python3 record_streams.py  firmware-frames.json   # ← re-add the 3 orphans
+# 3. re-pin the manifest to the new folder
+python3 library_manifest.py write ../../../patterns
+# 4. ./preflight.sh, then commit
+```
+
+Verified 2026-09-10: against the current folder both recorders are
+deterministic, and all 69 shared patterns reproduce byte-identically
+(`frames`, `total_ms`, `tick_ms`). A fresh `record_streams.py` also emits
+`events` and `raw` debug keys (~375 KB) that the committed fixture doesn't
+carry, so the committed one was pruned — expect a size change that isn't a
+behaviour change.
+
+What this repo owns is **provenance**: `library_manifest.py verify
+<patterns-dir>` exits non-zero listing every changed, added and removed
+file, so a swapped-in folder can't silently invalidate the recordings that
+*are* derived from it.
 
 ### The pattern library was a 16-LED library
 
@@ -1994,17 +2022,11 @@ target directly a minute later succeeded, which is the tell.
   User data is not in the bundle — it lives in
   `~/Library/Application Support/RingAnimator/`, so deleting an installed
   copy never touches saved presets, use cases or timelines.
-- **The pattern library's edits still aren't upstream** — and `patterns/`
-  is now **committed into this repo** (2026-09-10, "Add Blender animation
-  scripts and patterns library"), which is in tension with "The app depends
-  on `patterns/` but must not own it" further up. The 20-LED corrections no
-  longer live only in iCloud, but they still haven't been reviewed into the
-  firmware repo, which is where firmware-behavior changes belong. Treat the
-  in-repo copy as a pinned snapshot, not the source of truth;
-  `library_manifest.py` is what records which snapshot the committed
-  recordings came from. **Worth an explicit decision** — vendored-and-pinned
-  is a defensible answer, but it should be the chosen one rather than a
-  side effect of moving the folder.
+- **The pattern library's 20-LED edits still aren't upstream** in the
+  firmware repo, which is where firmware-behavior changes belong. Living in
+  this repo is settled and fine (Chris, 2026-09-10: it's a folder of scripts
+  that gets swapped out from time to time) — see "`patterns/` is a swappable
+  folder" above for the procedure and the three-orphan trap.
 
 ## Git
 
