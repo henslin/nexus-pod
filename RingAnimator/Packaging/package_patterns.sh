@@ -18,7 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
-PATTERNS_DIR="${1:-${PATTERNS_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/Claude/patterns}}"
+PATTERNS_DIR="${1:-${PATTERNS_DIR:-$(dirname "$PACKAGE_DIR")/patterns}}"
 MANIFEST="$PACKAGE_DIR/Sources/FirmwareFieldCheck/pattern-library.manifest"
 
 [ -d "$PATTERNS_DIR" ] || { echo "no pattern library at $PATTERNS_DIR"; exit 1; }

@@ -3,13 +3,17 @@
 # Everything that must pass before cutting a release.
 #
 # This exists as a script rather than a list in CLAUDE.md because the list
-# was wrong the moment it was written: a plain `swift run FirmwareFieldCheck`
-# in this repo fails with "resource fork, Finder information, or similar
-# detritus not allowed". SwiftPM codesigns the resource bundle during the
-# build, iCloud re-stamps com.apple.FinderInfo mid-flight, and the build
-# dies — so *every* build here needs a scratch path outside iCloud, not just
-# the release one. A checklist you have to remember to decorate is a
+# was wrong the moment it was written: back when this repo lived in iCloud, a
+# plain `swift run FirmwareFieldCheck` failed with "resource fork, Finder
+# information, or similar detritus not allowed" — SwiftPM codesigns the
+# resource bundle during the build and the file provider re-stamped
+# com.apple.FinderInfo mid-flight, so *every* build needed a scratch path,
+# not just the release one. A checklist you have to remember to decorate is a
 # checklist that gets run wrong.
+#
+# The repo is out of iCloud now and in-tree builds work, but $SCRATCH stays:
+# it keeps build output out of a tracked tree and gives the xcodebuild step
+# below one SYMROOT to serialise on.
 #
 #   ./preflight.sh
 #
@@ -20,7 +24,7 @@ set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SCRATCH="${NEXUS_BUILD_DIR:-$HOME/Developer/NexusPod-Build}"
-PATTERNS_DIR="${PATTERNS_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/Claude/patterns}"
+PATTERNS_DIR="${PATTERNS_DIR:-$(cd .. && pwd)/patterns}"
 
 # One at a time. Every step writes into $SCRATCH, and two concurrent runs
 # share it: the swift builds take SwiftPM's own lock and merely wait, but

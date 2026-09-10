@@ -1,7 +1,13 @@
 """Record each pattern's literal command stream, then replay it to per-LED state."""
 import sys, types, json, math, os
 
-P = "/Users/chris/Library/Mobile Documents/com~apple~CloudDocs/Claude/patterns"
+# The library lives in this repo, beside RingAnimator/. Derived from this
+# file's location rather than an absolute path, so moving the checkout
+# doesn't leave the recorder reading a folder that no longer exists.
+P = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))),
+    "patterns")
 
 events = []   # (t_ms, kind, payload)
 

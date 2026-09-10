@@ -196,17 +196,19 @@ at once), then File > Open Recent to reopen `RingAnimatoriOS.xcodeproj`
 fresh. Sometimes also needs Reset Package Caches + Clean Build Folder.
 This is a recurring SwiftPM local-package-lock quirk, not a real bug.
 
-**Signing/distribution (macOS):** both the *build* and the *staging* happen
-outside iCloud on purpose — `~/Developer/NexusPod-Build` (override with
-`NEXUS_BUILD_DIR`) and `~/Developer/NexusPod-Release` (`NEXUS_STAGE_DIR`).
+**Signing/distribution (macOS):** the *build* and the *staging* go to
+`~/Developer/NexusPod-Build` (override with `NEXUS_BUILD_DIR`) and
+`~/Developer/NexusPod-Release` (`NEXUS_STAGE_DIR`).
 
-Neither can live in the repo. `xattr -cr` strips `com.apple.FinderInfo`
-before signing, iCloud's file provider puts it back before
-`codesign --verify` runs, and the step dies with "resource fork, Finder
-information, or similar detritus not allowed". Stripping harder doesn't win
-that race. The build needs the same treatment as the staging, because
-SwiftPM codesigns the resource bundle *during* the build — an in-tree
-`swift build -c release` fails before any of the signing steps run.
+They used to *have* to live outside the repo, because the repo was in
+iCloud: `xattr -cr` strips `com.apple.FinderInfo` before signing, the file
+provider put it back before `codesign --verify` ran, and the step died with
+"resource fork, Finder information, or similar detritus not allowed". That
+constraint is gone — **the repo moved to `~/Developer/Nexus Pod/` on
+2026-09-10** and an in-tree `swift build` (debug and release) now completes
+and codesigns cleanly. The scratch paths are kept anyway: they keep build
+output out of a tracked tree and give `preflight.sh` one place to serialise
+its `xcodebuild` step.
 
 That bug silently cost a release once — the Aug 26 build was Developer ID
 signed but never notarized, because the script died after signing and
@@ -233,7 +235,7 @@ documented in the script's own header comments. Run from
 Both scripts locate themselves, so run them by full path from anywhere:
 
 ```
-cd "/Users/chris/Library/Mobile Documents/com~apple~CloudDocs/Claude/Nexus Ring App/RingAnimator"
+cd "$HOME/Developer/Nexus Pod/RingAnimator"
 ./preflight.sh                      # four checks, ~1 min
 # bump Packaging/Info.plist — the script doesn't
 ./Packaging/build_and_sign.sh       # signs, notarizes, staples, zips
@@ -285,13 +287,20 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
 
 ## Known issues / recent fixes
 
-- **iCloud + codesign**: this whole repo lives in iCloud Drive, which tags
-  synced files with `com.apple.FinderInfo` extended attributes that
-  `codesign` rejects ("resource fork, Finder information, or similar
-  detritus not allowed"). Fixed by adding `xattr -cr "$APP_BUNDLE"` in
-  `build_and_sign.sh` right before signing. If any *other* script ever
-  shells out to `codesign` on a bundle in this repo, it'll need the same
-  treatment.
+- **iCloud + codesign (resolved by the move, worth knowing anyway)**: the
+  repo used to live in iCloud Drive, which tags synced files with
+  `com.apple.FinderInfo` extended attributes that `codesign` rejects
+  ("resource fork, Finder information, or similar detritus not allowed").
+  `build_and_sign.sh` still runs `xattr -cr "$APP_BUNDLE"` before signing,
+  which is now belt-and-braces rather than load-bearing.
+  **The move did not fix this on its own.** The old attributes came along
+  with the files — three device-frame PNGs under
+  `Sources/RingAnimatorCore/Resources/DeviceFrames.xcassets/` still carried
+  `FinderInfo`, the resource bundle inherited it, and the first build at the
+  new path failed exactly as before. Cleared once, tree-wide
+  (`xattr -c` over everything but `.git`), and outside iCloud nothing puts
+  them back. If a stray `FinderInfo` ever reappears, look for a file that
+  was copied *in* from iCloud rather than blaming the build.
 - **Stale build artifacts**: `RingAnimator/RingAnimator.zip` and
   `RingAnimator/Packaging/stage/RingAnimator.app` are leftovers from before
   the `BUNDLE_NAME` split above — safe to delete once you've confirmed a
@@ -317,14 +326,15 @@ In `build_and_sign.sh`, `EXECUTABLE_NAME="RingAnimator"` and
   If regenerating, match this look; don't reintroduce squircle/glass
   chrome — that was explicitly removed per product direction ("keep it
   simple with just the ring").
-- **Debug `swift build` fails in place; release doesn't.** The debug
-  build codesigns `RingAnimator_RingAnimatorCore.bundle` inside
-  `.build/`, which is in iCloud, and fails with the same "detritus"
-  error as above. Unlike the packaging case, `xattr -cr` does *not* fix
-  it — the file provider re-stamps the bundle as fast as it's written.
-  Build with a scratch path outside iCloud instead:
-  `swift build --scratch-path /tmp/nexus-build`. `swift build -c release`
-  works in place, so `build_and_sign.sh` is unaffected (verified).
+- **Debug `swift build` failed in place; fixed by the move (2026-09-10).**
+  The debug build codesigns `RingAnimator_RingAnimatorCore.bundle` inside
+  `.build/`, which was in iCloud, and died with the same "detritus" error;
+  `xattr -cr` couldn't win the race against the file provider re-stamping
+  it. The workaround was `swift build --scratch-path /tmp/nexus-build`.
+  Out of iCloud, a plain in-tree `swift build` completes — verified. The
+  one-time catch was a stale `.build/` carried over from the old path,
+  which emitted "Stale file ... outside of the allowed root paths" warnings
+  and still failed; deleting `.build/` and rebuilding cleared it.
 - **`swift run` shows no window.** A bare SwiftPM binary doesn't reliably
   get a window placed even with the linker-embedded Info.plist and the
   AppDelegate activation fix. To actually *look* at the app, assemble a
@@ -1958,27 +1968,38 @@ target directly a minute later succeeded, which is the tell.
   that cost an hour of chasing a phantom bug once, reading behavior from a
   binary that predated the change under test. Deleting the 1.0 copy removes
   the ambiguity.
-- **The pattern library's edits aren't upstream yet.** `patterns/` is an
-  extract of a firmware repo (see "The app depends on `patterns/` but must
-  not own it"), and the 20-LED corrections currently exist only in iCloud.
-  They're firmware-behavior changes and belong in that repo, reviewed.
-  Until then `library_manifest.py` at least pins which snapshot the
-  committed recordings came from.
+- **The pattern library's edits still aren't upstream** — and `patterns/`
+  is now **committed into this repo** (2026-09-10, "Add Blender animation
+  scripts and patterns library"), which is in tension with "The app depends
+  on `patterns/` but must not own it" further up. The 20-LED corrections no
+  longer live only in iCloud, but they still haven't been reviewed into the
+  firmware repo, which is where firmware-behavior changes belong. Treat the
+  in-repo copy as a pinned snapshot, not the source of truth;
+  `library_manifest.py` is what records which snapshot the committed
+  recordings came from. **Worth an explicit decision** — vendored-and-pinned
+  is a defensible answer, but it should be the chosen one rather than a
+  side effect of moving the folder.
 
 ## Git
 
-**There is a remote now**: `git@github.com:henslin/nexus-pod.git`. This
-section used to say there wasn't, and that rewriting local history was
-safe — it isn't any more for anything that has been pushed. `origin/master`
-was last seen at `2b0eb8b`, a long way behind, so most local commits are
-still unpushed and still safe to amend; check `git log origin/master..HEAD`
-before rewriting anything. Latest commits, most recent first:
+**Two remotes, both current as of 2026-09-10** — nothing is unpushed, so
+**nothing here is safe to amend or rebase any more**. Check
+`git log origin/master..HEAD` before rewriting anything regardless; this
+section has been wrong about that twice.
+
+- `origin` — `git@github.com:henslin/nexus-pod.git`
+- `nas` — `ssh://henslin@10.0.4.173:22/volume1/Git/nexus-pod.git`
+  (bare repos live in `/volume1/Git`, capital G)
+
+`master` tracks `origin/master`, so a bare `git push` goes to GitHub only —
+`git push nas master` is a separate step, and the two drift silently if you
+forget. Latest commits, most recent first:
 ```
-9fd225d Fix RootView background/tab bar safe-area layout bug
-48d88ef Simplify app icon to isolated ring, no glass squircle background
-a055099 Update app icon with new source art (Mac + iOS)
-3578602 Rename app display name to Nexus Pod (Mac + iOS)
-ab9b24a Add new Liquid Glass app icon (iOS icon set + macOS .icns)
+2202476 Add Blender animation scripts and patterns library
+d3433c7 Derive release.sh's project dir from its own location
+5a4e6cb Stop drawing for a window nobody is looking at (3.6.1)
+aee07c7 Refinement pass: what was measured, and what it cost (3.6.0)
+958dcaf An edit could land in the animation you had just left
 ```
 `.gitignore` note: patterns with a slash are root-anchored in git, so
 nested build output needs `**/` prefixes (e.g. `**/Packaging/stage/`) —

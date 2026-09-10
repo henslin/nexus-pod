@@ -10,6 +10,20 @@ import RingAnimatorCore
 // screen. This times the pieces separately so "69 rows at 12fps" and "one
 // stage ring at 60fps" can be compared in the same units: milliseconds of
 // main-thread work per second of wall clock.
+
+/// The pattern library, which lives in this repo beside `RingAnimator/`.
+///
+/// Derived from `#filePath` rather than `$HOME`: this used to be an
+/// absolute iCloud path, and moving the checkout left the check reading a
+/// folder that no longer existed — which reads as "every pattern failed"
+/// rather than "wrong folder". A path anchored to the source survives the
+/// next move too.
+let defaultPatternsDirectory: URL = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()   // the tool's own directory
+    .deletingLastPathComponent()   // Sources
+    .deletingLastPathComponent()   // RingAnimator
+    .deletingLastPathComponent()   // repo root
+    .appendingPathComponent("patterns")
 /// Every measurement taken, so the budgets at the end can be checked
 /// against them by name.
 ///
@@ -42,8 +56,7 @@ func timeFrames(_ label: String, count: Int, fps: Double, build: (Int) -> AnyVie
 
 @MainActor
 func run() -> Int32 {
-    let patterns = URL(fileURLWithPath: NSHomeDirectory())
-        .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/Claude/patterns")
+    let patterns = defaultPatternsDirectory
     let text = BlenderScriptImporter.readScriptFollowingDelegation(
         at: patterns.appendingPathComponent("spinning_rainbow.py"))?.text
 

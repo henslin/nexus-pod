@@ -16,6 +16,20 @@ import RingAnimatorCore
 //
 // Exits non-zero if any file that declares a scheduler imports nothing.
 
+/// The pattern library, which lives in this repo beside `RingAnimator/`.
+///
+/// Derived from `#filePath` rather than `$HOME`: this used to be an
+/// absolute iCloud path, and moving the checkout left the check reading a
+/// folder that no longer existed — which reads as "every pattern failed"
+/// rather than "wrong folder". A path anchored to the source survives the
+/// next move too.
+let defaultPatternsDirectory: URL = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()   // the tool's own directory
+    .deletingLastPathComponent()   // Sources
+    .deletingLastPathComponent()   // RingAnimator
+    .deletingLastPathComponent()   // repo root
+    .appendingPathComponent("patterns")
+
 @MainActor
 func main() -> Int32 {
     let args = CommandLine.arguments
@@ -23,8 +37,7 @@ func main() -> Int32 {
     if args.count > 1 {
         folder = URL(fileURLWithPath: args[1])
     } else {
-        folder = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/Claude/patterns")
+        folder = defaultPatternsDirectory
     }
 
     // The same discovery the app does, so a file the app would never see
