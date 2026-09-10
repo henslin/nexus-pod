@@ -1,0 +1,43 @@
+"""firmware_update_circular_fill — registered LED-ring pattern (see pattern_common.py)."""
+
+import math
+
+from pattern_common import *          # noqa: F401,F403
+from pattern_common import (          # noqa: F401
+    _PERLIN_P, _PERLIN_PERM, _dual_comet_varied, _hash01, _hue_rgb, _import_ripple_math, _in_any_arc, _perlin_fade, _perlin_grad, _perlin_lerp, _perlin_noise_3d, _ring_distance, _ripple_supports_tuning, _schedule_alternating_firmware, _schedule_battery_cascade, _schedule_blink_cycle, _schedule_braided_twist, _schedule_connected_flow, _schedule_level_threshold, _schedule_solid_firmware, _schedule_spin_firmware, _schedule_spin_solid_fade, _schedule_wake_bloom, _schedule_warble_kaleidoscope, _schedule_white_breath,
+)
+
+DURATION_MS = None
+RENDER_ONLY = False
+DESCRIPTION = ("Alternating blue/amber circular fill.")
+
+
+def schedule_firmware_update_circular_fill(controller, system):
+    """Firmware Update (circular fill): LEDs light progressively clockwise from index 0,
+    alternating a BLUE fill then an AMBER fill each full loop, for 4 cycles. 2-color
+    palette (Color0=blue, Color1=amber) set once and never rewritten; each cycle selects
+    LEDs with Color0 bits (0x00) or Color1 bits (0x07). One global fade rate (2) smooths
+    the fill."""
+    fill_time_ms = 2000
+    num_cycles = 4
+    fade_rate = 2
+    start_led = 0
+
+    ms_per_led = max(50, (fill_time_ms // TOTAL_LEDS) // 50 * 50)
+
+    controller.add_event_at_time_ms(0, set_fade_rate, system, fade_rate)
+    controller.add_event_at_time_ms(0, set_color0, system, *COLOR_BLUE)
+    controller.add_event_at_time_ms(0, set_color1, system, *COLOR_AMBER)
+    controller.add_event_at_time_ms(0, global_off, system)
+
+    current_time_ms = 0
+    for cycle in range(num_cycles):
+        color_register = 0x00 if cycle % 2 == 0 else 0x07
+        for step in range(TOTAL_LEDS):
+            step_time_ms = current_time_ms + step * ms_per_led
+            current_led = (start_led + step) % TOTAL_LEDS
+            controller.add_event_at_time_ms(step_time_ms, select_led, system, current_led, True, color_register)
+        current_time_ms += TOTAL_LEDS * ms_per_led
+
+    controller.add_event_at_time_ms(current_time_ms + 500, global_off, system)
+    return current_time_ms + 1000
