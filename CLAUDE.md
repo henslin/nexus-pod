@@ -1977,12 +1977,26 @@ target directly a minute later succeeded, which is the tell.
 
 ## Open items (not yet done)
 
-- **TestFlight app name**: TestFlight was still showing an old app name to
-  testers. This is a separate App Store Connect metadata field ("App
-  Information → Name" at appstoreconnect.apple.com), independent of the
-  binary's `CFBundleDisplayName` — not fixable from Xcode or this repo.
-  Needs a manual edit in the App Store Connect web portal. Unconfirmed
-  whether this has been done yet.
+- ~~**TestFlight app name**~~ — **done, confirmed 2026-09-10.** App Store
+  Connect → App Information → Name already reads "Nexus Pod", with no
+  unsaved changes. The App Store Connect record exists and matches the repo:
+
+  | | |
+  |---|---|
+  | Name | Nexus Pod |
+  | Bundle ID | `ringanimator.RingAnimatoriOS` |
+  | Apple ID | 6799259659 |
+  | SKU | `ringanimatorios-2026` |
+  | Status | 1.0 Prepare for Submission (never released) |
+
+  Kept here because the *reason* it was an open item is still worth knowing:
+  the tester-facing name is App Store Connect metadata, entirely separate
+  from the binary's `CFBundleDisplayName` (which both build configs already
+  set to "Nexus Pod"), and it is not fixable from Xcode or this repo. App
+  Information also warns that changes "will be released with your next app
+  version", so a name edit is not necessarily what a tester is looking at.
+  If a tester ever reports the wrong name again, check which of the two
+  names they mean before touching anything.
 - **Local test data**: `~/Library/Application Support/RingAnimator/` holds
   local `saved-presets.json`/`use-cases.json` on the dev machine — currently
   the 69 imported firmware patterns. This is *not* shipped (confirmed —
