@@ -28,7 +28,13 @@ else
   exit 1
 fi
 
-PROJECT_DIR="/Users/chris/Library/Mobile Documents/com~apple~CloudDocs/Claude/Nexus Ring App"
+# Derived from this script's own location, not hardcoded.
+#
+# It used to name an absolute path inside iCloud Drive, which broke the
+# moment the project moved out of it. The script lives at
+# <project>/RingAnimator/release.sh, so its own directory's parent is the
+# project root wherever that happens to be.
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="RingAnimator"
 TEAM_ID="NR8MAUF922"
 SIGN_IDENTITY="Developer ID Application: Chris Henslin ($TEAM_ID)"
