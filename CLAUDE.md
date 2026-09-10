@@ -413,6 +413,60 @@ A single render reuses `BatchExportView` with a one-item list, which is
 also how single-animation GIF export came to exist outside the phone
 mockup's own button.
 
+## The 3.6 pass: what was actually slow, and what wasn't
+
+Measured before and after, in milliseconds of main-thread work per second
+of wall clock:
+
+| surface | before | after |
+| --- | --- | --- |
+| sidebar of 20 rows | 121.0 | 60.1 |
+| Cue Library, 20 rows | 138.2 | 52.9 |
+| stage ring, smoothed gradient | 51.3 | 20.6 |
+| stage ring, heaviest pattern | 68.2 | 24.5 |
+| one `RingConfig()` | 0.452 ms | 0.079 ms |
+
+Two changes account for nearly all of it, and neither was where the
+guessing pointed.
+
+**Colours were making a round trip.** A stream replay computes each LED's
+light as three Doubles and wrapped them in a `Color`; the field unwrapped
+them again microseconds later through
+`NSColor(_:).usingColorSpace(.deviceRGB)`, per diode, per sampled instant.
+Smoothing samples at the playhead plus up to nine temporal taps, so one
+twenty-diode frame could ask for two hundred conversions, times twenty
+rows. Stubbing the conversion out measured it at **57–68% of a frame**.
+`RGB` carries the numbers instead — see its doc comment.
+
+**Every thumbnail owned a voice stack.** `RingConfig` is the document and
+also what each row, timeline step and cue preview keeps as a
+`@StateObject`; its initializer read the Keychain and built an
+`ElevenLabsVoiceService`, a `VoiceConversationController` and a Combine
+bridge. A sidebar was a hundred of them. Now built on first use, and
+gated: `BlendCheck` renders a frame and asserts the stack is still
+unbuilt.
+
+### What was measured and rejected
+
+Worth recording, because both looked obviously right:
+
+- **Memoizing the stream replay.** `resolve` walks the event list from the
+  beginning every call and the largest pattern is 3,359 events, so caching
+  the frames looked free. Measured: **68.1 vs 68.2 ms/s**. It breaks early
+  at the playhead, so it walks half the list of cheap arithmetic. Reverted.
+- **Fewer gradient stops in thumbnails.** 81 stops at 28 points is
+  obviously too many. Measured: no change. Reverted.
+
+### Checks that could not fail
+
+Every check target now asserts how many assertions it ran. Preconditions
+in these are optionals — render a frame, write a GIF, decode it back — and
+where one came back nil inside an `if let`, the assertions underneath
+simply didn't run and the gate stayed green. It had already happened:
+`Pixels` rejected wide-gamut renders and two Ring Size assertions quietly
+did nothing. Verified by making `Pixels.normalized` return nil, which
+takes BlendCheck from 35 assertions to 21 and now fails loudly.
+
 ## GIF bands on gradients, and it isn't the renderer
 
 Measured, because it looks like a bug in Blend and isn't. One frame of a

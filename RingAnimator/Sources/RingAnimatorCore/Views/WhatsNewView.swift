@@ -154,33 +154,33 @@ public enum WhatsNew {
     /// Bump this when the notes change. The screen shows itself once per
     /// value, so editing the copy without bumping it means nobody who has
     /// already dismissed the old notes ever sees the new ones.
-    public static let version = "3.5"
+    public static let version = "3.6"
 
     public static let current: [WhatsNewItem] = [
         WhatsNewItem(
-            symbol: "circle.dashed",
-            title: "Ring Size, in Real Points",
-            detail: "How big the ring is, measured against the tab bar's own — so a number here means something on a device, not just in the preview. Every animation now starts at 44pt, and code exports carry that size instead of your zoom level."
+            symbol: "gauge.with.dots.needle.67percent",
+            title: "About Twice as Fast",
+            detail: "Lists and previews do roughly half the work they used to. Colours were making a needless round trip on every diode of every frame, and every thumbnail was quietly building a voice service it never used."
         ),
         WhatsNewItem(
-            symbol: "drop.halffull",
-            title: "Blend",
-            detail: "Bleed spreads light; Blend mixes colour. A red arc meeting a blue one now runs red through purple to blue instead of meeting at a seam — and only the colour moves, so brightness and the ring's clean edges stay exactly where they were."
+            symbol: "exclamationmark.triangle",
+            title: "Deleting Asks First",
+            detail: "Deleting an animation takes its sequence with it, and deleting a section takes every animation in it. Both now confirm, and the section one counts what's about to go."
         ),
         WhatsNewItem(
-            symbol: "sun.max",
-            title: "The Glow Finally Matches",
-            detail: "Every imported pattern used to glow the same default blue no matter what colour it was, which read as a stale ring sitting behind the real one. The halo now takes its colour from the light the ring is actually emitting."
+            symbol: "lifepreserver",
+            title: "A Library That Won't Load Is Kept",
+            detail: "If the file behind a list can't be read — a truncated write, a half-synced iCloud copy — it's set aside rather than replaced with an empty one on the next edit."
         ),
         WhatsNewItem(
-            symbol: "slider.horizontal.below.rectangle",
-            title: "Scrub Frame by Frame",
-            detail: "The playhead is the clock now, stopped or not: pause holds the exact frame you were watching, and dragging the scrubber moves through the animation the way a video scrubber does."
+            symbol: "arrow.triangle.branch",
+            title: "Edits Stay Where You Made Them",
+            detail: "Turning a knob could be captured into the selected step of an animation you'd already navigated away from. Each animation's sequence now only listens while you're actually looking at it."
         ),
         WhatsNewItem(
-            symbol: "square.grid.3x3.square",
-            title: "Smoother GIFs",
-            detail: "GIF has 256 colours to spend, which turns a gradient into visible bands. \"Smooth GIF gradients\" dithers them away for about a third more file. Transparent GIFs also stop growing a blotchy disc in the middle of the ring."
+            symbol: "magnifyingglass",
+            title: "Search Everywhere",
+            detail: "The Nexus list can be searched like Use Cases and the Cue Library. Every slider and switch is named for VoiceOver, too."
         ),
     ]
 }
