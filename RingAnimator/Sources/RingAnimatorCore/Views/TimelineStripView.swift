@@ -141,6 +141,7 @@ public struct TimelineStripView: View {
             }
             .disabled(player.timeline.isEmpty)
             .help(player.isPlaying ? "Pause" : "Play the sequence")
+            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
             .ringGlassButtonStyle()
 
             Button {
@@ -150,6 +151,7 @@ public struct TimelineStripView: View {
             }
             .disabled(player.timeline.isEmpty)
             .help("Back to start")
+            .accessibilityLabel("Back to start")
             .ringGlassButtonStyle()
 
             Toggle(isOn: $player.timeline.loops) {
@@ -158,6 +160,7 @@ public struct TimelineStripView: View {
             .toggleStyle(.button)
             .ringGlassButtonStyle()
             .help("Loop the whole sequence")
+            .accessibilityLabel("Loop the sequence")
 
             if !isCompact {
                 Text(timecode)

@@ -92,8 +92,12 @@ public struct GlassSectionCard<Content: View>: View {
                 }
 
                 if let masterToggle {
+                    // Labelled for VoiceOver even though the label is
+                    // hidden: this switch turns a whole section on and off,
+                    // and unlabelled it reads as just "switch".
                     Toggle("", isOn: masterToggle)
                         .labelsHidden()
+                        .accessibilityLabel(title)
                         .toggleStyle(.switch)
                         #if os(macOS)
                         .controlSize(.small)

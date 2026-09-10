@@ -43,6 +43,7 @@ public struct PasteableTextField: View {
                 pasteFromClipboard()
             } label: {
                 Image(systemName: "doc.on.clipboard")
+                    .accessibilityLabel("Paste")
             }
             .help("Paste from clipboard")
             .ringGlassButtonStyle()

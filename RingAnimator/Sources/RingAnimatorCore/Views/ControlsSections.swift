@@ -728,6 +728,7 @@ struct ColorSection: View {
                 }
                 .buttonStyle(.plain)
                 .help("Remove \(name)")
+                .accessibilityLabel("Remove \(name)")
             }
             Text(color.hexString).font(.caption).foregroundStyle(.secondary)
             ApprovedColorSwatchGrid(selectedHex: color.hexString) { newValue in
@@ -864,10 +865,19 @@ struct LabeledSlider: View {
     var body: some View {
         HStack {
             Text(title)
+            // The `Text` beside a `Slider` is not its label as far as
+            // VoiceOver is concerned — it's a separate element, and the
+            // slider announces itself as just "slider". Naming it here
+            // covers every slider in the app at once, since they are all
+            // built from this.
             Slider(value: $value, in: range)
+                .accessibilityLabel(title)
             Text(String(format: format, value))
                 .font(.caption.monospacedDigit())
                 .frame(width: 52, alignment: .trailing)
+                // Already spoken by the slider itself; reading it twice is
+                // noise.
+                .accessibilityHidden(true)
         }
     }
 }
