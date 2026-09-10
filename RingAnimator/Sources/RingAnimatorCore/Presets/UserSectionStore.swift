@@ -93,7 +93,11 @@ public final class UserSectionStore: ObservableObject {
 
     private func load() {
         guard let fileURL, let data = try? Data(contentsOf: fileURL) else { return }
-        sections = (try? JSONDecoder().decode([UserSection].self, from: data)) ?? []
+        if let decoded = try? JSONDecoder().decode([UserSection].self, from: data) {
+            sections = decoded
+            return
+        }
+        UnreadableStore.setAside(fileURL)
     }
 
     private func save() {

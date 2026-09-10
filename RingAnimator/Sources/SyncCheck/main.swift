@@ -146,6 +146,43 @@ func run() -> Int32 {
     }
     cleanUp("sync-check-existing.json")
 
+    // A library that won't decode must not be quietly replaced with an
+    // empty one.
+    //
+    // Every store used to read "if the file is unreadable, start empty",
+    // and the next edit called `save()`, which wrote `[]` over it. One
+    // truncated write or half-synced iCloud file and the whole library was
+    // gone, with the first sign being an empty list and no way back.
+    do {
+        let name = "corrupt-check-\(UUID().uuidString).json"
+        let store = RingPresetStore(fileName: name)
+        store.add(RingPreset(name: "Something Worth Keeping", config: RingConfig()))
+        let url = RingPresetStore.storageURL(for: name)
+        // Truncated mid-object, which is what a interrupted write leaves.
+        try? Data("[{\"name\":\"Someth".utf8).write(to: url)
+
+        let reopened = RingPresetStore(fileName: name)
+        check("an unreadable library opens empty rather than crashing",
+              reopened.presets.isEmpty, "\(reopened.presets.count) presets")
+
+        // The rescue: the bytes moved aside instead of being overwritten.
+        let dir = url.deletingLastPathComponent()
+        let stem = url.deletingPathExtension().lastPathComponent
+        let rescued = (try? FileManager.default.contentsOfDirectory(atPath: dir.path))?
+            .filter { $0.hasPrefix(stem + ".unreadable-") } ?? []
+        check("and the unreadable file is kept, not overwritten",
+              rescued.count == 1, rescued.first ?? "nothing was set aside")
+
+        // Saving now can't destroy it, because it isn't there any more.
+        reopened.add(RingPreset(name: "New", config: RingConfig()))
+        check("a later save doesn't touch the rescued copy",
+              ((try? Data(contentsOf: dir.appendingPathComponent(rescued.first ?? "")))?.count ?? 0) > 0,
+              "rescued copy still on disk")
+
+        try? FileManager.default.removeItem(at: url)
+        for name in rescued { try? FileManager.default.removeItem(at: dir.appendingPathComponent(name)) }
+    }
+
     if ran != expectedAssertions {
         print("  ✗ ran \(ran) assertions, expected \(expectedAssertions) — "
               + (ran < expectedAssertions
@@ -170,7 +207,7 @@ func run() -> Int32 {
 /// Counting them closes the whole class at once, including the paths
 /// nobody has thought of yet. Adding an assertion without bumping this
 /// fails too, which is the right direction to fail in.
-let expectedAssertions = 11
+let expectedAssertions = 14
 
 func writeRecord(_ record: UseCaseLibrary.InstallRecord, to url: URL) {
     let encoder = JSONEncoder()

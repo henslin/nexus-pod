@@ -155,7 +155,11 @@ public final class RingPresetStore: ObservableObject {
 
     // MARK: - Persistence
 
-    private var storageURL: URL {
+    private var storageURL: URL { Self.storageURL(for: fileName) }
+
+    /// Where a store by that name lives. Exposed so a check can corrupt one
+    /// on purpose — see SyncCheck.
+    public static func storageURL(for fileName: String) -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         let dir = base.appendingPathComponent("RingAnimator", isDirectory: true)
@@ -165,7 +169,13 @@ public final class RingPresetStore: ObservableObject {
 
     private func load() {
         guard let data = try? Data(contentsOf: storageURL) else { return }
-        presets = (try? JSONDecoder().decode([RingPreset].self, from: data)) ?? []
+        if let decoded = try? JSONDecoder().decode([RingPreset].self, from: data) {
+            presets = decoded
+            return
+        }
+        // The file is there and won't decode. Don't let the next save
+        // write an empty list over it — see `UnreadableStore`.
+        UnreadableStore.setAside(storageURL)
     }
 
     private func save() {

@@ -136,12 +136,17 @@ struct AnimationExportView: View {
                 .foregroundStyle(.secondary)
 
             if !timeline.isEmpty {
+                // Radios, matching Mode in the same sheet.
+                //
+                // Choosing what to export is picking a value, not switching
+                // what the sheet displays — and this sheet had already
+                // settled on radios for exactly that.
                 Picker("Source", selection: $source) {
                     ForEach(ExportSource.allCases) { option in
                         Text(option.rawValue).tag(option)
                     }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.radioGroup)
                 .labelsHidden()
             }
 

@@ -645,12 +645,18 @@ struct LiquidGlassSection: View {
     @ObservedObject var config: RingConfig
 
     var body: some View {
+        // A menu, like every other enum in this panel.
+        //
+        // This was the one segmented control among eleven menus, for no
+        // reason anyone could point at — and a segmented control is for
+        // switching what a view *shows*, not for picking a property's
+        // value. Glass Style is a property.
         Picker("Style", selection: $config.glassStyle) {
             ForEach(GlassStyle.allCases) { style in
                 Text(style.rawValue).tag(style)
             }
         }
-        .pickerStyle(.segmented)
+        .pickerStyle(.menu)
 
         Toggle("Tint", isOn: $config.glassTintEnabled)
         if config.glassTintEnabled {

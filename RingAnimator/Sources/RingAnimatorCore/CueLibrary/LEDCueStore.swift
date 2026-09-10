@@ -73,7 +73,11 @@ public final class LEDCueStore: ObservableObject {
 
     private func load() {
         guard let data = try? Data(contentsOf: Self.storageURL) else { return }
-        overrides = (try? JSONDecoder().decode([String: LEDCueParameters].self, from: data)) ?? [:]
+        if let decoded = try? JSONDecoder().decode([String: LEDCueParameters].self, from: data) {
+            overrides = decoded
+            return
+        }
+        UnreadableStore.setAside(Self.storageURL)
     }
 
     private func save() {
