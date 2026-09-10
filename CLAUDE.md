@@ -1982,10 +1982,7 @@ target directly a minute later succeeded, which is the tell.
 
 ## Git
 
-**Two remotes, both current as of 2026-09-10** — nothing is unpushed, so
-**nothing here is safe to amend or rebase any more**. Check
-`git log origin/master..HEAD` before rewriting anything regardless; this
-section has been wrong about that twice.
+**Two remotes:**
 
 - `origin` — `git@github.com:henslin/nexus-pod.git`
 - `nas` — `ssh://henslin@10.0.4.173:22/volume1/Git/nexus-pod.git`
@@ -1993,14 +1990,21 @@ section has been wrong about that twice.
 
 `master` tracks `origin/master`, so a bare `git push` goes to GitHub only —
 `git push nas master` is a separate step, and the two drift silently if you
-forget. Latest commits, most recent first:
+forget. To check both at once:
+
 ```
-2202476 Add Blender animation scripts and patterns library
-d3433c7 Derive release.sh's project dir from its own location
-5a4e6cb Stop drawing for a window nobody is looking at (3.6.1)
-aee07c7 Refinement pass: what was measured, and what it cost (3.6.0)
-958dcaf An edit could land in the animation you had just left
+git log --oneline origin/master..HEAD          # unpushed to GitHub
+git ls-remote nas master                       # compare to git rev-parse HEAD
 ```
+
+**Assume nothing here is safe to amend or rebase.** This section used to
+claim the opposite, then claimed `origin/master` was "a long way behind" at
+`2b0eb8b` — wrong both times, and wrong in the direction that loses other
+people's commits. Run the check above rather than trusting a sentence.
+
+**No commit list lives here.** There was one, pinned three separate times,
+and it was stale within a commit on each occasion — the third time by the
+very commit that re-pinned it. `git log --oneline -10` is never out of date.
 `.gitignore` note: patterns with a slash are root-anchored in git, so
 nested build output needs `**/` prefixes (e.g. `**/Packaging/stage/`) —
 already fixed once after this bit a commit; keep it in mind adding new
