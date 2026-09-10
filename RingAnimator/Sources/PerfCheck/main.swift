@@ -43,6 +43,22 @@ func run() -> Int32 {
         return c
     }
 
+    // What one `RingConfig` costs to exist.
+    //
+    // Every thumbnail row, every timeline step and every cue preview owns
+    // one as a `@StateObject`, and its initializer reads the Keychain and
+    // builds a voice service, a conversation controller and a Combine
+    // pipeline. A sidebar is a hundred of them.
+    do {
+        let start = Date()
+        var keep: [RingConfig] = []
+        for _ in 0..<100 { keep.append(RingConfig()) }
+        let each = Date().timeIntervalSince(start) / 100 * 1000
+        print(String(format: "  one RingConfig() costs %.3f ms — %.0f ms for a sidebar of 100\n",
+                     each, each * 100))
+        _ = keep.count
+    }
+
     print("main-thread cost per second of wall clock:\n")
 
     // The floor. ImageRenderer has fixed per-call overhead, and if that
@@ -132,6 +148,26 @@ func run() -> Int32 {
         AnyView(RingView(config: heaviest, diameter: 22, overrideElapsed: Double(i) / 12,
                          frameRate: RingView.thumbnailFrameRate)
             .frame(width: 28, height: 28))
+    }
+
+    // The Cue Library's own rows, which nothing here had ever measured.
+    // They render through `LEDCuePreviewView` rather than `RingView`, so
+    // none of the numbers above describe them.
+    if let cue = LEDCueLibrary.all.first {
+        timeFrames("cue library row, 22pt", count: 20, fps: 12) { i in
+            AnyView(LEDCuePreviewView(parameters: cue.defaultParameters, diameter: 22, lineWidth: 3,
+                                      overrideElapsed: Double(i) / 12,
+                                      frameRate: RingView.thumbnailFrameRate)
+                .frame(width: 28, height: 28))
+        }
+    }
+    // A ring whose config names a spec-sheet style: `RingView` hands it to
+    // `LEDCuePreviewView`, rebuilding an `LEDCueParameters` every frame,
+    // hex strings and all.
+    let styled = config { $0.patternStyle = .spin; $0.firmwarePatternStream = nil }
+    timeFrames("ring with a cue style, 200pt", count: 1, fps: 60) { i in
+        AnyView(RingView(config: styled, diameter: 200, overrideElapsed: Double(i) / 60)
+            .frame(width: 240, height: 240))
     }
 
     let thumb = config { _ in }

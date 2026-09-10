@@ -8,10 +8,61 @@ import Combine
 public final class RingConfig: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
-    public init() {
-        elevenLabsAPIKey = KeychainHelper.load(account: Self.elevenLabsAPIKeyAccount) ?? ""
-        voiceConversation = VoiceConversationController(elevenLabs: elevenLabs)
+    /// Read from the Keychain once per process, not once per config.
+    ///
+    /// Every thumbnail row, every timeline step and every cue preview owns
+    /// a `RingConfig` as a `@StateObject` — a sidebar is a hundred of them
+    /// — and each one was doing a synchronous Keychain lookup in its
+    /// initializer. The key is the same for all of them.
+    ///
+    /// The cost of not sharing it: a config built after the key is edited
+    /// no longer picks up the new value. Nothing depends on that — the
+    /// Voice settings bind to the one live config, whose in-memory value
+    /// is what they edited — and `didSet` still writes changes through to
+    /// the Keychain for the next launch.
+    private static let storedAPIKey: String =
+        KeychainHelper.load(account: elevenLabsAPIKeyAccount) ?? ""
 
+    public init() {
+        elevenLabsAPIKey = Self.storedAPIKey
+    }
+
+    /// The voice machinery, built on first use rather than in `init`.
+    ///
+    /// A `RingConfig` is not only the document — it is also what every
+    /// thumbnail row, timeline step and cue preview keeps as a
+    /// `@StateObject`, so a sidebar holds a hundred of them. Building an
+    /// `ElevenLabsVoiceService`, a `VoiceConversationController` and a
+    /// Combine bridge inside every one of those cost 0.29ms each and left
+    /// a hundred live subscriptions running behind a list of pictures.
+    ///
+    /// Nothing on a render path reaches for it: `RingView` only touches
+    /// `elevenLabs` behind a `voiceReactiveEnabled` check, which is off by
+    /// default and off for every preview. The Controls panel and the voice
+    /// pill do reach for it, and they are one instance each — which is
+    /// exactly the config that should be paying for it.
+    private final class VoiceStack {
+        let service: ElevenLabsVoiceService
+        let conversation: VoiceConversationController
+        var bridge: AnyCancellable?
+
+        init(service: ElevenLabsVoiceService) {
+            self.service = service
+            self.conversation = VoiceConversationController(elevenLabs: service)
+        }
+    }
+
+    /// Whether the voice machinery has been built yet.
+    ///
+    /// Exists so a check can assert that rendering a frame doesn't build
+    /// it. That is the whole point of the laziness, and it is the kind of
+    /// property that is one careless `config.elevenLabs` away from being
+    /// silently untrue again.
+    public var hasBuiltVoiceStack: Bool { voiceStackStorage != nil }
+    private var voiceStackStorage: VoiceStack?
+
+    private lazy var voiceStack: VoiceStack = {
+        let stack = VoiceStack(service: ElevenLabsVoiceService())
         // The hands-free voice loop should run when "Voice reactive" is on
         // and either there's a live ElevenLabs connection to actually talk
         // to, or the temporary demo toggle is on (see
@@ -20,16 +71,19 @@ public final class RingConfig: ObservableObject {
         // Centralized here (rather than in whichever view happens to be
         // visible) so it stays correct even if the phone mockup isn't
         // currently on screen.
-        Publishers.CombineLatest3($voiceReactiveEnabled, elevenLabs.$connectionState, $voiceDemoModeEnabled)
+        stack.bridge = Publishers.CombineLatest3(
+            $voiceReactiveEnabled, stack.service.$connectionState, $voiceDemoModeEnabled
+        )
             .map { enabled, state, demo in
                 (enabled && (state == .connected || demo), demo)
             }
             .removeDuplicates { $0 == $1 }
-            .sink { [weak voiceConversation] shouldBeActive, demo in
-                voiceConversation?.setActive(shouldBeActive, demo: demo)
+            .sink { [weak stack] shouldBeActive, demo in
+                stack?.conversation.setActive(shouldBeActive, demo: demo)
             }
-            .store(in: &cancellables)
-    }
+        voiceStackStorage = stack
+        return stack
+    }()
 
     @Published public var animationType: RingAnimationType = .wave
 
@@ -618,14 +672,14 @@ public final class RingConfig: ObservableObject {
     /// that aren't already redrawing every frame (like the connection
     /// status text) hold `elevenLabs` as their own `@ObservedObject`
     /// instead — see `ControlsView.init`.
-    public let elevenLabs = ElevenLabsVoiceService()
+    public var elevenLabs: ElevenLabsVoiceService { voiceStack.service }
 
     /// Hands-free "listen → send → wait for reply → listen again" loop
     /// built on top of `elevenLabs` — see `VoiceConversationController`.
     /// Started/stopped automatically by the `init()` wiring above; drives
     /// the listening/speaking pill shown above the tab bar in the phone
     /// mockup (`VoicePillView`, in the `RingAnimator` target).
-    public let voiceConversation: VoiceConversationController
+    public var voiceConversation: VoiceConversationController { voiceStack.conversation }
 
     // MARK: - Liquid Glass
     //

@@ -434,6 +434,32 @@ func run() async -> Int32 {
         }
     }
 
+    // ---- Rendering doesn't build the voice machinery ----
+    //
+    // `RingConfig` is the document, and it is also what every thumbnail
+    // row, timeline step and cue preview keeps as a `@StateObject`. Its
+    // initializer used to read the Keychain and build a voice service, a
+    // conversation controller and a Combine bridge — 0.45ms each, and a
+    // hundred live subscriptions behind a list of pictures. It is now
+    // built on first use, and one careless `config.elevenLabs` on a draw
+    // path would silently undo that.
+    do {
+        let rendering = RingConfig()
+        rendering.diodeModeEnabled = true
+        rendering.smoothingEnabled = true
+        _ = await AnimationExporter.renderFrames(
+            config: rendering, colorScheme: .dark, loopCount: 1, transparent: false
+        ).first
+        check("rendering a frame leaves the voice stack unbuilt",
+              !rendering.hasBuiltVoiceStack,
+              rendering.hasBuiltVoiceStack ? "something on the draw path reached for it" : "unbuilt")
+
+        let asked = RingConfig()
+        _ = asked.elevenLabs
+        check("and asking for it still builds it", asked.hasBuiltVoiceStack,
+              "\(asked.hasBuiltVoiceStack)")
+    }
+
     // ---- The GIF dither ----
     //
     // Banding is a *contour*, not an error magnitude, and measuring it the
@@ -562,7 +588,7 @@ func run() async -> Int32 {
 /// Counting them closes the whole class at once, including the paths
 /// nobody has thought of yet. Adding an assertion without bumping this
 /// fails too, which is the right direction to fail in.
-let expectedAssertions = 35
+let expectedAssertions = 37
 
 /// A rendered frame, unpacked once into a flat byte buffer.
 struct Pixels {
