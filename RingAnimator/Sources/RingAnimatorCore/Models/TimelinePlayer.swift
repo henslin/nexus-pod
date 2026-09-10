@@ -314,6 +314,23 @@ public final class TimelinePlayer: ObservableObject, @unchecked Sendable {
         undoManager.setActionName(name)
     }
 
+    /// Stops watching whatever config this was bound to.
+    ///
+    /// Nexus keeps one player per saved animation and binds the selected
+    /// one to the live config. Nothing ever unbound the others, and their
+    /// subscriptions to that same config stayed live — so turning a knob
+    /// while looking at one animation wrote into the *previous* one's
+    /// selected step. The `configSourceSegmentID` guard doesn't help here:
+    /// from the old player's point of view its own step is still the one
+    /// the config came from.
+    public func unbind() {
+        cancellables.removeAll()
+        boundConfig = nil
+        configSourceSegmentID = nil
+        pendingCapture?.cancel()
+        pendingCapture = nil
+    }
+
     public func bind(to config: RingConfig) {
         boundConfig = config
         configSourceSegmentID = nil

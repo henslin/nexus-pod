@@ -293,8 +293,7 @@ struct ContentView: View {
             // Deferred to `.onAppear` rather than done in an initializer:
             // `@StateObject`s aren't guaranteed to be constructed until the
             // view first appears, and binding needs both objects to exist.
-            timelinePlayer.bind(to: config)
-            timelinePlayer.undoManager = undoManager
+            timelinePlayers.bind(timelinePlayer, to: config, undoManager: undoManager)
             // Reconcile the use cases with whatever library this build
             // ships — see `UseCaseLibrary.sync` for what it will and won't
             // overwrite. Silent unless something actually moved.
@@ -305,8 +304,7 @@ struct ContentView: View {
             // Each animation has its own player now, and a player that
             // isn't bound can't load a step into the Controls panel — the
             // strip would move while the ring stayed on the last one.
-            timelinePlayer.bind(to: config)
-            timelinePlayer.undoManager = undoManager
+            timelinePlayers.bind(timelinePlayer, to: config, undoManager: undoManager)
         }
         .alert(
             "Animation Library Updated",
@@ -404,6 +402,9 @@ struct ContentView: View {
     private final class TimelinePlayers: ObservableObject {
         private var players: [UUID: TimelinePlayer] = [:]
         private let scratch = TimelinePlayer()
+        /// Whichever player is currently watching the live config. At most
+        /// one may be, which is the whole point of tracking it.
+        private weak var bound: TimelinePlayer?
 
         func player(for id: UUID?) -> TimelinePlayer {
             guard let id else { return scratch }
@@ -413,7 +414,23 @@ struct ContentView: View {
             return made
         }
 
-        func forget(_ id: UUID) { players[id] = nil }
+        /// Binds one player to the live config and unbinds whichever was
+        /// bound before.
+        ///
+        /// The unbinding is the part that matters. These players are cached
+        /// for the life of the session, and every one that had ever been
+        /// bound stayed subscribed to the same config — so an edit made
+        /// while looking at one animation was captured into the selected
+        /// step of every animation visited before it. Binding is exclusive
+        /// now, and `TimelineCheck` reproduces the old behaviour to make
+        /// sure it stays that way.
+        @MainActor
+        func bind(_ player: TimelinePlayer, to config: RingConfig, undoManager: UndoManager) {
+            if let bound, bound !== player { bound.unbind() }
+            player.bind(to: config)
+            player.undoManager = undoManager
+            bound = player
+        }
     }
 
     private var timelinePlayer: TimelinePlayer {

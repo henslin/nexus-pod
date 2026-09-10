@@ -298,6 +298,45 @@ func run() -> Int32 {
         TimelinePlayer.deleteStore(fileName: "timeline-live-edit-check.json")
     }
 
+    // Switching animations must stop the old one writing.
+    //
+    // Nexus keeps one player per saved animation, cached by id, and binds
+    // the newly selected one to the live config. Nothing unbound the
+    // previous one — its Combine subscription to that same config was
+    // still live — so an edit made while looking at animation B could land
+    // in animation A's selected step. Same shape as the write-back bug
+    // above, one level up: not the wrong step, the wrong animation.
+    do {
+        let live = RingConfig()
+        live.speed = 1
+
+        let first = TimelinePlayer(fileName: "cross-animation-a.json")
+        first.bind(to: live)
+        first.addSegment(from: live, named: "A's step")
+        if let id = first.timeline.segments.first?.id { first.select(id) }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+
+        // Now the user picks a different animation.
+        // What `ContentView.TimelinePlayers.bind` does when the selection
+        // moves: bind the new one, unbind the old one.
+        let second = TimelinePlayer(fileName: "cross-animation-b.json")
+        first.unbind()
+        second.bind(to: live)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+
+        // ...and turns a knob while looking at it.
+        live.speed = 9
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+
+        let landed = first.timeline.segments.first?.snapshot.speed ?? -1
+        check("an edit can't land in the animation you left",
+              abs(landed - 1) < 0.001,
+              String(format: "A's step holds speed %.1f, expected 1.0", landed))
+
+        TimelinePlayer.deleteStore(fileName: "cross-animation-a.json")
+        TimelinePlayer.deleteStore(fileName: "cross-animation-b.json")
+    }
+
     TimelinePlayer.deleteStore(fileName: "timeline-check.json")
     if ran != expectedAssertions {
         print("  ✗ ran \(ran) assertions, expected \(expectedAssertions) — "
@@ -323,7 +362,7 @@ func run() -> Int32 {
 /// Counting them closes the whole class at once, including the paths
 /// nobody has thought of yet. Adding an assertion without bumping this
 /// fails too, which is the right direction to fail in.
-let expectedAssertions = 15
+let expectedAssertions = 16
 
 print("timeline write-back:")
 exit(run())
