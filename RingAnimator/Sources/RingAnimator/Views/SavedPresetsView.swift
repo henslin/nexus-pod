@@ -55,6 +55,10 @@ struct SavedPresetsView: View {
     /// them, the same sheet either way.
     @State private var renderTargets: [RingPreset] = []
     @State private var searchText = ""
+    /// The animation a Delete click is asking about. Deleting takes the
+    /// animation and its sequence, with no undo — the same weight of
+    /// action Apply to All has always confirmed.
+    @State private var deletingPreset: RingPreset?
 
     /// Name and animation type, which is what a row shows — matching the
     /// Use Cases and Cue Library columns exactly. This was the one list of
@@ -66,6 +70,15 @@ struct SavedPresetsView: View {
             $0.name.localizedCaseInsensitiveContains(searchText)
                 || $0.animationType.rawValue.localizedCaseInsensitiveContains(searchText)
         }
+    }
+
+    private func confirmDelete(_ preset: RingPreset) {
+        store.delete(preset.id)
+        // Its sequence goes with it, the same way a deleted use case's does
+        // — otherwise every deleted animation leaves a file nothing will
+        // collect.
+        TimelinePlayer.deleteStore(fileName: TimelinePlayer.animationFileName(preset.id))
+        if selectedPresetID == preset.id { selectedPresetID = nil }
     }
 
     /// Returns `some DynamicViewContent`, not `some View`: `onMove` is
@@ -85,16 +98,7 @@ struct SavedPresetsView: View {
                     renamingPreset = preset
                 },
                 onExport: { exportSingle(preset) },
-                onDelete: {
-                    store.delete(preset.id)
-                    // Its sequence goes with it, the same way a deleted use
-                    // case's does — otherwise every deleted animation leaves
-                    // a file nothing will collect.
-                    TimelinePlayer.deleteStore(
-                        fileName: TimelinePlayer.animationFileName(preset.id)
-                    )
-                    if selectedPresetID == preset.id { selectedPresetID = nil }
-                }
+                onDelete: { deletingPreset = preset }
             )
             .tag(preset.id)
         }
@@ -129,6 +133,22 @@ struct SavedPresetsView: View {
                 }
             }
             .listStyle(.sidebar)
+            .confirmationDialog(
+                deletingPreset.map { "Delete “\($0.name)”?" } ?? "",
+                isPresented: Binding(
+                    get: { deletingPreset != nil },
+                    set: { if !$0 { deletingPreset = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete Animation", role: .destructive) {
+                    if let preset = deletingPreset { confirmDelete(preset) }
+                    deletingPreset = nil
+                }
+                Button("Cancel", role: .cancel) { deletingPreset = nil }
+            } message: {
+                Text("Its sequence goes with it. This can't be undone.")
+            }
             .onChange(of: selectedPresetID) { _, newValue in
                 guard let id = newValue, let preset = store.presets.first(where: { $0.id == id }) else { return }
                 preset.apply(to: config)

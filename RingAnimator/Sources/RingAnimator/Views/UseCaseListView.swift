@@ -25,6 +25,11 @@ struct UseCaseListView: View {
     /// section — and a search that clears when you switch sections is the
     /// behaviour you want anyway.
     @State private var searchText = ""
+    /// The animation a Delete click is asking about — the same
+    /// confirmation the Nexus column and section deletion now use, for the
+    /// same reason: it takes the animation and its sequence, and Apply to
+    /// All has always asked first for less.
+    @State private var deletingPreset: RingPreset?
     @State private var showingNewDialog = false
     @State private var newUseCaseName = ""
 
@@ -51,6 +56,17 @@ struct UseCaseListView: View {
     /// One row per animation. A function rather than inline so the
     /// reorderable and filtered branches above share it instead of keeping
     /// two copies of the row in step.
+    private func confirmDelete(_ preset: RingPreset) {
+        store.delete(preset.id)
+        // A use case's timeline lives in its own store file (see
+        // `TimelinePlayer.useCaseFileName`), which nothing else would ever
+        // clean up — a deleted use case would otherwise leave an orphan in
+        // Application Support forever, and a new use case can't collide
+        // with it since the name is keyed by UUID.
+        TimelinePlayer.deleteStore(fileName: TimelinePlayer.useCaseFileName(preset.id))
+        if selectedUseCaseID == preset.id { selectedUseCaseID = nil }
+    }
+
     /// Returns `some DynamicViewContent`, not `some View`: `onMove` is
     /// declared on the former, and an opaque `View` drops it.
     private func rows(_ presets: [RingPreset]) -> some DynamicViewContent {
@@ -64,19 +80,7 @@ struct UseCaseListView: View {
                 onExport: { exportSingle(preset) },
                 onCopy: { AnimationPasteboard.copy([preset]) },
                 onAddToTimeline: { nexusTimeline.addSegment(from: preset) },
-                onDelete: {
-                    store.delete(preset.id)
-                    // A use case's timeline lives in its own store file
-                    // (see `TimelinePlayer.useCaseFileName`), which nothing
-                    // else would ever clean up — a deleted use case would
-                    // otherwise leave an orphan in Application Support
-                    // forever, and a new use case can't collide with it
-                    // since the name is keyed by UUID.
-                    TimelinePlayer.deleteStore(
-                        fileName: TimelinePlayer.useCaseFileName(preset.id)
-                    )
-                    if selectedUseCaseID == preset.id { selectedUseCaseID = nil }
-                }
+                onDelete: { deletingPreset = preset }
             )
             .tag(preset.id)
         }
@@ -110,6 +114,22 @@ struct UseCaseListView: View {
                 }
             }
             .listStyle(.sidebar)
+            .confirmationDialog(
+                deletingPreset.map { "Delete “\($0.name)”?" } ?? "",
+                isPresented: Binding(
+                    get: { deletingPreset != nil },
+                    set: { if !$0 { deletingPreset = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete Animation", role: .destructive) {
+                    if let preset = deletingPreset { confirmDelete(preset) }
+                    deletingPreset = nil
+                }
+                Button("Cancel", role: .cancel) { deletingPreset = nil }
+            } message: {
+                Text("Its sequence goes with it. This can't be undone.")
+            }
         } actions: {
             // New stands alone. The two imports are one control — they both
             // bring a design in, they just read different file types — and

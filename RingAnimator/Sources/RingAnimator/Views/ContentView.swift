@@ -37,6 +37,14 @@ struct ContentView: View {
     /// because the timeline is keyed by it, and only `ContentView` can own
     /// something both columns and the detail pane need.
     @State private var selectedPresetID: RingPreset.ID?
+    /// The section a Delete click is asking about.
+    ///
+    /// Deleting a section takes every animation in it and every sequence
+    /// those animations own — by some distance the most destructive thing
+    /// in the app — and it used to happen on one click of a context menu.
+    /// Meanwhile Apply to All, which only changes settings, has always
+    /// asked first. The confirmation belonged here more than there.
+    @State private var deletingSection: UserSection?
     /// The stage's own state — zoom, pan, appearance, where Large Preview is
     /// parked. Owned here, one instance, and handed to whichever section is
     /// showing, so switching sections doesn't reset the canvas. See
@@ -138,7 +146,7 @@ struct ContentView: View {
                                             renameSectionText = userSection.name
                                         }
                                         Button("Delete", role: .destructive) {
-                                            deleteUserSection(userSection)
+                                            deletingSection = userSection
                                         }
                                     }
                             }
@@ -263,6 +271,22 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .showWhatsNew)) { _ in
             showingWhatsNew = true
+        }
+        .confirmationDialog(
+            deletingSection.map { "Delete “\($0.name)”?" } ?? "",
+            isPresented: Binding(
+                get: { deletingSection != nil },
+                set: { if !$0 { deletingSection = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Section", role: .destructive) {
+                if let section = deletingSection { deleteUserSection(section) }
+                deletingSection = nil
+            }
+            Button("Cancel", role: .cancel) { deletingSection = nil }
+        } message: {
+            Text(deletingSection.map { sectionDeletionWarning(for: $0) } ?? "")
         }
         .onAppear {
             showingWhatsNew = WhatsNewPresenter.shouldPresent()
@@ -443,6 +467,17 @@ struct ContentView: View {
             .id(preset.id)
         } else {
             ContentUnavailableView("Select or create an animation", systemImage: "folder")
+        }
+    }
+
+    /// Says how much is about to go, by counting it rather than saying
+    /// "everything in it" and leaving the reader to guess.
+    private func sectionDeletionWarning(for userSection: UserSection) -> String {
+        let count = store(forSection: userSection.id).presets.count
+        switch count {
+        case 0: return "This section is empty. This can't be undone."
+        case 1: return "Its one animation goes with it, and its sequence. This can't be undone."
+        default: return "All \(count) animations in it go with it, and their sequences. This can't be undone."
         }
     }
 
