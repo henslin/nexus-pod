@@ -446,6 +446,36 @@ bridge. A sidebar was a hundred of them. Now built on first use, and
 gated: `BlendCheck` renders a frame and asserts the stack is still
 unbuilt.
 
+### The biggest cost was a window nobody was looking at
+
+Profiling the shipped 3.6 build found the idle app burning **about a
+quarter of a core, continuously**, with our own drawing code barely 1% of
+the samples — the rest was `-[NSView _layoutSubtreeWithOldSize:]`. Each
+animation frame inside an `NSHostingView` invalidates constraints, and
+AppKit answers by laying out the window's whole view tree.
+
+Two fixes, in order of what they were worth:
+
+1. **`RenderActivity`** freezes every preview while the app is in the
+   background, and resumes on the next click. Backgrounded CPU: **~25% to
+   0.0%**. The particle recorder overrides it, since it captures the app's
+   own window and would otherwise record a still if the user clicked away.
+2. **`hostingView.sizingOptions = []`** plus
+   `translatesAutoresizingMaskIntoConstraints = true` on
+   `ZoomableCanvas`'s hosting view. It has an explicit frame and pinned
+   content, so it has no business deriving Auto Layout constraints from
+   SwiftUI's sizing every frame. Worth about a fifth of the active cost.
+
+**The first version of the freeze did nothing at all**, and the way that
+was found is the point. It recorded `NSApplication.shared.isActive` in its
+initializer without applying it, so `isRendering` stayed optimistically
+true and an app launched into the background rendered at full rate
+forever. Three rounds of CPU measurement disagreed with each other before
+a one-line log said the notification had never fired. `BlendCheck` now
+posts the activation notifications directly and asserts the state machine,
+including the recorder override and the resume — the paths that are
+awkward to reach by hand and therefore the ones that quietly rot.
+
 ### What was measured and rejected
 
 Worth recording, because both looked obviously right:
@@ -456,6 +486,14 @@ Worth recording, because both looked obviously right:
   at the playhead, so it walks half the list of cheap arithmetic. Reverted.
 - **Fewer gradient stops in thumbnails.** 81 stops at 28 points is
   obviously too many. Measured: no change. Reverted.
+- **Skipping the no-op filter chain.** `.saturation(1)`, `.contrast(1)`,
+  `.brightness(0)` and `.blendMode(.normal)` each force an offscreen pass
+  whether or not they change anything, and `BlurIfNeeded` already applies
+  that reasoning to `.blur(radius: 0)`. Removing them outright measured a
+  7% win — but you cannot *reach* it with a runtime branch: wrapping them
+  in a conditional `ViewModifier` measured **worse** than leaving them
+  in, consistently, because `_ConditionalContent` costs more than the
+  passes it skips. Reverted.
 
 ### Checks that could not fail
 

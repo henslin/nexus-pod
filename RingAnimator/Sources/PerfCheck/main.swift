@@ -10,6 +10,16 @@ import RingAnimatorCore
 // screen. This times the pieces separately so "69 rows at 12fps" and "one
 // stage ring at 60fps" can be compared in the same units: milliseconds of
 // main-thread work per second of wall clock.
+/// Every measurement taken, so the budgets at the end can be checked
+/// against them by name.
+///
+/// Boxed in an enum rather than a bare global: top-level variables can't
+/// carry a global actor, and this is only ever touched from `@MainActor`
+/// code.
+enum Measurements {
+    @MainActor static var perSecond: [String: Double] = [:]
+}
+
 @MainActor
 func timeFrames(_ label: String, count: Int, fps: Double, build: (Int) -> AnyView) {
     // One warm-up pass: the first render of any view type pays for SwiftUI
@@ -25,6 +35,7 @@ func timeFrames(_ label: String, count: Int, fps: Double, build: (Int) -> AnyVie
     }
     let perFrame = Date().timeIntervalSince(start) / Double(frames) * 1000
     let perSecond = perFrame * fps * Double(count)
+    Measurements.perSecond[label] = perSecond
     print(String(format: "  %-34@ %6.2f ms x %3d @ %2.0ffps = %7.1f ms/s",
                  label as NSString, perFrame, count, fps, perSecond))
 }
@@ -57,6 +68,21 @@ func run() -> Int32 {
         print(String(format: "  one RingConfig() costs %.3f ms — %.0f ms for a sidebar of 100\n",
                      each, each * 100))
         _ = keep.count
+    }
+
+    // What a list costs just to appear.
+    //
+    // Every thumbnail reads its animation's sequence off disk in `onAppear`
+    // to find out whether to show the first step instead of the animation
+    // itself. Seventy-eight rows is seventy-eight file reads and decodes,
+    // on the main thread, before a single pixel is drawn.
+    do {
+        let names = (0..<78).map { _ in TimelinePlayer.animationFileName(UUID()) }
+        let start = Date()
+        for name in names { _ = TimelinePlayer.storedTimeline(fileName: name) }
+        let each = Date().timeIntervalSince(start) / Double(names.count) * 1000
+        print(String(format: "  a thumbnail's sequence lookup: %.3f ms — %.0f ms for 78 rows\n",
+                     each, each * 78))
     }
 
     print("main-thread cost per second of wall clock:\n")
@@ -232,6 +258,60 @@ func run() -> Int32 {
         AnyView(RingView(config: particles, diameter: 200, overrideElapsed: Double(i) / 60)
             .frame(width: 240, height: 240))
     }
-    return 0
+    return checkBudgets()
 }
+
+/// Ceilings, so today's work can't be undone quietly.
+///
+/// This target used to only print. Two changes cut the app's busiest
+/// surfaces roughly in half, and nothing would have noticed them coming
+/// back — a stray `Color` conversion on the field or one
+/// `config.elevenLabs` on a draw path is all it would take.
+///
+/// The numbers are deliberately loose: about 1.7x what the machine this
+/// was written on measures, so a slower machine or a busy one doesn't
+/// produce a false failure, while a real regression — which in every case
+/// here was a doubling, not a few percent — still trips it. A perf gate
+/// that cries wolf gets ignored, and then it isn't a gate.
+@MainActor
+func checkBudgets() -> Int32 {
+    let budgets: [(String, Double)] = [
+        ("list rows visible in a sidebar", 105),
+        ("cue library row, 22pt", 95),
+        ("stage ring, smoothed gradient", 38),
+        ("stage ring, smoothed diodes", 38),
+        ("stage ring, heaviest pattern", 45),
+        ("row 22pt, heaviest pattern", 105),
+    ]
+
+    var failed = false
+    print("\nbudgets:")
+    for (label, ceiling) in budgets {
+        guard let value = Measurements.perSecond[label] else {
+            print("  ✗ \(label) — never measured, so the budget means nothing")
+            failed = true
+            continue
+        }
+        let ok = value <= ceiling
+        print(String(format: "  %@ %-34@ %6.1f of %6.1f ms/s",
+                     ok ? "✓" : "✗", label as NSString, value, ceiling))
+        if !ok { failed = true }
+    }
+
+    // The one that isn't about drawing: `RingConfig()` was 0.45ms because
+    // its initializer read the Keychain and built a voice stack, and a
+    // sidebar makes a hundred of them.
+    let start = Date()
+    var keep: [RingConfig] = []
+    for _ in 0..<100 { keep.append(RingConfig()) }
+    let each = Date().timeIntervalSince(start) / 100 * 1000
+    _ = keep.count
+    let configOK = each < 0.25
+    print(String(format: "  %@ %-34@ %6.3f of %6.3f ms",
+                 configOK ? "✓" : "✗", "one RingConfig()" as NSString, each, 0.25))
+    if !configOK { failed = true }
+
+    return failed ? 1 : 0
+}
+
 exit(run())

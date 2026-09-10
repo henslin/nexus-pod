@@ -16,6 +16,8 @@ import SwiftUI
 /// the 62pt tab bar pod) frame.
 public struct RingView: View {
     @ObservedObject var config: RingConfig
+    /// Whether previews should be running at all — see `RenderActivity`.
+    @ObservedObject private var activity = RenderActivity.shared
     var diameter: CGFloat? = nil
     /// When set, renders one deterministic frame at exactly this elapsed
     /// time instead of driving off `TimelineView(.animation)`'s real
@@ -219,7 +221,15 @@ public struct RingView: View {
     /// concrete types.
     @ViewBuilder
     private var continuousAnimationBody: some View {
-        if let frameRate, frameRate > 0 {
+        if !activity.isRendering {
+            // Frozen on the last frame while the app is in the background —
+            // see `RenderActivity`. The clock is absolute, so resuming
+            // picks up wherever real time has got to rather than stepping
+            // back.
+            TimelineView(.animation(paused: true)) { timeline in
+                continuousAnimationContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+            }
+        } else if let frameRate, frameRate > 0 {
             TimelineView(.periodic(from: .now, by: 1 / frameRate)) { timeline in
                 continuousAnimationContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
             }

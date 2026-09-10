@@ -460,6 +460,42 @@ func run() async -> Int32 {
               "\(asked.hasBuiltVoiceStack)")
     }
 
+    // ---- Previews stop when nobody is looking ----
+    //
+    // Measured on the shipped build: a backgrounded window was costing
+    // about a quarter of a core, continuously, drawing rings for nobody.
+    // Freezing them takes it to zero.
+    //
+    // Driven by AppKit notifications, which is exactly the sort of wiring
+    // that looks right and does nothing — the first version recorded the
+    // app's launch state without applying it, so an app launched into the
+    // background rendered at full rate until the next activation change
+    // happened to arrive. Posting the notifications here tests the state
+    // machine rather than the guess.
+    do {
+        let activity = RenderActivity.shared
+        let center = NotificationCenter.default
+
+        center.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        try? await Task.sleep(for: .milliseconds(60))
+        check("previews run when the app is active", activity.isRendering, "\(activity.isRendering)")
+
+        center.post(name: NSApplication.didResignActiveNotification, object: nil)
+        try? await Task.sleep(for: .milliseconds(60))
+        check("and stop when it goes to the background", !activity.isRendering, "\(activity.isRendering)")
+
+        // The recorder captures the app's own window frame by frame, so a
+        // click elsewhere mid-capture must not freeze what it is recording.
+        activity.beginForcedRendering()
+        check("a recording keeps them running anyway", activity.isRendering, "\(activity.isRendering)")
+        activity.endForcedRendering()
+        check("and they stop again when it finishes", !activity.isRendering, "\(activity.isRendering)")
+
+        center.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        try? await Task.sleep(for: .milliseconds(60))
+        check("coming back to the app resumes them", activity.isRendering, "\(activity.isRendering)")
+    }
+
     // ---- The GIF dither ----
     //
     // Banding is a *contour*, not an error magnitude, and measuring it the
@@ -588,7 +624,7 @@ func run() async -> Int32 {
 /// Counting them closes the whole class at once, including the paths
 /// nobody has thought of yet. Adding an assertion without bumping this
 /// fails too, which is the right direction to fail in.
-let expectedAssertions = 37
+let expectedAssertions = 42
 
 /// A rendered frame, unpacked once into a flat byte buffer.
 struct Pixels {

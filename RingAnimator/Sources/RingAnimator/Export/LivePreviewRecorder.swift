@@ -70,6 +70,15 @@ enum LivePreviewRecorder {
         RingPreset(name: "Capture Snapshot", config: config).apply(to: live)
         live.voiceReactiveEnabled = false
 
+        // Keep the previews live for the duration regardless of focus.
+        //
+        // Previews freeze when the app goes to the background (see
+        // `RenderActivity`), and this captures the app's own window frame
+        // by frame — so a click elsewhere mid-capture would otherwise
+        // record a still. The one case where "nobody is looking" is wrong.
+        RenderActivity.shared.beginForcedRendering()
+        defer { RenderActivity.shared.endForcedRendering() }
+
         let window = makeWindow(canvas: canvas, transparent: transparent, colorScheme: colorScheme, config: live)
         defer { window.orderOut(nil) }
 

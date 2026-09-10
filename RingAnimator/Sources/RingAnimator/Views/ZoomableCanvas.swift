@@ -126,6 +126,23 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let hostingView = NSHostingView(rootView: sizedContent)
         hostingView.frame = CGRect(origin: .zero, size: contentSize)
+        // Frame-based, and not a source of Auto Layout constraints.
+        //
+        // `NSHostingView` derives constraints from what SwiftUI inside it
+        // wants to be, and re-derives them whenever that content updates —
+        // which here is every animation frame. Each re-derivation calls
+        // `_informContainerThatSubviewsNeedUpdateConstraints`, and AppKit
+        // answers by laying out the window's whole view subtree. Profiling
+        // the idle app found 53% of a core going into
+        // `_layoutSubtreeWithOldSize:` while our own drawing code was
+        // barely 1% of the samples.
+        //
+        // Nothing here needs any of that: the content is pinned to
+        // `contentSize` with an explicit `.frame`, and the hosting view is
+        // given the same size outright. Saying so stops the constraint
+        // traffic at the boundary.
+        hostingView.translatesAutoresizingMaskIntoConstraints = true
+        hostingView.sizingOptions = []
 
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false

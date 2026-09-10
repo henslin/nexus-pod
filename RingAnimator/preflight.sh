@@ -126,6 +126,15 @@ else
     printf '    (set PATTERNS_DIR; recordings cannot be confirmed current without it)\n'
 fi
 
+# Perf is gated, loosely. Two changes cut the busiest surfaces roughly in
+# half, and nothing would have noticed them coming back — one stray colour
+# conversion on the field, or one `config.elevenLabs` on a draw path, is
+# all it would take. The ceilings sit about 1.7x above what this machine
+# measures, because a gate that cries wolf gets ignored.
+step "Drawing stays within its budget"
+swift run --scratch-path "$SCRATCH" -c release PerfCheck 2>&1 | grep -E '^  (✓|✗)'
+result "${PIPESTATUS[0]}" "PerfCheck"
+
 step "iOS target builds"
 xcodebuild -project ../RingAnimatoriOS/RingAnimatoriOS.xcodeproj \
     -target RingAnimatoriOS -sdk iphonesimulator -configuration Debug \

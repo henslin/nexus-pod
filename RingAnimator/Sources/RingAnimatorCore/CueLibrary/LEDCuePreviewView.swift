@@ -36,6 +36,8 @@ public struct LEDCuePreviewView: View {
     /// current `parameters` into it instead, on `.onAppear` and whenever
     /// `parameters` changes.
     @StateObject private var animationConfig = RingConfig()
+    /// Whether previews should be running at all — see `RenderActivity`.
+    @ObservedObject private var activity = RenderActivity.shared
 
     public init(
         parameters: LEDCueParameters,
@@ -89,7 +91,13 @@ public struct LEDCuePreviewView: View {
     /// that case existed.
     @ViewBuilder
     private var legacyStyleBody: some View {
-        if let frameRate, frameRate > 0 {
+        if !activity.isRendering {
+            // Same as `RingView`: nothing to animate for a window nobody is
+            // looking at. See `RenderActivity`.
+            TimelineView(.animation(paused: true)) { timeline in
+                legacyStyleContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
+            }
+        } else if let frameRate, frameRate > 0 {
             TimelineView(.periodic(from: .now, by: 1 / frameRate)) { timeline in
                 legacyStyleContent(elapsed: timeline.date.timeIntervalSinceReferenceDate)
             }

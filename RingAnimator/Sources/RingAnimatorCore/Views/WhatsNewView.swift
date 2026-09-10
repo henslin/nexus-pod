@@ -154,9 +154,14 @@ public enum WhatsNew {
     /// Bump this when the notes change. The screen shows itself once per
     /// value, so editing the copy without bumping it means nobody who has
     /// already dismissed the old notes ever sees the new ones.
-    public static let version = "3.6"
+    public static let version = "3.6.1"
 
     public static let current: [WhatsNewItem] = [
+        WhatsNewItem(
+            symbol: "moon.zzz",
+            title: "Quiet in the Background",
+            detail: "Previews freeze when you switch to another app and pick up the moment you come back. A window left open beside Figma was costing a quarter of a processor core drawing rings for nobody; now it costs nothing. Recording particles keeps them running regardless."
+        ),
         WhatsNewItem(
             symbol: "gauge.with.dots.needle.67percent",
             title: "About Twice as Fast",

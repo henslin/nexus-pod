@@ -29,9 +29,27 @@ public enum ExportLog {
         return formatter
     }()
 
+    /// Past this the log is started over rather than appended to.
+    ///
+    /// It is append-only and nothing else prunes it, so on a machine that
+    /// exports all day it would grow without limit — slowly, invisibly, and
+    /// forever. A quarter of a megabyte is thousands of exports, far more
+    /// history than any question about "what did that export do" needs.
+    private static let sizeLimit = 256 * 1024
+
     public static func note(_ message: String) {
         let line = "\(formatter.string(from: Date()))  \(message)\n"
         guard let data = line.data(using: .utf8) else { return }
+
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path))
+            .flatMap { $0[.size] as? Int } ?? 0
+        if size > sizeLimit {
+            // Started over, not rotated: a second file would be another
+            // thing nothing prunes.
+            try? data.write(to: url)
+            return
+        }
+
         if let handle = try? FileHandle(forWritingTo: url) {
             defer { try? handle.close() }
             _ = try? handle.seekToEnd()
