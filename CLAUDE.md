@@ -1962,12 +1962,38 @@ target directly a minute later succeeded, which is the tell.
   antialiased edges accumulated into a bright patch and an inward wash that
   a single fill doesn't produce. Better, but a change; worth an eye on if
   anyone was fond of the old look.
-- **Two stale copies in `/Applications`** share the bundle id
-  `ringanimator.RingAnimator`: `Nexus Pod.app` (2.0) and `RingAnimator.app`
-  (1.0, the old name). LaunchServices can resolve `open` to the wrong one —
-  that cost an hour of chasing a phantom bug once, reading behavior from a
-  binary that predated the change under test. Deleting the 1.0 copy removes
-  the ambiguity.
+- **Two stale copies in `/Applications` — cleared 2026-09-10.** Both shared
+  the bundle id `ringanimator.RingAnimator`, so LaunchServices returned two
+  candidates and `open` could resolve to either; that cost an hour of chasing
+  a phantom bug once, reading behavior from a binary that predated the change
+  under test. This note used to say the copies were `Nexus Pod.app` (2.0) and
+  `RingAnimator.app` (1.0) — the version was wrong, and wrong in the way that
+  matters: `Nexus Pod.app` was **3.4.2**, close enough to current to look
+  right while still predating 3.6. **Deleting only the old-name 1.0 would not
+  have fixed anything.** Both were trashed and replaced with a fresh
+  notarized build.
+
+  The general trap: an installed copy whose version is *near* the repo's is
+  more dangerous than an obviously ancient one. Before believing anything you
+  observe in a launched app:
+
+  ```
+  mdfind "kMDItemCFBundleIdentifier == 'ringanimator.RingAnimator'"
+  ```
+
+  **Expect two paths, not one** — `/Applications/Nexus Pod.app` and the
+  staging copy `~/Developer/NexusPod-Release/Nexus Pod.app`, which
+  `build_and_sign.sh` leaves behind every run by design. What matters is that
+  exactly one is under `/Applications`, and that its
+  `CFBundleShortVersionString` matches `RingAnimator/Packaging/Info.plist`.
+  The staged copy is the same binary immediately after a build and *drifts
+  from the installed one as soon as you build again without installing* — so
+  it is the same trap in miniature. `shasum` the two
+  `Contents/MacOS/RingAnimator` binaries if a result surprises you.
+
+  User data is not in the bundle — it lives in
+  `~/Library/Application Support/RingAnimator/`, so deleting an installed
+  copy never touches saved presets, use cases or timelines.
 - **The pattern library's edits still aren't upstream** — and `patterns/`
   is now **committed into this repo** (2026-09-10, "Add Blender animation
   scripts and patterns library"), which is in tension with "The app depends
