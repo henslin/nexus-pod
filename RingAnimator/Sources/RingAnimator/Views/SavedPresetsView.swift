@@ -54,9 +54,54 @@ struct SavedPresetsView: View {
     /// Non-empty while the render sheet is up — one animation or all of
     /// them, the same sheet either way.
     @State private var renderTargets: [RingPreset] = []
+    @State private var searchText = ""
+
+    /// Name and animation type, which is what a row shows — matching the
+    /// Use Cases and Cue Library columns exactly. This was the one list of
+    /// the three you couldn't search, for no reason other than that nobody
+    /// had added it.
+    private var visiblePresets: [RingPreset] {
+        guard !searchText.isEmpty else { return store.presets }
+        return store.presets.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+                || $0.animationType.rawValue.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    /// Returns `some DynamicViewContent`, not `some View`: `onMove` is
+    /// declared on the former, and an opaque `View` drops it.
+    private func rows(_ presets: [RingPreset]) -> some DynamicViewContent {
+        ForEach(presets) { preset in
+            SavedAnimationRow(
+                preset: preset,
+                onLoad: {
+                    preset.apply(to: config)
+                    // Controls is now showing this saved animation, not the
+                    // selected step.
+                    timelinePlayer.noteConfigReplaced()
+                },
+                onRename: {
+                    renameText = preset.name
+                    renamingPreset = preset
+                },
+                onExport: { exportSingle(preset) },
+                onDelete: {
+                    store.delete(preset.id)
+                    // Its sequence goes with it, the same way a deleted use
+                    // case's does — otherwise every deleted animation leaves
+                    // a file nothing will collect.
+                    TimelinePlayer.deleteStore(
+                        fileName: TimelinePlayer.animationFileName(preset.id)
+                    )
+                    if selectedPresetID == preset.id { selectedPresetID = nil }
+                }
+            )
+            .tag(preset.id)
+        }
+    }
 
     var body: some View {
-        ListColumn {
+        ListColumn(search: $searchText, searchPrompt: "Search animations") {
             List(selection: $selectedPresetID) {
                 Section("All Saved Animations") {
                     if store.presets.isEmpty {
@@ -64,38 +109,22 @@ struct SavedPresetsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 4)
+                    } else if visiblePresets.isEmpty {
+                        Text("No animations match “\(searchText)”.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 4)
+                    } else if searchText.isEmpty {
+                        // Reordering only when nothing is filtered out.
+                        // `onMove` hands back offsets into the rows on
+                        // screen, and against a filtered list those index
+                        // the wrong animations — a drag would quietly
+                        // reorder something else. The Use Cases column
+                        // learned this the same way.
+                        rows(visiblePresets)
+                            .onMove { store.move(fromOffsets: $0, toOffset: $1) }
                     } else {
-                        ForEach(store.presets) { preset in
-                            SavedAnimationRow(
-                                preset: preset,
-                                onLoad: {
-                                    preset.apply(to: config)
-                                    // Controls is now showing this saved
-                                    // animation, not the selected step.
-                                    timelinePlayer.noteConfigReplaced()
-                                },
-                                onRename: {
-                                    renameText = preset.name
-                                    renamingPreset = preset
-                                },
-                                onExport: { exportSingle(preset) },
-                                onDelete: {
-                                    store.delete(preset.id)
-                                    // Its sequence goes with it, the same
-                                    // way a deleted use case's does —
-                                    // otherwise every deleted animation
-                                    // leaves a file nothing will collect.
-                                    TimelinePlayer.deleteStore(
-                                        fileName: TimelinePlayer.animationFileName(preset.id)
-                                    )
-                                    if selectedPresetID == preset.id { selectedPresetID = nil }
-                                }
-                            )
-                            .tag(preset.id)
-                        }
-                        // The list's order *is* the store's array order, so
-                        // a move is just a move.
-                        .onMove { store.move(fromOffsets: $0, toOffset: $1) }
+                        rows(visiblePresets)
                     }
                 }
             }

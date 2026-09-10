@@ -178,20 +178,20 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         context.coordinator.observeScrolling(of: scrollView)
 
         let coordinator = context.coordinator
-        NotificationCenter.default.addObserver(
+        coordinator.observers.append(NotificationCenter.default.addObserver(
             forName: NSScrollView.willStartLiveMagnifyNotification,
             object: scrollView,
             queue: .main
         ) { [weak coordinator] _ in
             MainActor.assumeIsolated { coordinator?.magnifyDidBegin() }
-        }
-        NotificationCenter.default.addObserver(
+        })
+        coordinator.observers.append(NotificationCenter.default.addObserver(
             forName: NSScrollView.didEndLiveMagnifyNotification,
             object: scrollView,
             queue: .main
         ) { [weak coordinator] _ in
             MainActor.assumeIsolated { coordinator?.magnifyDidEnd() }
-        }
+        })
 
         return scrollView
     }
@@ -209,6 +209,12 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         Coordinator()
     }
 
+    /// SwiftUI's teardown hook, which is where the notification
+    /// registrations come back down — see `Coordinator.observers`.
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        MainActor.assumeIsolated { coordinator.stopObserving() }
+    }
+
     /// `@MainActor` explicitly — every touch of `scrollView.magnification`/
     /// `.animator()` here needs to be main-actor-isolated; gesture-
     /// recognizer target-action, `NSKeyValueObservation`, and this file's
@@ -217,6 +223,23 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
     /// compiler what's already true at runtime.
     @MainActor
     final class Coordinator: NSObject {
+        /// Every notification registration this coordinator made, so they
+        /// can be taken back down.
+        ///
+        /// These used to be deliberately abandoned, on the grounds that the
+        /// closures hold the coordinator weakly and a nonisolated `deinit`
+        /// can't touch a non-Sendable token. Both true, and neither is the
+        /// reason to leak: `dismantleNSView` is the hook for this, SwiftUI
+        /// calls it on teardown, and it runs where the tokens are usable.
+        /// Otherwise every trip through a section leaves two more dead
+        /// registrations behind.
+        var observers: [NSObjectProtocol] = []
+
+        func stopObserving() {
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers.removeAll()
+        }
+
         weak var hostingView: NSHostingView<AnyView>?
         weak var scrollView: NSScrollView?
         var viewport: StageState?
@@ -272,12 +295,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         func observeScrolling(of scrollView: NSScrollView) {
             let clipView = scrollView.contentView
             clipView.postsBoundsChangedNotifications = true
-            // Token deliberately not retained for later removal, matching
-            // the two live-magnify observers registered in `makeNSView`:
-            // the closure holds the coordinator weakly, so once it's gone
-            // this does nothing, and a nonisolated `deinit` can't touch a
-            // non-Sendable token anyway.
-            NotificationCenter.default.addObserver(
+            observers.append(NotificationCenter.default.addObserver(
                 forName: NSView.boundsDidChangeNotification,
                 object: clipView,
                 queue: .main
@@ -286,7 +304,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
                     guard let self, let scrollView = self.scrollView else { return }
                     self.viewport?.scrollOrigin = scrollView.contentView.bounds.origin
                 }
-            }
+            })
         }
 
 
