@@ -820,7 +820,7 @@ struct PodContentSection: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-        if config.podContent == .glyph {
+        if config.podContent.usesGlyph {
             // A free text field rather than a curated menu: which symbols
             // are worth trying is the question being explored, and a list
             // would answer it in advance.

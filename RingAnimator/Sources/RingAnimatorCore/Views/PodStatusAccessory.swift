@@ -112,7 +112,10 @@ public struct PodStatusAccessory: View {
     private var mark: some View {
         Group {
             switch content {
-            case .glyph:
+            case .glyph, .bubble:
+                // The bubble's mark is its glyph — a 20pt RealityKit
+                // scene in a status pill would be a second GPU scene for
+                // an echo nobody looks at.
                 Image(systemName: glyph)
                     .resizable()
                     .scaledToFit()

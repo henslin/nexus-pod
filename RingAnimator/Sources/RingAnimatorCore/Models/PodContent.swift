@@ -37,6 +37,11 @@ public enum PodContent: String, CaseIterable, Identifiable, Codable, Sendable {
     case photo
     /// An SF Symbol, the way an assistant affordance usually reads.
     case glyph
+    /// A glass bubble with the glyph floating inside — the pod as a 3D
+    /// object (RealityKit), so the same thing can grow from the tab bar
+    /// into a sheet or the full screen. See `BubbleView`. Added
+    /// 2026-09-14 when the brief went from "animate a ring" to "all in".
+    case bubble
 
     public var id: String { rawValue }
 
@@ -45,6 +50,7 @@ public enum PodContent: String, CaseIterable, Identifiable, Codable, Sendable {
         case .ring:  return "Ring"
         case .photo: return "Photo"
         case .glyph: return "Glyph"
+        case .bubble: return "Bubble"
         }
     }
 
@@ -52,6 +58,9 @@ public enum PodContent: String, CaseIterable, Identifiable, Codable, Sendable {
     /// ring is its own thing and takes neither — it is the quiet default
     /// the other two interrupt.
     public var takesStatusAndFill: Bool { self != .ring }
+
+    /// Whether the state has a glyph to configure.
+    public var usesGlyph: Bool { self == .glyph || self == .bubble }
 
     public var summary: String {
         switch self {
@@ -61,6 +70,8 @@ public enum PodContent: String, CaseIterable, Identifiable, Codable, Sendable {
             return "An image the host app supplies — a person who just arrived, typically — with an optional message above the bar. The ring goes away. Placeholder until a host image is passed in."
         case .glyph:
             return "An SF Symbol, with an optional message above the bar. The ring goes away."
+        case .bubble:
+            return "A 3D glass bubble holding the glyph, lit as an object, with the ring's colours drifting inside. Rendered with RealityKit. Prototype — no thumbnail or PNG export yet."
         }
     }
 }

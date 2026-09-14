@@ -318,7 +318,18 @@ struct RingStage: View {
     /// surfaces render the same appearance at once.
     @ViewBuilder
     private func glassRing(outerDiameter: CGFloat, ringDiameter: CGFloat) -> some View {
-        let ring = RingView(config: config, diameter: ringDiameter, overrideElapsed: playback?.elapsed)
+        let ring = Group {
+            if config.podContent == .bubble {
+                // The stage shows the bubble at the same scale the ring
+                // would fill, so it is judged at size — the point of a
+                // large preview. The other pod states stay ring-only here
+                // (see the doc comment above): they are content the host
+                // supplies, not a look to design.
+                BubbleView(config: config, diameter: ringDiameter * 1.35)
+            } else {
+                RingView(config: config, diameter: ringDiameter, overrideElapsed: playback?.elapsed)
+            }
+        }
             .frame(width: outerDiameter, height: outerDiameter)
             .opacity(playback?.opacity ?? 1)
 

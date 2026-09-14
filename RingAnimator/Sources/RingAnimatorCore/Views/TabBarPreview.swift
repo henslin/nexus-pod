@@ -209,6 +209,11 @@ public struct TabBarPreview: View {
     /// comparison of content rather than of two different sizes.
     private var contentDiameter: CGFloat { CGFloat(RingConfig.tabBarRingDiameter) }
 
+    /// The bubble is bigger than the ring: it is a sphere in a glass
+    /// capsule, and at the ring's 34pt it read as a marble in a dish. 50pt
+    /// leaves the capsule's own edge visible around it.
+    private var bubbleDiameter: CGFloat { CGFloat(RingConfig.tabBarPodDiameter) * 0.8 }
+
     /// `drawsDiffuser` is `false` for the blurred backing copy behind the
     /// glass — see `RingView.drawsDiffuser`. Two stacked diffusers were
     /// what made the pod's ring look like different proportions from the
@@ -226,13 +231,23 @@ public struct TabBarPreview: View {
             // bar — see `PodStatusAccessory` — not a mark on the pod.
             podInnerContent
                 .frame(width: contentDiameter, height: contentDiameter)
+        case .bubble:
+            // One RealityKit scene per pod, not two: the blurred backing
+            // copy (`drawsDiffuser: false`) is skipped. The bubble is its
+            // own glass and does not need the material's refraction to
+            // read as one.
+            if drawsDiffuser {
+                BubbleView(config: config, diameter: bubbleDiameter)
+            } else {
+                Color.clear.frame(width: bubbleDiameter, height: bubbleDiameter)
+            }
         }
     }
 
     @ViewBuilder
     private var podInnerContent: some View {
         switch config.podContent {
-        case .ring:
+        case .ring, .bubble:
             EmptyView()
         case .glyph:
             Image(systemName: config.podGlyph)

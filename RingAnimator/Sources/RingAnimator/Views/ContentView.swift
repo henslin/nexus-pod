@@ -13,6 +13,8 @@ import RingAnimatorCore
 /// stacked widgets.
 struct ContentView: View {
     @StateObject private var config = RingConfig()
+    /// The Lab's knobs and selection — see `LabState`.
+    @StateObject private var lab = LabState()
     @StateObject private var cueStore = LEDCueStore()
     @StateObject private var presetStore = RingPresetStore()
     /// A second, independent `RingPresetStore` — same shape of data (a
@@ -81,16 +83,20 @@ struct ContentView: View {
         /// `StylesGalleryView`. Picking writes into the Nexus animation, so
         /// its detail pane is Nexus's own stage.
         case styles
+        /// The sandbox — one experiment per rendering technology, large,
+        /// in the ring's colours. See `LabExperiment`.
+        case lab
         case cueLibrary
         case useCases
         case user(UUID)
 
-        static let fixed: [AppSection] = [.ringDesigner, .styles, .cueLibrary, .useCases]
+        static let fixed: [AppSection] = [.ringDesigner, .styles, .lab, .cueLibrary, .useCases]
 
         var id: String {
             switch self {
             case .ringDesigner: return "nexus"
             case .styles: return "styles"
+            case .lab: return "lab"
             case .cueLibrary: return "cues"
             case .useCases: return "useCases"
             case .user(let id): return id.uuidString
@@ -101,6 +107,7 @@ struct ContentView: View {
             switch self {
             case .ringDesigner: return "Nexus"
             case .styles: return "Styles"
+            case .lab: return "Lab"
             case .cueLibrary: return "Cue Library"
             case .useCases: return "Use Cases"
             // A user section's name lives in the store, not in the case —
@@ -114,6 +121,7 @@ struct ContentView: View {
             switch self {
             case .ringDesigner: return "sparkles"
             case .styles: return "square.grid.3x3"
+            case .lab: return "flask"
             case .cueLibrary: return "books.vertical"
             case .useCases: return "target"
             case .user: return "folder"
@@ -200,6 +208,13 @@ struct ContentView: View {
                 // gallery in your current settings instead.
                 StylesGalleryView(config: config, basis: .defaults)
                     .frame(minWidth: 360, idealWidth: 480)
+            case .lab:
+                ListColumn {
+                    LabListView(lab: lab)
+                } actions: {
+                    EmptyView()
+                }
+                .listColumnWidth()
             case .cueLibrary:
                 CueListView(store: cueStore, selectedCueID: $selectedCueID, searchText: $cueSearchText)
                     .listColumnWidth()
@@ -249,6 +264,8 @@ struct ContentView: View {
                     }
                     .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
                 }
+            case .lab:
+                LabStageView(lab: lab, config: config)
             case .cueLibrary:
                 cueDetail
             case .useCases:
@@ -409,6 +426,7 @@ struct ContentView: View {
         switch section {
         case .ringDesigner: return "Nexus"
         case .styles: return "Styles"
+        case .lab: return "Lab"
         case .cueLibrary: return "Cue Library"
         case .useCases: return "Use Cases"
         case .user(let id):
@@ -438,6 +456,8 @@ struct ContentView: View {
             let n = MotionChoice.animations.count + MotionChoice.basicStyles.count
                 + MotionChoice.multiPhaseStyles.count + MotionChoice.firmwarePatterns.count
             return "Every style as a live thumbnail · \(n)"
+        case .lab:
+            return "What each rendering technology can do · \(LabExperiment.allCases.count) experiments"
         case .cueLibrary:
             let tweaked = cueStore.overrides.count
             let base = "The hardware spec, cue by cue · \(LEDCueLibrary.all.count)"
