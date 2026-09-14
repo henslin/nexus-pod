@@ -195,7 +195,10 @@ struct ContentView: View {
             case .styles:
                 // Wider than a list column: it's a grid, and the thumbnails
                 // are the content.
-                StylesGalleryView(config: config)
+                // Rendered from defaults here — a reference to each style's
+                // original intent. The style well's popover shows the same
+                // gallery in your current settings instead.
+                StylesGalleryView(config: config, basis: .defaults)
                     .frame(minWidth: 360, idealWidth: 480)
             case .cueLibrary:
                 CueListView(store: cueStore, selectedCueID: $selectedCueID, searchText: $cueSearchText)

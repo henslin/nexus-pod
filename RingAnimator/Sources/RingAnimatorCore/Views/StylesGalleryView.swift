@@ -138,9 +138,29 @@ public enum MotionChoice: Hashable, Identifiable {
 /// have selected — which is why the detail pane stays the Nexus stage:
 /// you see the pick land immediately.
 public struct StylesGalleryView: View {
-    @ObservedObject var config: RingConfig
+    /// What the thumbnails are rendered *from*.
+    ///
+    /// Two jobs, two answers (Chris, 2026-09-14). In the style well's
+    /// popover you're mid-edit, so `.current` shows every style in the
+    /// colours and settings you have — what it would look like with what
+    /// you've got. In the Styles sidebar the gallery is a reference, so
+    /// `.defaults` renders every style from a fresh config: the original
+    /// intent of each, unaffected by whatever you happen to be editing.
+    /// Picking applies to the live config either way.
+    public enum Basis { case current, defaults }
 
-    public init(config: RingConfig) { self.config = config }
+    @ObservedObject var config: RingConfig
+    let basis: Basis
+    /// One fresh config for the whole gallery, not one per cell per
+    /// render — `RingConfig()` is cheap but not free, and there are 98.
+    private let defaults = RingConfig()
+
+    public init(config: RingConfig, basis: Basis = .current) {
+        self.config = config
+        self.basis = basis
+    }
+
+    private var source: RingConfig { basis == .current ? config : defaults }
 
     private static let thumbnail: CGFloat = 56
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: 12)]
@@ -148,6 +168,12 @@ public struct StylesGalleryView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                if basis == .defaults {
+                    Text("Every style at its defaults — the original intent of each, whatever you're editing. Pick one to apply it to the selected animation.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 group("Animations", MotionChoice.animations,
                       "Continuous loops — the app's own.")
                 group("Basic Styles", MotionChoice.basicStyles,
@@ -180,7 +206,7 @@ public struct StylesGalleryView: View {
             withAnimation(.easeInOut(duration: 0.2)) { choice.apply(to: config) }
         } label: {
             VStack(spacing: 6) {
-                AnimationThumbnail(preset: choice.preset(from: config),
+                AnimationThumbnail(preset: choice.preset(from: source),
                                    diameter: Self.thumbnail,
                                    timelineFileName: nil)
                 Text(choice.name)
