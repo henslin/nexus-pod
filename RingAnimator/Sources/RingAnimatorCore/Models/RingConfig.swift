@@ -193,6 +193,130 @@ public final class RingConfig: ObservableObject {
     /// Blink modulation layered under `RingAnimationType.multiChase` — see
     /// `BlinkPattern`. `.steady` (no modulation) is the default so adding
     /// this changed nothing about how anything already looked.
+    // MARK: - Tab appearance
+    //
+    // App-wide, not per-state: the host app's own tab bar doesn't rename
+    // itself per notification. Lives on `RingConfig` for the same reason
+    // the glass does — one object the panel and both previews observe —
+    // and is excluded from `RingPreset` the same way, by simply not being
+    // captured there.
+    //
+    // Editing *appearance* only, deliberately. `DemoTab` stays the stable
+    // identity because its `rawValue` keys the bundled screenshots and the
+    // exporter's `appUI(tab:)`; a renamed tab must not change which
+    // screenshot it shows. Adding or removing tabs is a different feature
+    // and would need those assets to be a matter of data too.
+
+    /// One entry per `DemoTab`, in `allCases` order.
+    @Published public var tabAppearances: [TabAppearance] = TabAppearance.defaults
+
+    /// The appearance for a slot, falling back to the default if the array
+    /// is ever short — a missing entry should show the tab as it shipped,
+    /// not crash or blank the bar.
+    public func appearance(for tab: DemoTab) -> TabAppearance {
+        tabAppearances.first { $0.slot == tab } ?? .default(for: tab)
+    }
+
+    // MARK: - Pod content
+    //
+    // What the tab bar pod shows — see `PodContent`. The pod is a fixed
+    // 62pt slot in a host app's bar, and the ring is only one of the
+    // things that could sit in it. Lives on the config (rather than as a
+    // `TabBarPreview` parameter) so the Mac tool's controls, the iOS
+    // settings sheet, and saved presets all pick it up for free — the
+    // same reason every other look-affecting knob is here.
+
+    /// What occupies the pod. `.ring` is the original behaviour.
+    @Published public var podContent: PodContent = .ring
+
+    /// The status capsule's text, shown with `.photo` and `.glyph`.
+    /// **Empty means no capsule** — that is the off switch, rather than a
+    /// separate boolean that could disagree with it.
+    @Published public var podStatus: String = ""
+
+    /// What sits behind photo/glyph content — see `PodFill`.
+    @Published public var podFill: PodFill = .standard
+
+    /// The tint for `PodFill.tinted`, and the status capsule's fill. One
+    /// colour rather than two: the capsule and the glass are meant to be
+    /// reading as the same state, and letting them disagree would invite
+    /// exactly the mismatch this is supposed to express.
+    @Published public var podTintColor: Color = Color(hex: "#2288DD")
+
+    /// SF Symbol name for `.glyph`. Not validated: an unknown name draws
+    /// nothing, which is a visible-enough failure while exploring.
+    @Published public var podGlyph: String = "sparkles"
+
+    // MARK: Status presentation
+    //
+    // The accessory is an *event*, not a permanent part of the bar: it
+    // arrives, is readable for a while, and goes. These are that
+    // lifecycle. Authored here rather than left to the host app because
+    // how long a sentence stays on screen is a design decision, and this
+    // is the tool where design decisions get made.
+
+    /// How it enters and leaves — see `PodStatusEntrance`.
+    @Published public var podStatusEntrance: PodStatusEntrance = .growFromPod
+
+    /// Whether it hides itself after `podStatusDuration`. Off means it
+    /// stays until dismissed, which is the right behaviour for something
+    /// that still needs acting on.
+    @Published public var podStatusAutoDismiss: Bool = true
+
+    /// Seconds on screen before auto-dismiss. Only meaningful when
+    /// `podStatusAutoDismiss` is on.
+    @Published public var podStatusDuration: Double = 4
+
+    /// Whether tapping it dismisses it. Independent of auto-dismiss on
+    /// purpose: "goes on its own" and "can be got rid of" are different
+    /// promises, and a message that stays until acted on is exactly the
+    /// case where tapping to clear matters most.
+    @Published public var podStatusDismissible: Bool = true
+
+    /// Whether the accessory is on screen right now.
+    ///
+    /// **Runtime only — deliberately not in `RingPreset`.** Whether a
+    /// notification happens to be showing is not part of what a saved
+    /// state looks like, the same reasoning that keeps `previewDiameter`
+    /// and the live voice fields out of a snapshot.
+    @Published public var podStatusPresented: Bool = false
+
+    /// Cancelled and replaced on every present, so re-triggering while one
+    /// is already up restarts the clock rather than letting the first
+    /// timer dismiss the second message early.
+    private var podStatusDismissTask: Task<Void, Never>?
+
+    /// Show the accessory, and schedule its dismissal if auto-dismiss is on.
+    ///
+    /// **Deliberately does not `withAnimation`.** These flip a plain flag;
+    /// the animation belongs at the view, on the local state that mirrors
+    /// this — see `statusPresented` in `RootView`/`PhoneMockupView`.
+    /// Animating here looked right and did nothing: `withAnimation` around
+    /// an `@Published` mutation does not reliably carry through the
+    /// `objectWillChange`-driven update, so the accessory swapped in and
+    /// out instantly. The voice pill already had the same shape for the
+    /// same reason.
+    @MainActor
+    public func presentPodStatus() {
+        podStatusDismissTask?.cancel()
+        podStatusPresented = true
+        guard podStatusAutoDismiss else { return }
+        let seconds = podStatusDuration
+        podStatusDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.dismissPodStatus()
+        }
+    }
+
+    /// See `presentPodStatus()` for why there is no `withAnimation` here.
+    @MainActor
+    public func dismissPodStatus() {
+        podStatusDismissTask?.cancel()
+        podStatusDismissTask = nil
+        podStatusPresented = false
+    }
+
     /// What each diode is drawn as — see `DiodeShape`. Applies to every
     /// diode-based animation, and to everything when `diodeModeEnabled`
     /// is on.
@@ -714,6 +838,28 @@ extension RingConfig {
         if glassTintEnabled {
             result = result.tint(glassTintColor)
         }
+        if glassInteractive {
+            result = result.interactive()
+        }
+        return result
+    }
+
+    /// The pod's own glass.
+    ///
+    /// Identical to `glass` except when `podFill` is `.tinted`, where the
+    /// pod takes `podTintColor` instead — that is the whole point of the
+    /// tinted fill: the pod carries state by colour once the ring is gone
+    /// and is no longer carrying it by motion.
+    ///
+    /// A separate property rather than a parameter on `glass` so the tab
+    /// bar cannot accidentally pick up the pod's tint; they are one
+    /// material but two surfaces, and only one of them is showing state.
+    /// `.ring` always uses the shared glass — the ring is not a state
+    /// colour, and tinting behind it would fight the animation.
+    public var podGlass: Glass {
+        guard podContent.takesStatusAndFill, podFill == .tinted else { return glass }
+        var result: Glass = glassStyle == .clear ? .clear : .regular
+        result = result.tint(podTintColor)
         if glassInteractive {
             result = result.interactive()
         }

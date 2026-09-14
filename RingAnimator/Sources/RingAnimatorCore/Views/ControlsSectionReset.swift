@@ -121,6 +121,20 @@ public enum ControlsSectionReset {
             config.backgroundImageData = d.backgroundImageData
             config.backgroundDimAmount = d.backgroundDimAmount
 
+        case "pod":
+            config.podContent = d.podContent
+            config.podStatus = d.podStatus
+            config.podFill = d.podFill
+            config.podTintColor = d.podTintColor
+            config.podGlyph = d.podGlyph
+            config.podStatusEntrance = d.podStatusEntrance
+            config.podStatusAutoDismiss = d.podStatusAutoDismiss
+            config.podStatusDuration = d.podStatusDuration
+            config.podStatusDismissible = d.podStatusDismissible
+
+        case "tabs":
+            config.tabAppearances = d.tabAppearances
+
         case "glass":
             config.glassStyle = d.glassStyle
             config.glassTintEnabled = d.glassTintEnabled

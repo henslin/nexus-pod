@@ -41,11 +41,10 @@ public struct VoicePillView: View {
     /// fully-rounded end looks stretched rather than pill-shaped. A fixed
     /// continuous corner radius keeps it looking like a pill when short and
     /// a rounded card when tall.
-    private static let cornerRadius: CGFloat = 22
+    private static var cornerRadius: CGFloat { BottomAccessoryPill<EmptyView>.cornerRadius }
 
     public var body: some View {
         pillBackground
-            .frame(width: width)
             // Covers a *new* bubble appearing (either side) — slides up,
             // pod grows to fit it. Deliberately keyed on the *count*, not
             // the whole `messages` array: an existing bubble's text
@@ -64,12 +63,12 @@ public struct VoicePillView: View {
     }
 
     @ViewBuilder
+    /// The glass shell is `BottomAccessoryPill`, shared with
+    /// `PodStatusAccessory` — see that file. This used to inline the
+    /// `glassEffect` + corner radius itself; once a second accessory
+    /// existed, two copies of the same shell would have drifted.
     private var pillBackground: some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
-        } else {
-            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
-        }
+        BottomAccessoryPill(width: width) { content }
     }
 
     private var content: some View {
@@ -290,5 +289,19 @@ extension AnyTransition {
             active: GrowFromRingModifier(isSource: true, rowWidth: rowWidth),
             identity: GrowFromRingModifier(isSource: false, rowWidth: rowWidth)
         )
+    }
+
+    /// The status accessory's entrance — see `PodStatusEntrance`.
+    /// `.growFromPod` resolves to the very same `growFromRing` the voice
+    /// pill uses, rather than a second implementation of the same motion.
+    public static func podStatus(_ entrance: PodStatusEntrance, rowWidth: CGFloat) -> AnyTransition {
+        switch entrance {
+        case .growFromPod:
+            return .growFromRing(rowWidth: rowWidth)
+        case .slideUp:
+            return .move(edge: .bottom).combined(with: .opacity)
+        case .fade:
+            return .opacity
+        }
     }
 }

@@ -61,6 +61,15 @@ struct RootView: View {
     /// below rather than driven directly, so the two-stage exit animation
     /// there can run before the view actually disappears).
     @State private var pillPresented = false
+    /// Mirrors `config.podStatusPresented` into local state.
+    ///
+    /// **Not driven off the published property directly** — that was the
+    /// bug: `withAnimation` around an `@Published` mutation does not
+    /// reliably carry through the `objectWillChange`-driven update, so the
+    /// accessory swapped in and out instantly instead of running its
+    /// transition. Exactly why `pillPresented` above exists too; the same
+    /// trap, found twice.
+    @State private var statusPresented = false
     @State private var pillLiftOffset: CGFloat = 0
 
     /// The settings sheet's own fixed height, in points — deliberately a
@@ -120,6 +129,24 @@ struct RootView: View {
                             .transition(.growFromRing(rowWidth: rowWidth))
                     }
 
+                    // The pod's status, as a tab bar accessory — same
+                    // shell, same width, same spawn-from-the-pod
+                    // transition as the voice pill above. Shown only when
+                    // there is a message and the pod is showing something
+                    // that can carry one; an empty string is the off
+                    // switch, so there is one source of truth.
+                    if statusPresented, config.podContent.takesStatusAndFill, !config.podStatus.isEmpty {
+                        PodStatusAccessory(width: rowWidth,
+                                           message: config.podStatus,
+                                           tint: config.podTintColor,
+                                           content: config.podContent,
+                                           glyph: config.podGlyph,
+                                           onDismiss: config.podStatusDismissible
+                                               ? { config.dismissPodStatus() }
+                                               : nil)
+                            .transition(.podStatus(config.podStatusEntrance, rowWidth: rowWidth))
+                    }
+
                     // One clock for the pod. `paused:` stops it dead when
                     // nothing is playing, so a parked timeline costs
                     // nothing — and with no timeline at all `playback(at:)`
@@ -158,6 +185,20 @@ struct RootView: View {
                     // constructed until first appearance, and binding
                     // needs both objects to exist.
                     player.bind(to: config)
+                }
+                .onAppear {
+                    // Sync without animating, in case a status is already
+                    // up when this view first appears.
+                    statusPresented = config.podStatusPresented
+                }
+                .onChange(of: config.podStatusPresented) { _, presented in
+                    // The animation lives HERE, on the local state, not at
+                    // the mutation on `RingConfig` — see `statusPresented`.
+                    withAnimation(presented
+                                  ? .bouncy(duration: 0.45, extraBounce: 0.08)
+                                  : .easeInOut(duration: 0.28)) {
+                        statusPresented = presented
+                    }
                 }
                 .onChange(of: voiceConversation.isVisible) { _, isVisible in
                     if isVisible {

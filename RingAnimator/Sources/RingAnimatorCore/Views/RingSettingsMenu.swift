@@ -209,6 +209,22 @@ public struct RingSettingsMenu: View {
                 NavigationLink {
                     Form {
                         Section {
+                            PodContentSection(config: config)
+                        } footer: {
+                            Text("What the ring pod shows in the tab bar below — the ring, a glyph, a photo, or a short status string.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .formStyle(.grouped)
+                    .navigationTitle("Pod Content")
+                    .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Pod Content", systemImage: "circle.circle")
+                }
+                NavigationLink {
+                    Form {
+                        Section {
                             LiquidGlassSection(config: config)
                         } footer: {
                             Text("The real Glass API's own parameters — style, tint, and interactive — applied to the tab bar and ring pod below.")

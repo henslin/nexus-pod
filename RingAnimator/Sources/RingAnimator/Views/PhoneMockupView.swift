@@ -69,6 +69,15 @@ struct PhoneMockupView: View {
     /// a quick upward lift *before* the shrink-back-to-the-ring transition
     /// starts, instead of both happening at once. See the `onChange` below.
     @State private var pillPresented = false
+    /// Mirrors `config.podStatusPresented` into local state.
+    ///
+    /// **Not driven off the published property directly** — that was the
+    /// bug: `withAnimation` around an `@Published` mutation does not
+    /// reliably carry through the `objectWillChange`-driven update, so the
+    /// accessory swapped in and out instantly instead of running its
+    /// transition. Exactly why `pillPresented` above exists too; the same
+    /// trap, found twice.
+    @State private var statusPresented = false
     /// Extra manual offset for that pre-exit lift — separate from the
     /// shrink/offset math in `GrowFromRingModifier` so the two motions
     /// stack cleanly (lift up, then reset to 0 right as the shrink begins).
@@ -270,6 +279,24 @@ struct PhoneMockupView: View {
                         .offset(y: pillLiftOffset)
                         .transition(.growFromRing(rowWidth: screenWidth - 42))
                 }
+                    // The pod's status, as a tab bar accessory — same
+                    // shell, same width, same spawn-from-the-pod
+                    // transition as the voice pill above. Shown only when
+                    // there is a message and the pod is showing something
+                    // that can carry one; an empty string is the off
+                    // switch, so there is one source of truth.
+                    if statusPresented, config.podContent.takesStatusAndFill, !config.podStatus.isEmpty {
+                        PodStatusAccessory(width: screenWidth - 42,
+                                           message: config.podStatus,
+                                           tint: config.podTintColor,
+                                           content: config.podContent,
+                                           glyph: config.podGlyph,
+                                           onDismiss: config.podStatusDismissible
+                                               ? { config.dismissPodStatus() }
+                                               : nil)
+                            .transition(.podStatus(config.podStatusEntrance, rowWidth: screenWidth - 42))
+                    }
+
                 TabBarPreview(config: config, selectedTab: $selectedTab, width: screenWidth - 42, playback: playback)
             }
             .padding(.bottom, 21)
@@ -277,6 +304,20 @@ struct PhoneMockupView: View {
                 // Sync without animating in case the loop is already active
                 // when this view first appears.
                 pillPresented = voiceConversation.isVisible
+            }
+            .onAppear {
+            // Sync without animating, in case a status is already
+            // up when this view first appears.
+            statusPresented = config.podStatusPresented
+            }
+            .onChange(of: config.podStatusPresented) { _, presented in
+            // The animation lives HERE, on the local state, not at
+            // the mutation on `RingConfig` — see `statusPresented`.
+            withAnimation(presented
+            ? .bouncy(duration: 0.45, extraBounce: 0.08)
+            : .easeInOut(duration: 0.28)) {
+            statusPresented = presented
+            }
             }
             .onChange(of: voiceConversation.isVisible) { _, isVisible in
                 // `.bouncy` is the real iOS spring preset — a touch of

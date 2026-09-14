@@ -1975,6 +1975,141 @@ target directly a minute later succeeded, which is the tell.
 
 `preflight.sh` now takes a `mkdir` lock and refuses to start a second run.
 
+## The pod has states, and the panel has aspects
+
+Added 2026-09-10. Two features and three design decisions that cost a
+wrong turn each, so they are written down.
+
+### The pod's three states
+
+`PodContent` — **Ring**, **Photo**, **Glyph**. Ring is the quiet default;
+photo and glyph are what interrupt it. Photo takes an image the host app
+supplies (`TabBarPreview`'s `podImage`, currently `nil` and drawn as an
+obvious placeholder — that is the seam a real host plugs into later).
+
+Two ideas died on the way here, both worth not retrying:
+
+- **`status` as a fourth state.** It isn't a thing the pod shows; it is a
+  message that accompanies photo or glyph.
+- **The ring framing content.** At the pod's geometry the ring is 34pt with
+  a ~22pt hole, so framed content was an illegible smudge — measured, not
+  guessed. Growing the ring to the pod's full 62pt fixed legibility but made
+  the ring change size depending on what was inside it, which is the wrong
+  trade for the product's own mark. So for photo and glyph the ring simply
+  goes away and `PodFill` decides what is behind them.
+
+### The status is a tab bar accessory, not a badge
+
+The Apple Music pattern: the pod becomes a photo, and a glass panel the
+full width of the bar spawns *from the pod* saying "John arrived home." It
+has to hold a sentence, so `lineLimit` is deliberately absent and the panel
+grows.
+
+**None of this was new machinery.** `VoicePillView` already did exactly
+that — matched width, glass, `.growFromRing`. The shell is now
+`BottomAccessoryPill`, shared by both; only the content differs. An earlier
+pass drew the status as a small capsule on the pod, which could carry two
+characters and was the wrong *idea*, not the wrong size.
+
+The accessory is an **event**: `podStatusEntrance`, `podStatusAutoDismiss`,
+`podStatusDuration`, `podStatusDismissible` are its lifecycle and are saved
+per-state. `podStatusPresented` is runtime and is *not* in `RingPreset` —
+whether a notification happens to be showing is not what a saved state
+looks like. The Show/Hide button exists because auto-dismiss otherwise
+means typing a message and seeing nothing.
+
+### The Controls panel: four aspects, two of them global
+
+Keynote's model — one selected state, several inspectors onto it, **not**
+four libraries. A state of the Nexus tab is a `RingPreset`, which already
+snapshots the ring, the pod content, the message and the tint together, so
+"add a state" is still "add a use case".
+
+| Segment | Scope |
+|---|---|
+| Animation | per-state |
+| Status | per-state |
+| AI Agent | app-wide (presets already exclude every voice/ElevenLabs field) |
+| Global | app-wide |
+
+**Global names a rule `RingPreset` already followed silently**, by omitting
+`previewDiameter`, the background staging image and the voice fields as
+"not really part of the animation".
+
+- **Liquid Glass became app-wide** (Chris, 2026-09-10). Presets no longer
+  *restore* it — a state that reset the bar's material as it loaded would
+  mean the bar restyled itself every time a notification arrived. The fields
+  are still declared and still written so files round-trip and old presets
+  keep opening; only reading stopped. `PresetDiff` never copied glass
+  anyway, so Apply to All had been treating it as global all along.
+- **Preview Size deliberately stayed in Shape**, though it is global by the
+  same test. It sits under Ring Size because the two sound alike and
+  separating them is what made the ring's own diameter read as missing — see
+  "Ring Size and Preview Size are different questions". Taxonomy is not
+  worth reintroducing a fixed confusion.
+- **The segmented control is the panel's one legitimate one.** It switches
+  what the view *displays*; the value pickers inside cards stay menus. Two
+  controls doing different jobs is correct — it was two doing the *same*
+  job that was the bug when Glass Style was segmented among eleven menus.
+  Glyph-only with the name on hover.
+
+  **It is `AspectSwitcher`, not the stock picker.** Stock
+  `.pickerStyle(.segmented)` was tried first and then with
+  `.controlSize(.extraLarge)`; neither carried Keynote's glass at the size
+  it needs. So the *arrangement* is hand-built while every surface stays a
+  real API — `GlassEffectContainer` + `.glassEffect(.regular.interactive(),
+  in: Capsule())` for the capsule, `.fill.tertiary` for the selection
+  (the system's own adaptive fill for vibrant/glass, the same one
+  `TabBarPreview` uses on the selected tab), `matchedGeometryEffect` for
+  the slide. That is the right side of the standing rule: custom means the
+  arrangement, never the materials. The selection is **not** a second
+  `glassEffect` — glass over glass sits proud, and the selected segment
+  should be flush.
+
+  Glyphs are `circle` / `ellipsis.message` / `sparkles` / `gearshape`
+  (Chris, 2026-09-10). They name *subjects* — the ring that animates, the
+  thing that says something, the agent, app-wide — where the first set
+  (`play.circle`/`circle.circle`/`waveform`) named mechanisms and made two
+  of the four both circles, which is the failure mode for a glyph-only
+  control. Verify any replacement resolves before shipping it: an unknown
+  SF Symbol name draws nothing at all, silently, leaving a blank segment.
+
+### Editable tab names and glyphs
+
+Global → Tabs. Each tab takes an editable name and either one of the
+bundled artwork pairs or any SF Symbol.
+
+**`DemoTab` stays the identity; `TabAppearance` is the appearance.** This
+separation is the whole point and must not be "simplified" away.
+`DemoTab.rawValue` is not just a label — `screenshotImage(dark:)` builds
+`"dashboard-dark"` from it, and the exporter's `appUI(tab:)` keys off it.
+If an edited name drove the enum, renaming Dashboard to Home would
+silently repoint which screenshot that tab shows, and it would read as an
+asset bug rather than a rename bug. `artworkBaseName` exists for the same
+reason: the asset key and the display name are deliberately two things.
+
+`TabGlyph` is `.artwork(base)` or `.symbol(name)`. Symbols use the *same*
+glyph selected and unselected rather than guessing at a `.fill` variant —
+the guess draws nothing whenever that variant doesn't exist, and selection
+is already carried by the pill and the ink colour. `bundledArtwork` is
+hardcoded because an asset catalog can't be enumerated at runtime: add a
+pair to `TabIcons.xcassets` and it must be added there too.
+
+**Two limits, both deliberate:**
+
+- **Appearance, not structure.** Adding or removing tabs would need the
+  bundled screenshots to be data as well, which is a separate feature.
+- **Nothing persists across launches.** `tabAppearances` resets on
+  relaunch, the same as the glass settings, because `RingConfig` has no
+  app-level persistence at all. Making global settings stick is its own
+  small piece of work.
+
+**`ControlsSectionReset` rots exactly as its own doc comment warns.** Adding
+Pod Content without listing it there made its Reset a silent no-op. If you
+add a card, add its case, and re-run the audit: every `card("id"` in
+`ControlsView` needs a `case "id":`, except `fidelity`, which is
+deliberately not resettable.
+
 ## Open items (not yet done)
 
 - ~~**TestFlight app name**~~ — **done, confirmed 2026-09-10.** App Store

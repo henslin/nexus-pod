@@ -119,8 +119,22 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
     let onMagnifyEnd: () -> Void
     @ViewBuilder var content: () -> Content
 
-    private var sizedContent: AnyView {
-        AnyView(content().frame(width: contentSize.width, height: contentSize.height))
+    /// The hosted content, at a concrete type.
+    ///
+    /// **Not `AnyView`, and this matters.** It used to be
+    /// `AnyView(content().frame(...))`, which meant every update handed
+    /// the hosting view a brand-new type-erased root. `AnyView` erases
+    /// structural identity, so SwiftUI could not diff the subtree against
+    /// the previous one — it re-rendered it fresh. The visible consequence
+    /// was that **nothing inside this canvas could animate an
+    /// insertion/removal transition**: the view simply snapped in and out,
+    /// whatever `.transition` was on it.
+    ///
+    /// Measured, not guessed: with `AnyView`, a `.move(edge:)` transition
+    /// produced exactly two layout passes at the *same* timestamp. An
+    /// animation produces a run of them across its duration.
+    private var sizedContent: SizedCanvasContent<Content> {
+        SizedCanvasContent(content: content(), size: contentSize)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -219,7 +233,23 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
         context.coordinator.onPercentChange = onPercentChange
         context.coordinator.onMagnifyBegin = onMagnifyBegin
         context.coordinator.onMagnifyEnd = onMagnifyEnd
-        context.coordinator.hostingView?.rootView = sizedContent
+        // **Wrapped in the update's own transaction, deliberately.**
+        //
+        // Pushing a new `rootView` into an `NSHostingView` starts a fresh
+        // SwiftUI update inside that host. Assigned bare, that update
+        // carries no animation, so *nothing inside this canvas can ever
+        // animate a transition* — the data arrives instantly and any
+        // `.transition` on it is skipped. `withAnimation` in the outer
+        // tree sets `context.transaction`; handing that to the assignment
+        // is what carries the animation across the AppKit boundary.
+        //
+        // Found via the status accessory, whose three different entrances
+        // all rendered as the same instant show/hide. The voice pill has
+        // the same shape and was equally affected — it just appears only
+        // during a live conversation, so nobody had watched it closely.
+        withTransaction(context.transaction) {
+            context.coordinator.hostingView?.rootView = sizedContent
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -257,7 +287,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
             observers.removeAll()
         }
 
-        weak var hostingView: NSHostingView<AnyView>?
+        weak var hostingView: NSHostingView<SizedCanvasContent<Content>>?
         weak var scrollView: NSScrollView?
         var viewport: StageState?
         var restMagnification: CGFloat = 1
@@ -378,5 +408,20 @@ private final class CenteringClipView: NSClipView {
             rect.origin.y = (documentFrame.height - proposedBounds.height) / 2
         }
         return rect
+    }
+}
+
+
+/// The canvas's hosted root, as a concrete type.
+///
+/// Exists purely so `NSHostingView`'s `RootView` is a stable type across
+/// updates — see `ZoomableCanvas.sizedContent` for why `AnyView` there
+/// silently disabled every transition inside the canvas.
+struct SizedCanvasContent<Content: View>: View {
+    var content: Content
+    var size: CGSize
+
+    var body: some View {
+        content.frame(width: size.width, height: size.height)
     }
 }

@@ -154,38 +154,33 @@ public enum WhatsNew {
     /// Bump this when the notes change. The screen shows itself once per
     /// value, so editing the copy without bumping it means nobody who has
     /// already dismissed the old notes ever sees the new ones.
-    public static let version = "3.6.1"
+    public static let version = "3.7.0"
 
     public static let current: [WhatsNewItem] = [
         WhatsNewItem(
-            symbol: "moon.zzz",
-            title: "Quiet in the Background",
-            detail: "Previews freeze when you switch to another app and pick up the moment you come back. A window left open beside Figma was costing a quarter of a processor core drawing rings for nobody; now it costs nothing. Recording particles keeps them running regardless."
+            symbol: "circle.circle",
+            title: "The Pod Has States",
+            detail: "The Nexus tab can now show the ring, a photo, or a glyph. The ring is the quiet default; a photo or glyph is what interrupts it — a known person arriving home, an alert. Pick one under Status."
         ),
         WhatsNewItem(
-            symbol: "gauge.with.dots.needle.67percent",
-            title: "About Twice as Fast",
-            detail: "Lists and previews do roughly half the work they used to. Colours were making a needless round trip on every diode of every frame, and every thumbnail was quietly building a voice service it never used."
+            symbol: "ellipsis.message",
+            title: "A Message Above the Bar",
+            detail: "A photo or glyph can carry a sentence — \"John arrived home.\" — as a glass panel the full width of the tab bar that spawns from the pod, the way Music's mini player does. It wraps rather than truncating, chooses how it enters, and can dismiss itself after a few seconds or wait to be tapped."
         ),
         WhatsNewItem(
-            symbol: "exclamationmark.triangle",
-            title: "Deleting Asks First",
-            detail: "Deleting an animation takes its sequence with it, and deleting a section takes every animation in it. Both now confirm, and the section one counts what's about to go."
+            symbol: "square.grid.2x2",
+            title: "Four Inspectors, One State",
+            detail: "The Controls panel is split the way Keynote's is: Animation, Status, and AI Agent are three views of the selected state, and Global is the app around it. A state is still one saved animation — nothing was split into separate libraries."
         ),
         WhatsNewItem(
-            symbol: "lifepreserver",
-            title: "A Library That Won't Load Is Kept",
-            detail: "If the file behind a list can't be read — a truncated write, a half-synced iCloud copy — it's set aside rather than replaced with an empty one on the next edit."
+            symbol: "textformat",
+            title: "Rename the Tabs",
+            detail: "Global → Tabs lets you change each tab's name and swap its glyph for any SF Symbol or one of the bundled icons. Which screenshot a tab shows is tied to the tab itself, so renaming one never repoints its content."
         ),
         WhatsNewItem(
-            symbol: "arrow.triangle.branch",
-            title: "Edits Stay Where You Made Them",
-            detail: "Turning a knob could be captured into the selected step of an animation you'd already navigated away from. Each animation's sequence now only listens while you're actually looking at it."
-        ),
-        WhatsNewItem(
-            symbol: "magnifyingglass",
-            title: "Search Everywhere",
-            detail: "The Nexus list can be searched like Use Cases and the Cue Library. Every slider and switch is named for VoiceOver, too."
+            symbol: "wand.and.stars",
+            title: "Glass Is App-Wide",
+            detail: "Liquid Glass settings now belong to the app rather than to each saved animation, so switching states no longer restyles the tab bar underneath you. Existing animations still open; they just no longer carry a material of their own."
         ),
     ]
 }

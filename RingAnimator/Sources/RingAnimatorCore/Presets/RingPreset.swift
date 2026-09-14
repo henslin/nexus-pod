@@ -45,6 +45,25 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// `.steady` and 2.0.
     public var diodeShape: DiodeShape?
     public var diodeColorMode: DiodeColorMode?
+    /// See `RingConfig.podContent`. Optional for the same reason as the
+    /// pair above: presets saved before the pod had content other than the
+    /// ring must still decode, and they mean `.ring` with the ring frame
+    /// on — which is exactly what those presets looked like.
+    public var podContent: PodContent?
+    public var podGlyph: String?
+    public var podStatus: String?
+    public var podFill: PodFill?
+    /// Hex, like every other colour here — `Color` isn't `Codable`.
+    public var podTintColorHex: String?
+    /// How long the accessory stays and how it moves *are* part of the
+    /// state's design. Whether it happens to be on screen right now
+    /// (`podStatusPresented`) is not, and is excluded — same line the
+    /// snapshot already draws around `previewDiameter` and the live voice
+    /// fields.
+    public var podStatusEntrance: PodStatusEntrance?
+    public var podStatusAutoDismiss: Bool?
+    public var podStatusDuration: Double?
+    public var podStatusDismissible: Bool?
     /// See `RingConfig.smoothingEnabled`. Optional like its neighbours so a
     /// preset saved before smoothing existed still decodes — and decodes to
     /// the hardware-exact render it was saved as.
@@ -142,6 +161,10 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     public var fadeOutSeconds: Double
     public var loops: Int
 
+    /// **Retained for file compatibility only — no longer applied.**
+    /// Liquid Glass became app-wide rather than per-state; see the note in
+    /// `apply(to:)`. Still captured so a file written today still opens on
+    /// a build that does read them.
     public var glassStyle: GlassStyle
     public var glassTintEnabled: Bool
     public var glassTintColorHex: String
@@ -164,6 +187,15 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         diodeCount = config.diodeCount
         diodeShape = config.diodeShape
         diodeColorMode = config.diodeColorMode
+        podContent = config.podContent
+        podGlyph = config.podGlyph
+        podStatus = config.podStatus
+        podFill = config.podFill
+        podTintColorHex = config.podTintColor.hexString
+        podStatusEntrance = config.podStatusEntrance
+        podStatusAutoDismiss = config.podStatusAutoDismiss
+        podStatusDuration = config.podStatusDuration
+        podStatusDismissible = config.podStatusDismissible
         smoothingEnabled = config.smoothingEnabled
         smoothingGradientRing = config.smoothingGradientRing
         smoothingSpread = config.smoothingSpread
@@ -261,6 +293,15 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.diodeCount = diodeCount
         config.diodeShape = diodeShape ?? .round
         config.diodeColorMode = diodeColorMode ?? .perDiode
+        config.podContent = podContent ?? .ring
+        config.podGlyph = podGlyph ?? "sparkles"
+        config.podStatus = podStatus ?? ""
+        config.podFill = podFill ?? .standard
+        config.podTintColor = podTintColorHex.map { Color(hex: $0) } ?? Color(hex: "#2288DD")
+        config.podStatusEntrance = podStatusEntrance ?? .growFromPod
+        config.podStatusAutoDismiss = podStatusAutoDismiss ?? true
+        config.podStatusDuration = podStatusDuration ?? 4
+        config.podStatusDismissible = podStatusDismissible ?? true
         config.smoothingEnabled = smoothingEnabled ?? false
         config.smoothingGradientRing = smoothingGradientRing ?? true
         config.smoothingSpread = smoothingSpread ?? 1.4
@@ -335,9 +376,16 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.fadeOutSeconds = fadeOutSeconds
         config.loops = loops
 
-        config.glassStyle = glassStyle
-        config.glassTintEnabled = glassTintEnabled
-        config.glassTintColor = Color(hex: glassTintColorHex)
-        config.glassInteractive = glassInteractive
+        // Glass is **not** restored — it is app-wide now (Chris,
+        // 2026-09-10), and a state that reset the tab bar's material as it
+        // loaded would mean the bar restyled itself every time a
+        // notification arrived. Real host apps do not do that.
+        //
+        // The fields are still declared and still written (see the capture
+        // above) purely so files round-trip: presets saved before this, and
+        // presets handed to someone on an older build, must keep decoding.
+        // Reading them is what stopped, not storing them. If they are ever
+        // actually removed, they have to stay optional-tolerant on decode
+        // or every existing file throws `keyNotFound`.
     }
 }

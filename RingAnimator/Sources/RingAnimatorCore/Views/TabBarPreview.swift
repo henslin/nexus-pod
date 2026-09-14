@@ -52,18 +52,31 @@ public struct TabBarPreview: View {
     /// `RingView` takes `overrideElapsed` instead of reaching for a clock.
     var playback: TimelinePlayback?
 
+    /// The image for `PodContent.photo`.
+    ///
+    /// **This is the seam the host app will eventually plug into.** Today
+    /// nothing passes it and `.photo` draws an obvious placeholder, which
+    /// is deliberate: the point of this pass is choosing what the pod
+    /// should show, and a placeholder that reads as "host supplies this"
+    /// is more honest at that stage than a bundled stock avatar that
+    /// flatters the design. When a look is chosen, this parameter is
+    /// where the real content arrives — widen it then, not now.
+    var podImage: Image?
+
     public init(
         config: RingConfig,
         selectedTab: Binding<DemoTab>,
         width: CGFloat = 340,
         onRingTap: (() -> Void)? = nil,
-        playback: TimelinePlayback? = nil
+        playback: TimelinePlayback? = nil,
+        podImage: Image? = nil
     ) {
         self.config = config
         self._selectedTab = selectedTab
         self.width = width
         self.onRingTap = onRingTap
         self.playback = playback
+        self.podImage = podImage
     }
 
     /// Drives the selected-tab pill's slide between items.
@@ -132,7 +145,7 @@ public struct TabBarPreview: View {
     }
 
     private var ringPodBackgroundDuplicate: some View {
-        RingView(config: config, diameter: CGFloat(RingConfig.tabBarRingDiameter), overrideElapsed: playback?.elapsed)
+        podContentStack
             .frame(width: CGFloat(RingConfig.tabBarPodDiameter), height: CGFloat(RingConfig.tabBarPodDiameter))
             .blur(radius: 4)
             // Multiplied into the existing 0.8, not replacing it — this
@@ -145,7 +158,9 @@ public struct TabBarPreview: View {
     @ViewBuilder
     private var ringPodGlass: some View {
         if #available(iOS 26.0, macOS 26.0, *) {
-            ringPodTappable.glassEffect(config.glass, in: Capsule())
+            // `podGlass`, not `glass` — the pod carries the tinted fill;
+            // the bar keeps the shared material.
+            ringPodTappable.glassEffect(config.podGlass, in: Capsule())
         } else {
             ringPodTappable.background(.ultraThinMaterial, in: Capsule())
         }
@@ -167,9 +182,88 @@ public struct TabBarPreview: View {
     }
 
     private var ringPod: some View {
-        RingView(config: config, diameter: CGFloat(RingConfig.tabBarRingDiameter), overrideElapsed: playback?.elapsed)
+        podContentStack
             .frame(width: CGFloat(RingConfig.tabBarPodDiameter), height: CGFloat(RingConfig.tabBarPodDiameter))
             .opacity(playback?.opacity ?? 1)
+    }
+
+    // MARK: - Pod content
+    //
+    // `podContentStack` is used by BOTH the pod and the blurred duplicate
+    // behind the glass. That duplicate is what gets refracted by the
+    // material (see `ringPodStack`), so it has to be the same content —
+    // leaving it hardcoded to `RingView` would make a photo pod lose the
+    // refraction the ring pod has, which reads as the glass breaking
+    // rather than as a content change.
+    //
+    // Three states, and the ring appears in exactly one of them: for
+    // `.photo` and `.glyph` the ring goes away entirely and the pod is its
+    // fill plus the content, optionally carrying a status capsule.
+
+    /// The content's diameter for `.photo`/`.glyph`.
+    ///
+    /// The ring's own 34pt, not the pod's 62pt: without a ring the pod is
+    /// a plain glass capsule, and content sized to its full width would
+    /// touch the edges. Matching the ring's diameter also keeps the pod
+    /// equally "full" whichever state it is in, so switching states is a
+    /// comparison of content rather than of two different sizes.
+    private var contentDiameter: CGFloat { CGFloat(RingConfig.tabBarRingDiameter) }
+
+    @ViewBuilder
+    private var podContentStack: some View {
+        switch config.podContent {
+        case .ring:
+            RingView(config: config,
+                     diameter: CGFloat(RingConfig.tabBarRingDiameter),
+                     overrideElapsed: playback?.elapsed)
+        case .photo, .glyph:
+            // No badge here. The status is a tab bar *accessory* above the
+            // bar — see `PodStatusAccessory` — not a mark on the pod.
+            podInnerContent
+                .frame(width: contentDiameter, height: contentDiameter)
+        }
+    }
+
+    @ViewBuilder
+    private var podInnerContent: some View {
+        switch config.podContent {
+        case .ring:
+            EmptyView()
+        case .glyph:
+            Image(systemName: config.podGlyph)
+                .resizable()
+                .scaledToFit()
+                .fontWeight(.semibold)
+                .padding(contentDiameter * 0.1)
+                .foregroundStyle(iconColor(isSelected: true))
+        case .photo:
+            podPhoto
+        }
+    }
+
+    /// The host's image once there is one; until then a placeholder that
+    /// looks like a placeholder. A stock avatar here would make the design
+    /// look finished while the actual question — does a photo belong in
+    /// this slot at all — is still open.
+    @ViewBuilder
+    private var podPhoto: some View {
+        if let podImage {
+            podImage
+                .resizable()
+                .scaledToFill()
+                .clipShape(Circle())
+        } else {
+            ZStack {
+                Circle().fill(.fill.tertiary)
+                Circle().strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                    .foregroundStyle(iconColor(isSelected: true).opacity(0.6))
+                Image(systemName: "person.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(contentDiameter * 0.26)
+                    .foregroundStyle(iconColor(isSelected: true).opacity(0.7))
+            }
+        }
     }
 
     /// A single tab item: custom outline artwork when unselected, filled
@@ -187,6 +281,7 @@ public struct TabBarPreview: View {
     /// materials, which is what "Fills - Vibrant/Tertiary" is.
     private func tabItem(_ tab: DemoTab) -> some View {
         let isSelected = tab == selectedTab
+        let appearance = config.appearance(for: tab)
 
         return Button {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
@@ -194,13 +289,17 @@ public struct TabBarPreview: View {
             }
         } label: {
             VStack(spacing: 3) {
-                (isSelected ? tab.filledImage : tab.outlineImage)
+                // Name and glyph come from the editable appearance, not
+                // from the enum — see `TabAppearance`. `tab.rawValue` is
+                // still the asset/identity key and must not be used as a
+                // label, or renaming a tab would repoint its screenshot.
+                appearance.glyph.image(selected: isSelected)
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 22, height: 22)
                     .foregroundStyle(iconColor(isSelected: isSelected))
-                Text(tab.rawValue)
+                Text(appearance.name)
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0)
                     .lineSpacing(2) // 12pt line height - 10pt font size

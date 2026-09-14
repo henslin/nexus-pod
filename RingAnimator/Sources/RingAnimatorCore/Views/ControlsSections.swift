@@ -667,6 +667,189 @@ struct LiquidGlassSection: View {
     }
 }
 
+// MARK: - Tabs
+
+/// Editable tab names and glyphs — see `TabAppearance`.
+///
+/// Appearance only. `DemoTab` remains the identity that keys the bundled
+/// screenshots and the exporter, so renaming "Dashboard" changes the label
+/// and nothing else. Adding or removing tabs would need those assets to be
+/// data too, and is a separate feature.
+struct TabsSection: View {
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        ForEach(Array(config.tabAppearances.enumerated()), id: \.element.id) { index, appearance in
+            VStack(alignment: .leading, spacing: 6) {
+                // The slot's own name, so it stays obvious which tab you
+                // are editing once its label no longer says.
+                Text(appearance.slot.rawValue.uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                TextField("Name", text: Binding(
+                    get: { config.tabAppearances[index].name },
+                    set: { config.tabAppearances[index].name = $0 }
+                ))
+
+                Picker("Icon", selection: Binding(
+                    get: { isSymbol(index) },
+                    set: { useSymbol in
+                        // Swapping source keeps a sensible value rather
+                        // than emptying the field, so the bar never blanks
+                        // mid-edit.
+                        config.tabAppearances[index].glyph = useSymbol
+                            ? .symbol("circle")
+                            : .artwork(appearance.slot.artworkBaseName)
+                    }
+                )) {
+                    Text("Artwork").tag(false)
+                    Text("SF Symbol").tag(true)
+                }
+                .pickerStyle(.menu)
+
+                if isSymbol(index) {
+                    TextField("SF Symbol", text: Binding(
+                        get: { if case .symbol(let n) = config.tabAppearances[index].glyph { return n }; return "" },
+                        set: { config.tabAppearances[index].glyph = .symbol($0) }
+                    ))
+                } else {
+                    Picker("Artwork", selection: Binding(
+                        get: { if case .artwork(let n) = config.tabAppearances[index].glyph { return n }; return appearance.slot.artworkBaseName },
+                        set: { config.tabAppearances[index].glyph = .artwork($0) }
+                    )) {
+                        ForEach(TabGlyph.bundledArtwork, id: \.self) { name in
+                            Text(name.capitalized).tag(name)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+
+        Text("Names and glyphs only. Which screenshot a tab shows is keyed to the tab itself, so renaming one never repoints its content.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func isSymbol(_ index: Int) -> Bool {
+        if case .symbol = config.tabAppearances[index].glyph { return true }
+        return false
+    }
+}
+
+// MARK: - Pod content
+
+/// What the tab bar pod shows — see `PodContent`.
+///
+/// **A note on the picker, since it is arguably the exception to this
+/// panel's own rule.** A segmented control is for switching what a view
+/// *displays*, and `podContent` genuinely does that — unlike Glass Style,
+/// which was converted from segmented to a menu because it picks a
+/// property's value. So a segmented control has a real claim here.
+/// It is a menu anyway, because this panel has eleven menus and no
+/// segmented controls, and two controls doing the same job in one panel is
+/// its own bug. Worth revisiting deliberately rather than by drift.
+struct PodContentSection: View {
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        Picker("Shows", selection: $config.podContent) {
+            ForEach(PodContent.allCases) { content in
+                Text(content.label).tag(content)
+            }
+        }
+        .pickerStyle(.menu)
+
+        Text(config.podContent.summary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+        if config.podContent == .glyph {
+            // A free text field rather than a curated menu: which symbols
+            // are worth trying is the question being explored, and a list
+            // would answer it in advance.
+            TextField("SF Symbol", text: $config.podGlyph)
+            Text("Any SF Symbol name. An unknown name draws nothing.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        if config.podContent.takesStatusAndFill {
+            TextField("Status Message", text: $config.podStatus, axis: .vertical)
+                .lineLimit(1...4)
+            Text(config.podStatus.isEmpty
+                 ? "Empty means no accessory. A sentence — \"John arrived home.\", \"Emergency services called.\""
+                 : "Spawns from the pod as a glass panel above the tab bar, the bar's full width. Wraps rather than truncating.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Presentation. The accessory is an event, so it needs a way
+            // to be *fired* — typing a message and seeing nothing, because
+            // it already auto-dismissed, is the obvious trap here.
+            Button {
+                if config.podStatusPresented {
+                    config.dismissPodStatus()
+                } else {
+                    config.presentPodStatus()
+                }
+            } label: {
+                Label(config.podStatusPresented ? "Hide Status" : "Show Status",
+                      systemImage: config.podStatusPresented ? "eye.slash" : "eye")
+                    .frame(maxWidth: .infinity)
+            }
+            .disabled(config.podStatus.isEmpty)
+            .ringGlassButtonStyle()
+
+            Picker("Entrance", selection: $config.podStatusEntrance) {
+                ForEach(PodStatusEntrance.allCases) { e in
+                    Text(e.label).tag(e)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text(config.podStatusEntrance.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Toggle("Auto-Dismiss", isOn: $config.podStatusAutoDismiss)
+            if config.podStatusAutoDismiss {
+                LabeledSlider(title: "Stays For", value: $config.podStatusDuration,
+                              range: 1...15, format: "%.1f s")
+            } else {
+                Text("Stays until dismissed — right for something that still needs acting on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Toggle("Tap To Dismiss", isOn: $config.podStatusDismissible)
+
+            Picker("Fill", selection: $config.podFill) {
+                ForEach(PodFill.allCases) { fill in
+                    Text(fill.label).tag(fill)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text(config.podFill.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Shown for either — it fills the capsule as well as the glass,
+            // so it is still live when the fill is Default.
+            ColorPicker("Tint", selection: $config.podTintColor)
+        }
+    }
+}
+
 // MARK: - Color
 
 struct ColorSection: View {
