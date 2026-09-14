@@ -26,6 +26,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case refraction
     case chromatic
     case morph
+    case liquid
+    case rays
+    case sphere
 
     public var id: String { rawValue }
 
@@ -42,6 +45,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .refraction: return "Refraction"
         case .chromatic:  return "Chromatic"
         case .morph:      return "Morph"
+        case .liquid:     return "Liquid"
+        case .rays:       return "Rays"
+        case .sphere:     return "Sphere"
         }
     }
 
@@ -60,6 +66,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .refraction: return "Metal · layerEffect"
         case .chromatic:  return "Metal · layerEffect"
         case .morph:      return "SwiftUI · Liquid Glass"
+        case .liquid:     return "Metal · colorEffect"
+        case .rays:       return "Metal · layerEffect"
+        case .sphere:     return "Metal · colorEffect"
         }
     }
 
@@ -76,6 +85,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .refraction: return "circle.circle"
         case .chromatic:  return "camera.filters"
         case .morph:      return "arrow.up.left.and.arrow.down.right.circle"
+        case .liquid:     return "drop.circle"
+        case .rays:       return "rays"
+        case .sphere:     return "circle.hexagongrid"
         }
     }
 
@@ -103,6 +115,12 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "The ring split into its red, green and blue by a radial offset, the way a cheap lens fringes. Tiny amounts read as expensive glass; large amounts on a beat read as impact."
         case .morph:
             return "Liquid Glass itself: one glass shape morphing from the pod’s circle to a pill to a sheet-sized panel and back, with the content riding inside. This is the pod-to-sheet expansion, and it is a container Apple already ships."
+        case .liquid:
+            return "Metaballs: a handful of blobs orbiting inside the disc, drawn as one distance field so they merge and split like mercury. Each blob carries a palette colour; where they meet, the colours blend. Audio pulls them apart."
+        case .rays:
+            return "Light streaks: a layerEffect that samples the ring along the line back to the centre and accumulates — a radial blur, added. Gives the ring god-rays. Over Bloom it’s a sun; over Sparks it’s a fire."
+        case .sphere:
+            return "The After Effects gradient-sphere recipe as one shader: a small gradient shape, box-blurred, pushed around by turbulent displace, wrapped by a lens into a sphere with a thin bright rim. Add Bloom from the post stack for his Deep Glow. Every stage has his controls."
         }
     }
 
@@ -111,7 +129,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// underneath for those, so the comparison is "the ring, plus this".
     public var decoratesRing: Bool {
         switch self {
-        case .bloom, .ripple, .sparks, .refraction, .chromatic: return true
+        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays: return true
         default: return false
         }
     }
@@ -140,7 +158,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         ]
         case .bloom: return [
             .init("radius", "Radius", 2...80, 24, "How far the glow reaches, points.", "%.0f pt"),
-            .init("strength", "Strength", 0...4, 1.4, "How much light is added."),
+            .init("strength", "Strength", 0...4, 1.0, "How much light is added. Full-disc bases want less than a ring."),
             .init("threshold", "Threshold", 0...1, 0, "Only pixels brighter than this bloom. 0 blooms everything."),
         ]
         case .ripple: return [
@@ -197,6 +215,117 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("spring", "Spring", 0.2...1.2, 0.55, "Response — lower is snappier."),
             .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom."),
         ]
+        case .liquid: return [
+            .init("blobs", "Blobs", 2...8, 5, "How many.", "%.0f"),
+            .init("size", "Blob Size", 0.1...0.6, 0.32, "Radius as a fraction of the disc."),
+            .init("goo", "Goo", 0.02...0.4, 0.14, "How far apart they still merge."),
+            .init("orbit", "Orbit", 0...2, 0.6, "How fast they wander."),
+            .init("edge", "Edge", 0...1, 0.8, "Sharpness of the surface. 0 is a cloud."),
+            .init("shade", "Shade", 0...1, 0.5, "Sphere shading on the surface."),
+        ]
+        case .rays: return [
+            .init("length", "Length", 0...1, 0.5, "How far the streaks reach, as a fraction of the radius."),
+            .init("strength", "Strength", 0...3, 1, "How much light the streaks add."),
+            .init("decay", "Decay", 0.5...1, 0.92, "How quickly a streak fades along its length."),
+            .init("twist", "Twist", -1...1, 0, "Curves the streaks. 0 is straight out."),
+        ]
+        case .sphere: return [
+            .init("shape", "Shape", 0...2, 0, "0 star, 1 blob, 2 ring.", "%.0f"),
+            .init("srcSize", "Source Size", 0.1...1.2, 0.45, "The gradient shape's radius."),
+            .init("blur", "Blur", 0...1, 0.35, "Fast Box Blur — softens the shape's edge."),
+            .init("dispAmount", "Displace Amount", 0...2, 0.9, "Turbulent Displace amount."),
+            .init("dispSize", "Displace Size", 0.3...6, 1.6, "Turbulent Displace size — bigger is smoother."),
+            .init("complexity", "Complexity", 1...5, 2, "Noise octaves.", "%.0f"),
+            .init("evolution", "Evolution", 0...3, 1, "How fast the turbulence evolves."),
+            .init("wiggle", "Wiggle", 0...1, 0.5, "The source wanders."),
+            .init("curvature", "Curvature", -1...1, 0.7, "The lens. Positive pinches to the rim, negative bulges."),
+            .init("rim", "Rim", 0...2, 1, "The thin bright edge."),
+            .init("exposure", "Exposure", 0...3, 1.2, "Source brightness."),
+        ]
+        }
+    }
+}
+
+/// Which audio signal an experiment listens to.
+public enum LabAudioSource: String, CaseIterable, Identifiable, Sendable {
+    case level, bass, mid, treble, beat
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .level:  return "Level"
+        case .bass:   return "Bass"
+        case .mid:    return "Mid"
+        case .treble: return "Treble"
+        case .beat:   return "Beat"
+        }
+    }
+}
+
+/// The four smoothed signals plus the beat, as a frame sees them.
+public struct LabAudioBands: Sendable {
+    public var level: Double = 0
+    public var bass: Double = 0
+    public var mid: Double = 0
+    public var treble: Double = 0
+    public var beat: Double = 0
+    public init() {}
+    public func value(_ source: LabAudioSource) -> Double {
+        switch source {
+        case .level: return level
+        case .bass: return bass
+        case .mid: return mid
+        case .treble: return treble
+        case .beat: return beat
+        }
+    }
+}
+
+/// A palette for the Lab — the Nexus animation's own colours, or one of
+/// a few curated sets, so an experiment can be judged in colours it was
+/// not designed around.
+public enum LabPalette: String, CaseIterable, Identifiable, Sendable {
+    case nexus, aurora, ember, ice, candy, mono, spectrum
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .nexus:    return "Nexus"
+        case .aurora:   return "Aurora"
+        case .ember:    return "Ember"
+        case .ice:      return "Ice"
+        case .candy:    return "Candy"
+        case .mono:     return "Mono"
+        case .spectrum: return "Spectrum"
+        }
+    }
+    /// `nil` for `.nexus` — the caller substitutes the config's colours.
+    public var colors: [Color]? {
+        switch self {
+        case .nexus:    return nil
+        case .aurora:   return [Color(hex: "#16E0A0"), Color(hex: "#2A7BFF"), Color(hex: "#9B4DFF")]
+        case .ember:    return [Color(hex: "#FF3B1F"), Color(hex: "#FF9A1F"), Color(hex: "#FFE066")]
+        case .ice:      return [Color(hex: "#DFF6FF"), Color(hex: "#6BC5FF"), Color(hex: "#1E5BFF")]
+        case .candy:    return [Color(hex: "#FF4FA3"), Color(hex: "#FFB03B"), Color(hex: "#7CFFCB")]
+        case .mono:     return [Color(hex: "#FFFFFF"), Color(hex: "#7A7A7A")]
+        case .spectrum: return [Color(hex: "#FF3B30"), Color(hex: "#FFCC00"), Color(hex: "#34C759"), Color(hex: "#007AFF"), Color(hex: "#AF52DE")]
+        }
+    }
+}
+
+/// A post effect: one of the ring-decorating experiments, applied over
+/// whatever the base experiment drew. The stack is what turns "eleven
+/// demos" into a design space — Aurora with Bloom and a little
+/// Chromatic is a different thing from any of the three alone.
+public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
+    case bloom, rays, ripple, refraction, chromatic
+    public var id: String { rawValue }
+    /// The experiment whose knobs this effect uses.
+    public var experiment: LabExperiment {
+        switch self {
+        case .bloom: return .bloom
+        case .rays: return .rays
+        case .ripple: return .ripple
+        case .refraction: return .refraction
+        case .chromatic: return .chromatic
         }
     }
 }
@@ -242,8 +371,36 @@ public final class LabState: ObservableObject {
     /// Per-experiment knob values, keyed `experiment.param`. Absent means
     /// the parameter's default.
     @Published public var values: [String: Double] = [:]
+    /// Which signal `LabFrame.audio` carries.
+    @Published public var audioSource: LabAudioSource = .level
+    @Published public var audioAttack: Double = 0.03
+    @Published public var audioRelease: Double = 0.25
+    @Published public var palette: LabPalette = .nexus
+    /// Post effects, in the order they are applied.
+    @Published public var post: [LabPostEffect] = []
+    /// Show the experiment at pod size in a glass pod, in the corner.
+    @Published public var showPod: Bool = true
+    /// An SF Symbol drawn inside Orb, Refraction and Liquid — the glyph
+    /// state of the pod, inside the effect. Empty for none.
+    @Published public var glyph: String = ""
+    /// Continuous hue rotation of the palette, degrees per second.
+    @Published public var hueDrift: Double = 0
 
     public init() {}
+
+    public func togglePost(_ effect: LabPostEffect) {
+        if let i = post.firstIndex(of: effect) { post.remove(at: i) } else { post.append(effect) }
+    }
+
+    /// Every experiment's knobs, resolved — the base and the post stack
+    /// each read their own by experiment.
+    public func allResolvedParameters() -> [String: Double] {
+        var out: [String: Double] = [:]
+        for e in LabExperiment.allCases {
+            for p in e.parameters { out["\(e.id).\(p.id)"] = value(p, of: e) }
+        }
+        return out
+    }
 
     public func value(_ parameter: LabParameter, of experiment: LabExperiment) -> Double {
         values["\(experiment.id).\(parameter.id)"] ?? parameter.defaultValue
@@ -274,10 +431,16 @@ public struct LabFrame {
     public var colors: [Color]
     public var diameter: CGFloat
     public var darkStage: Bool
-    /// The experiment's own knobs — see `LabExperiment.parameters`.
+    /// Every experiment's knobs, keyed `experiment.param` — the base and
+    /// each post effect read their own. See `LabExperiment.parameters`.
     public var params: [String: Double]
+    /// The full spectrum, for experiments that want more than `audio`.
+    public var bands: LabAudioBands
+    /// An SF Symbol to draw inside, or `nil`.
+    public var glyph: String?
 
-    public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool, params: [String: Double] = [:]) {
+    public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
+                params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -285,11 +448,20 @@ public struct LabFrame {
         self.diameter = diameter
         self.darkStage = darkStage
         self.params = params
+        self.bands = bands
+        self.glyph = glyph
     }
 
     /// A knob's value, or its declared default when the frame was built
     /// without one (a harness, a thumbnail).
     public func p(_ id: String, _ experiment: LabExperiment) -> Double {
-        params[id] ?? experiment.parameters.first { $0.id == id }?.defaultValue ?? 0
+        params["\(experiment.id).\(id)"] ?? experiment.parameters.first { $0.id == id }?.defaultValue ?? 0
+    }
+
+    /// The same frame at another size — for the pod-size preview.
+    public func resized(_ d: CGFloat) -> LabFrame {
+        var f = self
+        f.diameter = d
+        return f
     }
 }

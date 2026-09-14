@@ -330,3 +330,135 @@ extension LabFrame {
         experiment.parameters.map { Float(p($0.id, experiment)) }
     }
 }
+
+// MARK: - Liquid (Metal · colorEffect)
+
+struct LabLiquidView: View {
+    let frame: LabFrame
+
+    var body: some View {
+        let lab = PerceptualGradient.labTriples(frame.colors)
+        let time = Float(frame.time), intensity = Float(frame.intensity), audio = Float(frame.audio)
+        let knobs = frame.knobs(.liquid)
+        Rectangle()
+            .fill(Color.white)
+            .frame(width: frame.diameter, height: frame.diameter)
+            .visualEffect { content, proxy in
+                content.colorEffect(
+                    ShaderLibrary.bundle(.module).labLiquid(
+                        .float2(proxy.size),
+                        .float(time),
+                        .float(intensity),
+                        .float(audio),
+                        .floatArray(knobs),
+                        .floatArray(lab)
+                    )
+                )
+            }
+    }
+}
+
+// MARK: - Sphere (Metal · colorEffect) — the After Effects recipe
+
+struct LabSphereView: View {
+    let frame: LabFrame
+
+    var body: some View {
+        let lab = PerceptualGradient.labTriples(frame.colors)
+        let time = Float(frame.time), intensity = Float(frame.intensity), audio = Float(frame.audio)
+        let knobs = frame.knobs(.sphere)
+        Rectangle()
+            .fill(Color.white)
+            .frame(width: frame.diameter, height: frame.diameter)
+            .visualEffect { content, proxy in
+                content.colorEffect(
+                    ShaderLibrary.bundle(.module).labSphere(
+                        .float2(proxy.size),
+                        .float(time),
+                        .float(intensity),
+                        .float(audio),
+                        .floatArray(knobs),
+                        .floatArray(lab)
+                    )
+                )
+            }
+    }
+}
+
+// MARK: - Rays (Metal · layerEffect), over anything
+
+struct LabRaysView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+
+    var body: some View {
+        let reach = frame.diameter * 0.5 * frame.p("length", .rays) * (0.5 + frame.intensity) + frame.audio * 40
+        let strength = Float(frame.p("strength", .rays) * (0.6 + frame.intensity * 0.8) + frame.audio * 0.8)
+        let decay = Float(frame.p("decay", .rays)), twist = Float(frame.p("twist", .rays))
+        ring()
+            .padding(reach * 0.3 + 4)
+            .visualEffect { content, proxy in
+                content.layerEffect(
+                    ShaderLibrary.bundle(.module).labRays(
+                        .float2(CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)),
+                        .float(Float(reach)),
+                        .float(strength),
+                        .float(decay),
+                        .float(twist)
+                    ),
+                    maxSampleOffset: CGSize(width: reach, height: reach)
+                )
+            }
+    }
+}
+
+// MARK: - Glyph inside
+
+/// An SF Symbol drawn over an experiment's centre — the pod's glyph
+/// state, inside the effect. White with a soft shadow so it reads on
+/// any palette; sized to the ring's hole.
+struct LabGlyphOverlay: View {
+    let frame: LabFrame
+
+    var body: some View {
+        if let glyph = frame.glyph, !glyph.isEmpty {
+            Image(systemName: glyph)
+                .resizable()
+                .scaledToFit()
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.35), radius: frame.diameter * 0.02, y: frame.diameter * 0.01)
+                .frame(width: frame.diameter * 0.3, height: frame.diameter * 0.3)
+                .scaleEffect(1 + frame.audio * 0.12)
+        }
+    }
+}
+
+// MARK: - Post stack
+
+/// Applies the post effects in order over a base. Each is the same view
+/// the experiment of that name uses, so a stacked Bloom is exactly the
+/// Bloom you tuned, over whatever you tuned it for.
+struct LabPostStack<Base: View>: View {
+    let effects: [LabPostEffect]
+    let frame: LabFrame
+    @ViewBuilder let base: () -> Base
+
+    var body: some View {
+        apply(effects[...], AnyView(base()))
+    }
+
+    private func apply(_ remaining: ArraySlice<LabPostEffect>, _ view: AnyView) -> AnyView {
+        guard let first = remaining.first else { return view }
+        let rest = remaining.dropFirst()
+        let wrapped: AnyView
+        switch first {
+        case .bloom:      wrapped = AnyView(LabBloomView(frame: frame) { view })
+        case .rays:       wrapped = AnyView(LabRaysView(frame: frame) { view })
+        case .ripple:     wrapped = AnyView(LabRippleView(frame: frame) { view })
+        case .refraction: wrapped = AnyView(LabRefractionView(frame: frame) { view })
+        case .chromatic:  wrapped = AnyView(LabChromaticView(frame: frame) { view })
+        }
+        return apply(rest, wrapped)
+    }
+}
