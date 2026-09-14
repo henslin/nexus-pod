@@ -488,8 +488,355 @@ struct LabTilesView<Base: View>: View {
                     ShaderLibrary.bundle(.module).labTiles(
                         .float2(proxy.size), .float(Float(cell)), .float(Float(bulge)),
                         .float(Float(frame.p("frost", .tiles))), .float(Float(frame.p("grout", .tiles))),
-                        .float(Float(frame.p("coverage", .tiles)))),
+                        .float(Float(frame.p("coverage", .tiles))), .float(Float(frame.p("orientation", .tiles)))),
                     maxSampleOffset: CGSize(width: cell, height: cell))
             }
+    }
+}
+
+// MARK: - Bubble / Slices / Vessel (Metal · colorEffect)
+
+struct LabBubbleView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .bubble, name: "labBubble") }
+}
+
+struct LabSlicesView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .slices, name: "labSlices") }
+}
+
+struct LabVesselView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .vessel, name: "labVessel") }
+}
+
+// MARK: - Stack (SwiftUI · Canvas) — planes receding in depth
+
+struct LabStackView: View {
+    let frame: LabFrame
+
+    var body: some View {
+        let count = Int(frame.p("count", .stack))
+        let depth = frame.p("depth", .stack)
+        let opacity = frame.p("opacity", .stack)
+        let shapeK = frame.p("shape", .stack)
+        let sway = frame.p("sway", .stack) * (0.5 + frame.intensity) + frame.audio * 0.3
+        let perspective = frame.p("perspective", .stack)
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: max(count, 2))
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let base = frame.diameter * 0.62
+            ctx.blendMode = .plusLighter
+            // Back to front. Each plane is smaller and shifted by depth, so
+            // they read as a corridor; sway rolls the whole stack.
+            for i in stride(from: count - 1, through: 0, by: -1) {
+                let z = Double(i) / Double(max(count - 1, 1))          // 0 front … 1 back
+                let scale = 1 - z * depth * 0.6
+                let shift = CGPoint(x: sin(frame.time * 0.7) * sway * 60 * z + z * depth * perspective * 80,
+                                    y: cos(frame.time * 0.5) * sway * 40 * z)
+                let s = base * scale
+                let rect = CGRect(x: c.x - s / 2 + shift.x, y: c.y - s / 2 + shift.y, width: s, height: s)
+                let color = sweep[(i * sweep.count / max(count, 1)) % sweep.count]
+                let path = shapeK < 0.5
+                    ? Path(roundedRect: rect, cornerRadius: s * 0.08)
+                    : Path(ellipseIn: rect)
+                ctx.fill(path, with: .color(color.opacity(opacity)))
+                ctx.stroke(path, with: .color(color.opacity(min(1, opacity * 2.2))), lineWidth: 1)
+            }
+        }
+        .frame(width: frame.diameter * 1.5, height: frame.diameter * 1.5)
+    }
+}
+
+// MARK: - Cascade (SwiftUI · Canvas) — Retoka's overlapping shapes
+
+struct LabCascadeView: View {
+    let frame: LabFrame
+
+    var body: some View {
+        let count = Int(frame.p("count", .cascade))
+        let step = frame.p("step", .cascade)
+        let opacity = frame.p("opacity", .cascade)
+        let swing = frame.p("swing", .cascade) * (0.5 + frame.intensity) + frame.audio * 0.5
+        let corner = frame.p("corner", .cascade)
+        let multiply = frame.p("multiply", .cascade) >= 0.5
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: max(count, 2))
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let s = frame.diameter * 0.62
+            ctx.blendMode = multiply ? .multiply : .plusLighter
+            // Overlapping rounded shapes offset down a slow arc — the
+            // reference's cascade — each in the next palette colour.
+            // Step is in shape heights; the whole cascade is centred, and
+            // swings sideways along a gentle arc that breathes with time.
+            let h = s * 0.86
+            let total = step * h * Double(max(count - 1, 1))
+            for i in 0..<count {
+                let u = Double(i) / Double(max(count - 1, 1))
+                let dy = -total / 2 + step * h * Double(i)
+                let dx = sin((u - 0.5) * .pi) * swing * s * 0.5 + sin(frame.time * 0.6 + u * 3) * swing * 8
+                let rect = CGRect(x: c.x - s / 2 + dx, y: c.y - h / 2 + dy, width: s, height: h)
+                let color = sweep[(i * sweep.count / max(count, 1)) % sweep.count]
+                let path = Path(roundedRect: rect, cornerRadius: s * corner)
+                ctx.fill(path, with: .color(color.opacity(opacity)))
+            }
+        }
+        .frame(width: frame.diameter * 1.5, height: frame.diameter * 1.5)
+    }
+}
+
+// MARK: - Prism (SwiftUI · Canvas) — the dispersion cube
+
+struct LabPrismView: View {
+    let frame: LabFrame
+
+    var body: some View {
+        let dispersion = frame.p("dispersion", .prism) * (0.5 + frame.intensity)
+        let spin = frame.p("spin", .prism)
+        let tilt = frame.p("tilt", .prism)
+        let faceAlpha = frame.p("faces", .prism)
+        let edgeWidth = frame.p("edge", .prism)
+        let glow = frame.p("glow", .prism)
+        let primary = frame.colors.first ?? .white
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let R = frame.diameter * 0.26
+            let t = frame.time
+            // A unit cube, rotated about Y and X, projected with a little
+            // perspective.
+            let ry = t * spin, rx = tilt + sin(t * 0.4) * 0.15
+            let cy = cos(ry), sy = sin(ry), cx = cos(rx), sx = sin(rx)
+            func project(_ v: SIMD3<Double>) -> (CGPoint, Double) {
+                let x1 = v.x * cy + v.z * sy, z1 = -v.x * sy + v.z * cy
+                let y2 = v.y * cx - z1 * sx, z2 = v.y * sx + z1 * cx
+                let persp = 1 / (1 + z2 * 0.18)
+                return (CGPoint(x: c.x + x1 * R * persp, y: c.y - y2 * R * persp), z2)
+            }
+            let verts: [SIMD3<Double>] = [
+                [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+                [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
+            ]
+            let p = verts.map(project)
+            let faces = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [0, 3, 7, 4], [1, 2, 6, 5]]
+            // Faces: faint glass, back faces first.
+            let sorted = faces.sorted { a, b in
+                a.map { p[$0].1 }.reduce(0, +) < b.map { p[$0].1 }.reduce(0, +)
+            }
+            for f in sorted {
+                var path = Path()
+                path.move(to: p[f[0]].0)
+                for k in f.dropFirst() { path.addLine(to: p[k].0) }
+                path.closeSubpath()
+                let depth = f.map { p[$0].1 }.reduce(0, +) / 4
+                ctx.fill(path, with: .color(primary.opacity(faceAlpha * (0.5 + 0.5 * (depth + 1) / 2))))
+            }
+            // Edges: three strokes, red / green / blue, each offset along
+            // the edge's normal by a different amount — dispersion. Then a
+            // white core.
+            let edges = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
+            ctx.blendMode = .plusLighter
+            for (a, b) in edges {
+                let pa = p[a].0, pb = p[b].0
+                let dx = pb.x - pa.x, dy = pb.y - pa.y
+                let len = max(hypot(dx, dy), 1)
+                let n = CGPoint(x: -dy / len, y: dx / len)
+                let near = (p[a].1 + p[b].1) / 2
+                let bright = 0.45 + 0.55 * (near + 1) / 2
+                let channels: [(Color, Double)] = [(.red, -1), (.green, 0), (.blue, 1)]
+                for (color, k) in channels {
+                    var path = Path()
+                    let o = CGPoint(x: n.x * k * dispersion * 4, y: n.y * k * dispersion * 4)
+                    path.move(to: CGPoint(x: pa.x + o.x, y: pa.y + o.y))
+                    path.addLine(to: CGPoint(x: pb.x + o.x, y: pb.y + o.y))
+                    ctx.stroke(path, with: .color(color.opacity(bright * 0.8)), style: StrokeStyle(lineWidth: edgeWidth * 2.5, lineCap: .round))
+                    ctx.stroke(path, with: .color(color.opacity(bright * glow * 0.4)), style: StrokeStyle(lineWidth: edgeWidth * 8, lineCap: .round))
+                }
+                var core = Path()
+                core.move(to: pa); core.addLine(to: pb)
+                ctx.stroke(core, with: .color(.white.opacity(bright)), style: StrokeStyle(lineWidth: edgeWidth, lineCap: .round))
+            }
+        }
+        .frame(width: frame.diameter, height: frame.diameter)
+    }
+}
+
+// MARK: - Chrome (Metal · layerEffect), post
+
+struct LabChromeView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+
+    var body: some View {
+        let bevel = frame.p("bevel", .chrome)
+        let lab = PerceptualGradient.labTriples(frame.colors)
+        ring()
+            .layerEffect(
+                ShaderLibrary.bundle(.module).labChrome(
+                    .float(Float(bevel)), .float(Float(frame.p("iridescence", .chrome))),
+                    .float(Float(frame.p("shine", .chrome) * (0.7 + frame.intensity * 0.6))),
+                    .float(Float(frame.p("keep", .chrome))), .float(Float(frame.time)),
+                    .floatArray(lab)),
+                maxSampleOffset: CGSize(width: bevel * 2, height: bevel * 2))
+    }
+}
+
+// MARK: - Holo / Lenticular / Moiré (Metal · colorEffect)
+
+struct LabHoloView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .holo, name: "labHolo") }
+}
+
+struct LabLenticularView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .lenticular, name: "labLenticular") }
+}
+
+struct LabMoireView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .moire, name: "labMoire") }
+}
+
+// MARK: - Orrery (SwiftUI · Canvas) — rings in 3D, with dispersion edges
+
+struct LabOrreryView: View {
+    let frame: LabFrame
+
+    var body: some View {
+        let count = Int(frame.p("rings", .orrery))
+        let spin = frame.p("spin", .orrery)
+        let dispersion = frame.p("dispersion", .orrery) * (0.5 + frame.intensity)
+        let width = frame.p("width", .orrery)
+        let spacing = frame.p("spacing", .orrery)
+        let glow = frame.p("glow", .orrery)
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: max(count, 2))
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let R0 = frame.diameter / 2 * 0.78
+            let t = frame.time
+            // Each ring is a circle in 3D on its own tilted axis, turning
+            // at its own rate; projected as a polyline so the near half
+            // can be drawn over the far half.
+            struct Seg { let a: CGPoint; let b: CGPoint; let z: Double; let ring: Int }
+            var segs: [Seg] = []
+            for i in 0..<count {
+                let R = R0 * (1 - spacing * Double(i) / Double(max(count, 1)))
+                let tiltX = 0.5 + Double(i) * 0.7, tiltY = Double(i) * 1.1
+                let rate = spin * (0.6 + Double(i) * 0.35) * (i % 2 == 0 ? 1 : -1)
+                let steps = 72
+                var prev: (CGPoint, Double)?
+                for k in 0...steps {
+                    let a = Double(k) / Double(steps) * 2 * .pi
+                    var x = cos(a) * R, y = sin(a) * R, z = 0.0
+                    // Rotate: about X by tiltX, about Y by tiltY + spin.
+                    let cx = cos(tiltX), sx = sin(tiltX)
+                    let y1 = y * cx - z * sx, z1 = y * sx + z * cx
+                    let ay = tiltY + t * rate
+                    let cy = cos(ay), sy = sin(ay)
+                    let x2 = x * cy + z1 * sy, z2 = -x * sy + z1 * cy
+                    x = x2; y = y1; z = z2
+                    let p = CGPoint(x: c.x + x, y: c.y - y)
+                    if let prev { segs.append(Seg(a: prev.0, b: p, z: (prev.1 + z) / 2, ring: i)) }
+                    prev = (p, z)
+                }
+            }
+            segs.sort { $0.z < $1.z }
+            ctx.blendMode = .plusLighter
+            for s in segs {
+                let depth = (s.z / R0 + 1) / 2                       // 0 far … 1 near
+                let bright = 0.25 + 0.75 * depth
+                let color = sweep[(s.ring * sweep.count / max(count, 1)) % sweep.count]
+                let dx = s.b.x - s.a.x, dy = s.b.y - s.a.y
+                let len = max(hypot(dx, dy), 0.001)
+                let n = CGPoint(x: -dy / len, y: dx / len)
+                // Dispersion: R and B offset along the normal, G on the line.
+                for (ch, k) in [(Color.red, -1.0), (Color.green, 0.0), (Color.blue, 1.0)] {
+                    var path = Path()
+                    path.move(to: CGPoint(x: s.a.x + n.x * k * dispersion * 3, y: s.a.y + n.y * k * dispersion * 3))
+                    path.addLine(to: CGPoint(x: s.b.x + n.x * k * dispersion * 3, y: s.b.y + n.y * k * dispersion * 3))
+                    ctx.stroke(path, with: .color(ch.opacity(bright * 0.6)), style: StrokeStyle(lineWidth: width * 1.6, lineCap: .round))
+                }
+                var core = Path()
+                core.move(to: s.a); core.addLine(to: s.b)
+                ctx.stroke(core, with: .color(color.opacity(bright * glow * 0.6)), style: StrokeStyle(lineWidth: width * 5, lineCap: .round))
+                ctx.stroke(core, with: .color(.white.opacity(bright)), style: StrokeStyle(lineWidth: width * 0.7, lineCap: .round))
+            }
+        }
+        .frame(width: frame.diameter, height: frame.diameter)
+    }
+}
+
+// MARK: - Bokeh (SwiftUI · Canvas) — out-of-focus lights
+
+struct LabBokehView: View {
+    let frame: LabFrame
+
+    private struct Light { let x: Double; let y: Double; let z: Double; let fx: Double; let fy: Double; let colorT: Double; let seed: Double }
+    private static let lights: [Light] = {
+        var g = SeededGenerator(seed: 0xB0CE)
+        return (0..<120).map { _ in
+            Light(x: Double.random(in: -1...1, using: &g), y: Double.random(in: -1...1, using: &g),
+                  z: Double.random(in: 0...1, using: &g),
+                  fx: Double.random(in: 0.1...0.4, using: &g), fy: Double.random(in: 0.1...0.4, using: &g),
+                  colorT: Double.random(in: 0..<1, using: &g), seed: Double.random(in: 0..<6.28, using: &g))
+        }
+    }()
+
+    var body: some View {
+        let count = min(Int(frame.p("count", .bokeh)), Self.lights.count)
+        let sizeK = frame.p("size", .bokeh)
+        let edge = frame.p("edge", .bokeh)
+        let drift = frame.p("drift", .bokeh)
+        let sides = Int(frame.p("sides", .bokeh))
+        let focus = frame.p("focus", .bokeh)
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 24)
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let R = frame.diameter / 2
+            let t = frame.time * drift
+            ctx.blendMode = .plusLighter
+            // Far lights are big and soft, near ones small and sharp — the
+            // way a lens renders points at different depths. Focus slides
+            // which depth is sharp.
+            for l in Self.lights.prefix(count).sorted(by: { $0.z < $1.z }) {
+                let x = c.x + (l.x + sin(t * l.fx + l.seed) * 0.25) * R * 0.85
+                let y = c.y + (l.y + cos(t * l.fy + l.seed) * 0.25) * R * 0.85
+                let blur = abs(l.z - focus)                          // 0 sharp … 1 very soft
+                let d = sizeK * R * (0.06 + blur * 0.35) * (1 + frame.audio * 0.3)
+                let color = sweep[Int(l.colorT * Double(sweep.count - 1))]
+                let alpha = (0.9 - blur * 0.6) * (0.5 + frame.intensity * 0.5)
+                let rect = CGRect(x: x - d / 2, y: y - d / 2, width: d, height: d)
+                let path: Path = sides < 3 ? Path(ellipseIn: rect) : Self.polygon(in: rect, sides: sides, rotation: l.seed)
+                // A soft body that brightens toward the rim, then falls off
+                // — the profile of a real bokeh disc. Sharp (in-focus)
+                // lights get a hotter core; soft ones are all rim.
+                let core = alpha * (0.15 + 0.6 * (1 - blur))
+                let rim = alpha * edge * 0.7
+                let shading = GraphicsContext.Shading.radialGradient(
+                    Gradient(stops: [
+                        .init(color: color.opacity(core), location: 0),
+                        .init(color: color.opacity(alpha * 0.3), location: 0.55),
+                        .init(color: color.opacity(rim), location: 0.88),
+                        .init(color: color.opacity(0), location: 1),
+                    ]),
+                    center: CGPoint(x: x, y: y), startRadius: 0, endRadius: d / 2)
+                ctx.fill(path, with: shading)
+            }
+        }
+        .frame(width: frame.diameter, height: frame.diameter)
+        .clipShape(Circle())
+    }
+
+    private static func polygon(in rect: CGRect, sides: Int, rotation: Double) -> Path {
+        var p = Path()
+        let c = CGPoint(x: rect.midX, y: rect.midY), r = rect.width / 2
+        for i in 0..<sides {
+            let a = rotation + Double(i) / Double(sides) * 2 * .pi
+            let pt = CGPoint(x: c.x + cos(a) * r, y: c.y + sin(a) * r)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        p.closeSubpath()
+        return p
     }
 }

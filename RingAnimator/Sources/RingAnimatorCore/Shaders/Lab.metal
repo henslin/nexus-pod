@@ -529,11 +529,15 @@ static float lab_star_radius(float theta, float points) {
 // what a real matrix looks like through a diffuser. `cell` is in pixels.
 
 [[ stitchable ]] half4 labDots(float2 position, SwiftUI::Layer layer,
-                               float cell, float roundness, float gain)
+                               float cell, float roundness, float gain, float lens)
 {
     float2 c = floor(position / cell) * cell + cell * 0.5f;
-    half4 s = layer.sample(c);
     float2 d = (position - c) / (cell * 0.5f);
+    // Lens: each dot bends what is behind it (reference: a dot grid over
+    // a gradient sphere, every dot its own little glass bead) rather
+    // than flat-sampling its centre.
+    float dz = sqrt(max(0.0f, 1.0f - dot(d, d)));
+    half4 s = lens > 0.0f ? layer.sample(c + d * (1.0f - dz) * lens * cell) : layer.sample(c);
     float lum = dot(float3(s.rgb), float3(0.2126f, 0.7152f, 0.0722f));
     float radius = mix(0.95f, 0.35f + 0.6f * lum, roundness);
     float dist = length(d);
@@ -909,13 +913,16 @@ static float sd_blob(float2 p, float t) {
 // so it can sit over half the subject the way the reference does.
 
 [[ stitchable ]] half4 labTiles(float2 position, SwiftUI::Layer layer,
-                                float2 size, float cell, float bulge, float frost, float grout, float coverage)
+                                float2 size, float cell, float bulge, float frost, float grout, float coverage, float orientation)
 {
     float edgeX = size.x * (1.0f - coverage);
     if (position.x < edgeX) return layer.sample(position);
     float2 local = float2(position.x - edgeX, position.y);
     float2 c = floor(local / cell) * cell + cell * 0.5f;
     float2 uv = (local - c) / (cell * 0.5f);          // -1…1 within the tile
+    // Flutes: a 1-D lens — reeded glass — vertical (1) or horizontal (2).
+    if (orientation > 0.5f && orientation < 1.5f) uv.y = 0.0f;
+    if (orientation >= 1.5f) uv.x = 0.0f;
     float r2 = min(dot(uv, uv), 1.0f);
     float z = sqrt(1.0f - r2);
     // A lens per tile: sample from further out toward the tile's edge.
@@ -935,4 +942,336 @@ static float sd_blob(float2 p, float t) {
     half3 rgb = s.rgb * half(1.0f - line * 0.5f) + half3(bevel * 0.35f) * s.a;
     half haze = half(0.04f + frost * 0.06f) * s.a;
     return half4(rgb + haze, s.a);
+}
+
+// MARK: - Bubble (colorEffect)
+//
+// A soap bubble: a thin film whose colour comes from interference —
+// the film's thickness, which varies with noise and drains downward,
+// sets which wavelength survives. Rendered as the palette cycling with
+// thickness, strongest at the rim where the film is seen edge-on
+// (Fresnel), dark and see-through in the middle, with a soft palette
+// glow pooling at the bottom the way the reference has. `knobs`:
+// thickness, drain, iridescence, rim, pool, highlight, wobble.
+
+[[ stitchable ]] half4 labBubble(float2 position, half4 color,
+                                 float2 size, float time, float intensity, float audio,
+                                 device const float *knobs, int knobCount,
+                                 device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float kThick = knobs[0], kDrain = knobs[1], kIrid = knobs[2], kRim = knobs[3], kPool = knobs[4], kSpec = knobs[5], kWobble = knobs[6];
+    // Wobble: the bubble is never quite round.
+    float ang = atan2(uv.y, uv.x);
+    float wob = 1.0f + kWobble * 0.03f * sin(ang * 3.0f + time * 1.7f) + kWobble * 0.02f * sin(ang * 5.0f - time * 2.3f) + audio * 0.03f;
+    float r = length(uv) / wob;
+    float mask = 1.0f - smoothstep(0.985f, 1.0f, r);
+    if (mask <= 0.0f) return half4(0);
+    float rr = min(r, 1.0f);
+    float z = sqrt(max(0.0f, 1.0f - rr * rr));
+    // Steep: the film only shows where it is seen edge-on, so the middle
+    // stays black and see-through like the reference.
+    float fresnel = pow(1.0f - z, 5.0f);
+
+    // Film thickness: noise, plus drainage — thinner at the top, thicker
+    // at the bottom, sliding down over time.
+    float n = lab_fbm_n(uv * 2.5f + float2(0, time * kDrain * 0.3f), 3);
+    float thickness = kThick * (0.6f + 0.8f * n) + kDrain * 0.5f * (uv.y * 0.5f + 0.5f) + audio * 0.3f;
+    // Interference: the palette cycles with thickness × the view angle.
+    float phase = thickness * (2.0f + 2.0f * (1.0f - z)) + time * 0.05f;
+    float3 film = lab_palette_linear(phase, lab, labCount);
+
+    // The rim: a thin bright band at the edge, plus the Fresnel-weighted film.
+    float rimLine = smoothstep(0.93f, 0.985f, rr) * (1.0f - smoothstep(0.985f, 1.0f, rr));
+    float3 lin = film * (fresnel * kIrid * 1.3f + rimLine * kRim * 1.6f);
+
+    // The pool: palette glow gathering at the bottom *edge* — inside the
+    // film, near the rim, not across the whole lower half (which filled
+    // the bubble in). It fades toward the centre with the radius.
+    float lower = smoothstep(0.3f, 1.0f, uv.y);
+    float pool = lower * smoothstep(0.35f, 0.95f, rr);
+    lin += lab_palette_linear(0.35f + time * 0.03f, lab, labCount) * pool * kPool * 0.6f;
+    // The centre is see-through: only a breath of the film.
+    lin += film * 0.012f;
+
+    // Highlights: two small specular hits, upper left and lower right.
+    float3 nrm = float3(uv / wob, z);
+    float3 L1 = normalize(float3(-0.6f, -0.7f, 0.5f)), L2 = normalize(float3(0.7f, 0.6f, 0.4f));
+    float s1 = pow(max(dot(nrm, normalize(L1 + float3(0, 0, 1))), 0.0f), 220.0f);
+    float s2 = pow(max(dot(nrm, normalize(L2 + float3(0, 0, 1))), 0.0f), 400.0f);
+    lin += float3(1.0f) * (s1 * 0.7f + s2 * 0.4f) * kSpec;
+
+    float alpha = max(max(lin.r, lin.g), lin.b);
+    alpha = min(1.0f, alpha * 1.3f + fresnel * 0.1f) * mask;
+    return half4(half3(lab_linear_to_srgb(lin)) * half(mask), half(alpha));
+}
+
+// MARK: - Slices (colorEffect)
+//
+// A sphere cut into vertical slats — reference: a gradient sphere as a
+// row of slivers, each a lens-shaped slice, colour running across, with
+// a fine moiré in the slices. `knobs`: slats, duty, gap wobble, moiré,
+// tilt, reflection.
+
+[[ stitchable ]] half4 labSlices(float2 position, half4 color,
+                                 float2 size, float time, float intensity, float audio,
+                                 device const float *knobs, int knobCount,
+                                 device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float kSlats = knobs[0], kDuty = knobs[1], kWobble = knobs[2], kMoire = knobs[3], kTilt = knobs[4], kReflect = knobs[5];
+    // The sphere sits in the top ~65%; its reflection, squashed, below.
+    float2 p = uv;
+    float reflected = 0.0f;
+    float top = -0.3f;                // sphere centre y
+    float radius = 0.6f;
+    float2 sp = float2(p.x / radius, (p.y - top) / radius);
+    float2 rp = float2(p.x / radius, (p.y - (top + radius * 2.05f)) / (radius * 0.5f));
+    if (length(rp) < 1.0f && kReflect > 0.0f && p.y > top + radius) { sp = rp; reflected = 1.0f; }
+    float r = length(sp);
+    if (r > 1.0f) return half4(0);
+    // Slats along x, rotated by tilt; each is on for `duty` of its pitch.
+    float ca = cos(kTilt), sa = sin(kTilt);
+    float x = sp.x * ca - sp.y * sa;
+    float slot = x * kSlats * 0.5f + 0.5f;
+    float idx = floor(slot);
+    float f = fract(slot);
+    float wob = kWobble * 0.15f * sin(idx * 1.3f + time * 1.1f) + audio * 0.1f;
+    float on = 1.0f - smoothstep(kDuty + wob - 0.02f, kDuty + wob + 0.02f, f);
+    if (on <= 0.0f) return half4(0);
+    // Each slat is a lens: its own little sphere in cross-section.
+    float sf = (f / max(kDuty + wob, 0.05f)) * 2.0f - 1.0f;
+    float slatShade = sqrt(max(0.0f, 1.0f - sf * sf));
+    float z = sqrt(max(0.0f, 1.0f - r * r));
+    // Colour runs across x through the palette; the reflection takes the
+    // palette from further along, like the reference's green/blue.
+    float t = (sp.x * 0.5f + 0.5f) * 0.6f + reflected * 0.5f + time * 0.02f;
+    float3 c = lab_palette_linear(t, lab, labCount);
+    // Moiré: a fine ring pattern inside each slat.
+    float moire = 1.0f - kMoire * 0.35f * (0.5f + 0.5f * sin(r * 260.0f + f * 40.0f));
+    float3 lin = c * (0.45f + 0.55f * z * slatShade) * moire * (0.85f + intensity * 0.3f);
+    if (reflected > 0.0f) lin *= 0.75f * kReflect;
+    return half4(half3(lab_linear_to_srgb(lin)) * half(on), half(on));
+}
+
+// MARK: - Vessel (colorEffect)
+//
+// A capsule with liquid in it — reference: a clear pill, the lower
+// half full of glowing liquid with sparkles suspended. The capsule is a
+// signed-distance shape; its shell is shaded as glass with a thickness
+// rim; the liquid sits below a level that sloshes, and bubbles rise
+// through it. Level is the knob, or the audio — so it can be a meter.
+// `knobs`: level, slosh, bubbles, rim, glow, tilt.
+
+static float sd_capsule(float2 p, float halfLen, float rad) {
+    p.y -= clamp(p.y, -halfLen, halfLen);
+    return length(p) - rad;
+}
+
+[[ stitchable ]] half4 labVessel(float2 position, half4 color,
+                                 float2 size, float time, float intensity, float audio,
+                                 device const float *knobs, int knobCount,
+                                 device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float kLevel = knobs[0], kSlosh = knobs[1], kBubbles = knobs[2], kRim = knobs[3], kGlow = knobs[4], kTilt = knobs[5];
+    float ca = cos(kTilt), sa = sin(kTilt);
+    float2 p = float2(uv.x * ca - uv.y * sa, uv.x * sa + uv.y * ca);
+    const float halfLen = 0.42f, rad = 0.36f;
+    float d = sd_capsule(p, halfLen, rad);
+    float shell = 1.0f - smoothstep(-0.005f, 0.005f, d);
+    if (shell <= 0.0f) return half4(0);
+    // Glass: a thickness term from the distance to the edge.
+    float inside = -d / rad;                       // 0 at the edge, 1 at the axis
+    float z = sqrt(max(0.0f, 1.0f - (1.0f - inside) * (1.0f - inside)));
+    float fresnel = pow(1.0f - z, 2.5f);
+
+    // Liquid level (0 empty … 1 full), sloshing.
+    float level = clamp(kLevel + audio * 0.25f, 0.0f, 1.0f);
+    float surfaceY = (halfLen + rad) - level * 2.0f * (halfLen + rad);
+    float slosh = kSlosh * 0.05f * sin(p.x * 6.0f + time * 3.0f) + kSlosh * 0.02f * sin(p.x * 11.0f - time * 4.7f);
+    // Screen y grows downward, so "below the surface" is p.y > surfaceY.
+    float liquid = smoothstep(surfaceY + slosh - 0.01f, surfaceY + slosh + 0.01f, p.y);
+    float3 liqCol = lab_palette_linear(0.1f + (p.y * 0.5f + 0.5f) * 0.3f + time * 0.02f, lab, labCount);
+    // Bubbles rising through the liquid.
+    float bub = 0.0f;
+    for (int i = 0; i < 12; i++) {
+        float fi = float(i);
+        float h1 = lab_hash(float2(fi, 1.0f)), h2 = lab_hash(float2(fi, 2.0f));
+        float speed = 0.15f + h2 * 0.25f;
+        float by = (halfLen + rad) - fract(time * speed + h1) * (level * 2.0f * (halfLen + rad));
+        float bx = (h1 - 0.5f) * rad * 1.4f + 0.03f * sin(time * 3.0f + fi);
+        float bd = length(p - float2(bx, by));
+        float bsz = 0.008f + h2 * 0.014f;
+        bub += (1.0f - smoothstep(bsz * 0.6f, bsz, bd)) * (1.0f - smoothstep(bsz * 0.2f, bsz * 0.6f, bd) * 0.6f);
+    }
+    bub *= kBubbles * liquid;
+
+    float3 lin = liqCol * liquid * (0.35f + kGlow * 0.6f * (1.0f - fresnel)) * (0.8f + intensity * 0.4f);
+    // Meniscus: a bright line at the surface.
+    float meniscus = (1.0f - smoothstep(0.0f, 0.02f, abs(p.y - surfaceY - slosh)));
+    lin += liqCol * meniscus * 1.2f;
+    // Shell: rim tinted by whatever is behind it, brighter where the liquid is.
+    float3 rimCol = mix(float3(0.55f), liqCol * 1.3f, liquid);
+    lin += rimCol * fresnel * kRim * 0.8f;
+    // Highlight strip down the left, the way a glass tube has.
+    float strip = (1.0f - smoothstep(0.0f, 0.05f, abs(p.x + rad * 0.55f))) * (1.0f - smoothstep(halfLen * 0.8f, halfLen + rad * 0.9f, abs(p.y)));
+    lin += float3(1.0f) * strip * 0.25f;
+    lin += float3(1.0f) * bub * 0.9f;
+
+    float alpha = max(liquid * 0.85f, fresnel * kRim * 0.7f + strip * 0.3f + meniscus + bub);
+    alpha = min(1.0f, alpha) * shell;
+    return half4(half3(lab_linear_to_srgb(lin)) * half(alpha), half(alpha));
+}
+
+// MARK: - Chrome (layerEffect)
+//
+// A material for anything with an alpha edge: a bevel from the alpha
+// gradient gives a normal; the normal reflects a striped environment
+// (chrome) and, with `iridescence`, an interference palette (the
+// holographic bolt in the reference). `bevel` is the sample distance in
+// pixels — the bevel's width.
+
+[[ stitchable ]] half4 labChrome(float2 position, SwiftUI::Layer layer,
+                                 float bevel, float iridescence, float shine, float keep, float time,
+                                 device const float *lab, int labCount)
+{
+    half4 src = layer.sample(position);
+    if (src.a < 0.002h) return src;
+    float aL = float(layer.sample(position - float2(bevel, 0)).a);
+    float aR = float(layer.sample(position + float2(bevel, 0)).a);
+    float aU = float(layer.sample(position - float2(0, bevel)).a);
+    float aD = float(layer.sample(position + float2(0, bevel)).a);
+    float aL2 = float(layer.sample(position - float2(bevel * 2.0f, 0)).a);
+    float aR2 = float(layer.sample(position + float2(bevel * 2.0f, 0)).a);
+    float aU2 = float(layer.sample(position - float2(0, bevel * 2.0f)).a);
+    float aD2 = float(layer.sample(position + float2(0, bevel * 2.0f)).a);
+    float2 g = float2((aR + aR2) - (aL + aL2), (aD + aD2) - (aU + aU2));
+    float3 n = normalize(float3(-g * 1.5f, 0.6f));
+    // Environment: bright above, dark band, bright below — the stripes a
+    // chrome capsule reflects. Reflected by the normal's y.
+    float envY = n.y * 0.5f + 0.5f;
+    float env = 0.25f + 0.75f * (smoothstep(0.0f, 0.25f, envY) * (1.0f - smoothstep(0.35f, 0.5f, envY)) + smoothstep(0.62f, 0.85f, envY));
+    float3 L = normalize(float3(-0.4f, -0.6f, 0.7f));
+    float spec = pow(max(dot(n, normalize(L + float3(0, 0, 1))), 0.0f), 40.0f);
+    float edge = min(1.0f, length(g) * 1.2f);
+    // Iridescence: palette by the normal's angle and the edge.
+    float3 irid = lab_palette_linear(atan2(n.y, n.x) / 6.2831f + edge * 0.6f + time * 0.03f, lab, labCount);
+    float3 base = mix(float3(env), lab_linear_to_srgb(irid) * (0.4f + env), iridescence);
+    half3 rgb = half3(base) * src.a * half(shine) + half3(spec * 0.9f) * src.a + src.rgb * half(keep);
+    return half4(min(rgb, half3(1)), src.a);
+}
+
+// MARK: - Holo (colorEffect)
+//
+// A holographic foil disc: a diffraction grating whose rainbow shifts
+// with the viewing angle — the sticker on a credit card. The "view" is
+// a slow virtual tilt (plus audio), so the bands sweep across. Two
+// gratings at an angle to each other give the cross-hatched shimmer.
+
+[[ stitchable ]] half4 labHolo(float2 position, half4 color,
+                               float2 size, float time, float intensity, float audio,
+                               device const float *knobs, int knobCount,
+                               device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float r = length(uv);
+    float mask = 1.0f - smoothstep(0.97f, 1.0f, r);
+    if (mask <= 0.0f) return half4(0);
+    float kPitch = knobs[0], kTilt = knobs[1], kAngle = knobs[2], kMetal = knobs[3], kNoise = knobs[4];
+    // Virtual view direction, wandering.
+    float2 view = float2(sin(time * 0.5f), cos(time * 0.37f)) * kTilt * (1.0f + audio * 0.8f);
+    // Two gratings: the phase along each grating direction, modulated by
+    // the view — this is what makes the bands slide as you tilt.
+    float a = kAngle;
+    float2 g1 = float2(cos(a), sin(a)), g2 = float2(cos(a + 1.1f), sin(a + 1.1f));
+    float n = lab_fbm_n(uv * 3.0f + time * 0.1f, 3) * kNoise;
+    float p1 = dot(uv, g1) * kPitch + dot(view, g1) * 4.0f + n * 2.0f;
+    float p2 = dot(uv, g2) * kPitch * 0.7f + dot(view, g2) * 4.0f - n * 1.5f;
+    float3 c1 = lab_palette_linear(fract(p1 * 0.5f), lab, labCount);
+    float3 c2 = lab_palette_linear(fract(p2 * 0.5f + 0.33f), lab, labCount);
+    // Sharpness: a rainbow band is bright where the grating "focuses".
+    float band1 = 0.5f + 0.5f * cos(p1 * 6.2831f);
+    float band2 = 0.5f + 0.5f * cos(p2 * 6.2831f);
+    // Broad, bright bands — the foil is mostly colour, with the darkest
+    // point between bands still lit.
+    float3 rainbow = c1 * (0.35f + 0.9f * pow(band1, 1.2f)) + c2 * (0.2f + 0.6f * pow(band2, 1.2f));
+    // Metallic base: a silver disc with a soft specular that follows the view.
+    float spec = pow(max(0.0f, 1.0f - length(uv - view * 0.6f) * 1.2f), 2.0f);
+    float3 metal = float3(0.35f) + float3(0.5f) * spec;
+    float3 lin = mix(rainbow * (0.7f + intensity * 0.5f), metal, kMetal) + rainbow * spec * 0.6f;
+    return half4(half3(lab_linear_to_srgb(lin)) * half(mask), half(mask));
+}
+
+// MARK: - Lenticular (colorEffect)
+//
+// A lenticular print: the disc under fine vertical lenses, each strip
+// showing one of two pictures depending on the viewing angle — here
+// two gradient spheres in different palette halves, swapping as a
+// virtual view sweeps. Between the two the image tears the way the
+// real thing does when you're halfway.
+
+[[ stitchable ]] half4 labLenticular(float2 position, half4 color,
+                                     float2 size, float time, float intensity, float audio,
+                                     device const float *knobs, int knobCount,
+                                     device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float r = length(uv);
+    float mask = 1.0f - smoothstep(0.985f, 1.0f, r);
+    if (mask <= 0.0f) return half4(0);
+    float kLenses = knobs[0], kSweep = knobs[1], kShade = knobs[2], kTear = knobs[3];
+    float view = 0.5f + 0.5f * sin(time * kSweep) + audio * 0.3f;   // 0 picture A … 1 picture B
+    float strip = fract(uv.x * kLenses * 0.5f);
+    // Each lens shows A on one side of its width and B on the other; the
+    // boundary slides with the view. Tear: the boundary is ragged.
+    float tear = kTear * 0.2f * sin(uv.y * 20.0f + time * 2.0f);
+    float showB = smoothstep(view - 0.06f + tear, view + 0.06f + tear, strip);
+    float rr = min(r, 1.0f);
+    float z = sqrt(max(0.0f, 1.0f - rr * rr));
+    float shade = mix(1.0f, 0.35f + 0.65f * z, kShade);
+    float3 a = lab_palette_linear((uv.y * 0.5f + 0.5f) * 0.4f + time * 0.02f, lab, labCount);
+    float3 b = lab_palette_linear((uv.x * 0.5f + 0.5f) * 0.4f + 0.5f + time * 0.02f, lab, labCount);
+    float3 lin = mix(a, b, showB) * shade * (0.8f + intensity * 0.4f);
+    // The lens ridges: a faint bright line per lens.
+    float ridge = 1.0f - smoothstep(0.0f, 0.08f, min(strip, 1.0f - strip));
+    lin += float3(ridge * 0.12f);
+    return half4(half3(lab_linear_to_srgb(lin)) * half(mask), half(mask));
+}
+
+// MARK: - Moiré (colorEffect)
+//
+// Two fine ring gratings, one turning against the other: their
+// interference makes patterns far larger than either — the moiré
+// inside the sliced sphere reference, on its own. Coloured by the
+// beat pattern through the palette. Hypnotic and nearly free.
+
+[[ stitchable ]] half4 labMoire(float2 position, half4 color,
+                                float2 size, float time, float intensity, float audio,
+                                device const float *knobs, int knobCount,
+                                device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float r = length(uv);
+    float mask = 1.0f - smoothstep(0.97f, 1.0f, r);
+    if (mask <= 0.0f) return half4(0);
+    float kPitch = knobs[0], kOffset = knobs[1], kSpeed = knobs[2], kContrast = knobs[3], kMode = knobs[4];
+    // Two centres drifting apart and round each other.
+    float2 c1 = float2(cos(time * kSpeed), sin(time * kSpeed * 0.8f)) * kOffset * (1.0f + audio * 0.6f);
+    float2 c2 = -c1;
+    float g1, g2;
+    if (kMode < 0.5f) {
+        g1 = 0.5f + 0.5f * cos(length(uv - c1) * kPitch);
+        g2 = 0.5f + 0.5f * cos(length(uv - c2) * kPitch);
+    } else {
+        // Line gratings at a slowly changing angle.
+        float a = time * kSpeed * 0.3f;
+        g1 = 0.5f + 0.5f * cos((uv.x * cos(a) + uv.y * sin(a)) * kPitch);
+        g2 = 0.5f + 0.5f * cos((uv.x * cos(a + kOffset) + uv.y * sin(a + kOffset)) * kPitch);
+    }
+    float beat = g1 * g2;
+    float v = pow(beat, mix(1.0f, 3.0f, kContrast));
+    float3 c = lab_palette_linear(v * 0.6f + atan2(uv.y, uv.x) / 6.2831f * 0.2f + time * 0.02f, lab, labCount);
+    float3 lin = c * (0.15f + v * 1.1f) * (0.8f + intensity * 0.4f);
+    return half4(half3(lab_linear_to_srgb(lin)) * half(mask), half(mask));
 }

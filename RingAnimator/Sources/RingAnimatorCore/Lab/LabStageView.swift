@@ -539,6 +539,30 @@ public struct LabExperimentView: View {
             LabStippleView(frame: frame)
         case .tiles:
             LabTilesView(frame: frame) { ring }
+        case .bubble:
+            LabBubbleView(frame: frame)
+        case .slices:
+            LabSlicesView(frame: frame)
+        case .vessel:
+            LabVesselView(frame: frame)
+        case .stack:
+            LabStackView(frame: frame)
+        case .cascade:
+            LabCascadeView(frame: frame)
+        case .prism:
+            LabPrismView(frame: frame)
+        case .chrome:
+            LabChromeView(frame: frame) { ring }
+        case .holo:
+            LabHoloView(frame: frame)
+        case .lenticular:
+            LabLenticularView(frame: frame)
+        case .moire:
+            LabMoireView(frame: frame)
+        case .orrery:
+            LabOrreryView(frame: frame)
+        case .bokeh:
+            LabBokehView(frame: frame)
         case .journey:
             LabJourneyView(frame: frame, config: config)
         case .agentStates:

@@ -468,6 +468,7 @@ struct LabPostStack<Base: View>: View {
         case .duotone:    wrapped = AnyView(LabDuotoneView(frame: frame) { view })
         case .spin:       wrapped = AnyView(LabSpinView(frame: frame) { view })
         case .tiles:      wrapped = AnyView(LabTilesView(frame: frame) { view })
+        case .chrome:     wrapped = AnyView(LabChromeView(frame: frame) { view })
         }
         return apply(rest, wrapped)
     }
@@ -653,14 +654,17 @@ struct LabDotsView<Base: View>: View {
 
     var body: some View {
         let cell = Float(frame.p("cell", .dots))
+        let lens = Float(frame.p("lens", .dots))
+        let reach = CGFloat(cell) * (1 + CGFloat(lens))
         ring()
             .layerEffect(
                 ShaderLibrary.bundle(.module).labDots(
                     .float(cell),
                     .float(Float(frame.p("roundness", .dots))),
-                    .float(Float(frame.p("gain", .dots) * (1 + frame.audio * 0.4)))
+                    .float(Float(frame.p("gain", .dots) * (1 + frame.audio * 0.4))),
+                    .float(lens)
                 ),
-                maxSampleOffset: CGSize(width: CGFloat(cell), height: CGFloat(cell))
+                maxSampleOffset: CGSize(width: reach, height: reach)
             )
     }
 }
