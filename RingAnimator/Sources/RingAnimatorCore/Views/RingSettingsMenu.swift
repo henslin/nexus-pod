@@ -94,21 +94,15 @@ public struct RingSettingsMenu: View {
             // reorganized into two different container shapes rather than
             // two independently-ordered menus.
             Section {
+                // Same order as the Mac panel — the order of operations for
+                // making an animation. See ControlsView.animationCards.
                 NavigationLink {
-                    Form { Section { ColorSection(config: config) } }
+                    Form { Section { MotionSection(config: config) } }
                         .formStyle(.grouped)
-                        .navigationTitle("Color")
+                        .navigationTitle("Motion")
                         .inlineNavigationTitleIfAvailable()
                 } label: {
-                    Label("Color", systemImage: "paintpalette")
-                }
-                NavigationLink {
-                    Form { Section { AnimationSection(config: config) } }
-                        .formStyle(.grouped)
-                        .navigationTitle("Animation")
-                        .inlineNavigationTitleIfAvailable()
-                } label: {
-                    Label("Animation", systemImage: "play.circle")
+                    Label("Motion", systemImage: "play.circle")
                 }
                 NavigationLink {
                     Form { Section { ShapeSection(config: config) } }
@@ -119,20 +113,60 @@ public struct RingSettingsMenu: View {
                     Label("Shape", systemImage: "circle.dashed")
                 }
                 NavigationLink {
+                    Form { Section { ColorSection(config: config) } }
+                        .formStyle(.grouped)
+                        .navigationTitle("Color")
+                        .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Color", systemImage: "paintpalette")
+                }
+                NavigationLink {
                     Form {
                         Section {
-                            MotionEffectsSection(config: config)
+                            SweepSection(config: config)
                         } footer: {
-                            Text("Layer these on top of any animation type above.")
+                            Text("How the colours are drawn around the ring, as distinct from which colours.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .formStyle(.grouped)
-                    .navigationTitle("Motion Effects")
+                    .navigationTitle("Sweep")
                     .inlineNavigationTitleIfAvailable()
                 } label: {
-                    Label("Motion Effects", systemImage: "arrow.triangle.2.circlepath")
+                    Label("Sweep", systemImage: "circle.lefthalf.filled.righthalf.striped.horizontal")
+                }
+                NavigationLink {
+                    Form {
+                        Section {
+                            HardwareSection(config: config)
+                        } footer: {
+                            Text("The animation as a fixed ring of diodes, the way addressable LED hardware works.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .formStyle(.grouped)
+                    .navigationTitle("Hardware")
+                    .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Hardware", systemImage: "cpu")
+                }
+                NavigationLink {
+                    Form {
+                        Section {
+                            SmoothingSection(config: config)
+                        } footer: {
+                            Text("Spreads the hardware render in space and trails it in time. Preview only; code exports stay hardware-accurate.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .formStyle(.grouped)
+                    .navigationTitle("Smooth")
+                    .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Smooth", systemImage: "drop.halffull")
                 }
                 NavigationLink {
                     Form { Section { GlowBlendSection(config: config) } }
@@ -157,6 +191,22 @@ public struct RingSettingsMenu: View {
                     .inlineNavigationTitleIfAvailable()
                 } label: {
                     Label("Particles", systemImage: "sparkles")
+                }
+                NavigationLink {
+                    Form {
+                        Section {
+                            NeutralStateSection(config: config)
+                        } footer: {
+                            Text("The ring when nothing is happening. Brightness at zero with the diffuser on is the frosted-glass resting state.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .formStyle(.grouped)
+                    .navigationTitle("Neutral State")
+                    .inlineNavigationTitleIfAvailable()
+                } label: {
+                    Label("Neutral State", systemImage: "circle.dotted.circle")
                 }
                 NavigationLink {
                     Form {

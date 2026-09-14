@@ -26,12 +26,9 @@ public enum ControlsSectionReset {
         let d = RingConfig()
         switch id {
         case "color":
-            config.ledBrightness = d.ledBrightness
-            config.perceptualGradient = d.perceptualGradient
-            config.shaderSweepEnabled = d.shaderSweepEnabled
-            config.shaderWarp = d.shaderWarp
-            config.shaderWarpSpeed = d.shaderWarpSpeed
             config.primaryColor = d.primaryColor
+            config.hueShiftEnabled = d.hueShiftEnabled
+            config.hueShiftSpeed = d.hueShiftSpeed
             config.secondaryColor = d.secondaryColor
             config.additionalColors = d.additionalColors
 
@@ -43,7 +40,10 @@ public enum ControlsSectionReset {
             config.smoothingTrail = d.smoothingTrail
             config.smoothingFluidTime = d.smoothingFluidTime
 
-        case "animation":
+        case "motion":
+            config.scalePulseEnabled = d.scalePulseEnabled
+            config.scalePulseAmount = d.scalePulseAmount
+            config.scalePulseSpeed = d.scalePulseSpeed
             config.animationType = d.animationType
             config.speed = d.speed
             config.trailFraction = d.trailFraction
@@ -65,6 +65,20 @@ public enum ControlsSectionReset {
             config.lineWidth = d.lineWidth
             config.ringScale = d.ringScale
             config.previewDiameter = d.previewDiameter
+
+        case "sweep":
+            config.perceptualGradient = d.perceptualGradient
+            config.shaderSweepEnabled = d.shaderSweepEnabled
+            config.shaderWarp = d.shaderWarp
+            config.shaderWarpSpeed = d.shaderWarpSpeed
+            config.flowEnabled = d.flowEnabled
+            config.flowSpeed = d.flowSpeed
+            config.flowMix = d.flowMix
+            config.flowOffsetsColors = d.flowOffsetsColors
+
+        // These used to be reset under "shape" while their controls sat in
+        // the animation card — neither matched the other. Now both agree.
+        case "hardware":
             config.diodeModeEnabled = d.diodeModeEnabled
             config.diodeCount = d.diodeCount
             config.diodeShape = d.diodeShape
@@ -74,16 +88,12 @@ public enum ControlsSectionReset {
             config.diodeColorMode = d.diodeColorMode
             config.firmwareTickMs = d.firmwareTickMs
 
-        case "motion":
-            config.flowEnabled = d.flowEnabled
-            config.flowSpeed = d.flowSpeed
-            config.flowMix = d.flowMix
-            config.flowOffsetsColors = d.flowOffsetsColors
-            config.scalePulseEnabled = d.scalePulseEnabled
-            config.scalePulseAmount = d.scalePulseAmount
-            config.scalePulseSpeed = d.scalePulseSpeed
-            config.hueShiftEnabled = d.hueShiftEnabled
-            config.hueShiftSpeed = d.hueShiftSpeed
+        case "neutral":
+            config.ledBrightness = d.ledBrightness
+            config.diffuserEnabled = d.diffuserEnabled
+            config.diffuserMilkiness = d.diffuserMilkiness
+            config.diffuserWidth = d.diffuserWidth
+            config.diffuserOpacity = d.diffuserOpacity
             config.blurRadius = d.blurRadius
             config.blendMode = d.blendMode
             config.chromaticAberrationEnabled = d.chromaticAberrationEnabled
@@ -140,12 +150,6 @@ public enum ControlsSectionReset {
             config.podStatusAutoDismiss = d.podStatusAutoDismiss
             config.podStatusDuration = d.podStatusDuration
             config.podStatusDismissible = d.podStatusDismissible
-
-        case "diffuser":
-            config.diffuserEnabled = d.diffuserEnabled
-            config.diffuserMilkiness = d.diffuserMilkiness
-            config.diffuserWidth = d.diffuserWidth
-            config.diffuserOpacity = d.diffuserOpacity
 
         case "tabs":
             config.tabAppearances = d.tabAppearances

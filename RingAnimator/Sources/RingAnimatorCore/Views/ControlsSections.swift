@@ -16,49 +16,19 @@ import PhotosUI
 
 // MARK: - Animation
 
-struct AnimationSection: View {
+struct MotionSection: View {
     @ObservedObject var config: RingConfig
 
     /// Everything this picker offers, in declaration order — grouped into
     /// basic vs multi-phase by `body` below.
-    private var selectableStyles: [LEDPatternStyle] {
-        LEDPatternStyle.allCases.filter {
-            ![.continuousAnimation, .earConOnly, .notApplicable, .voiceAssistantColor, .custom].contains($0)
-        }
-    }
-
     var body: some View {
-        Picker("Pattern Style", selection: $config.patternStyle) {
-            Text("Continuous").tag(LEDPatternStyle?.none)
-            // Excludes a few Cue Library-only styles that don't make sense
-            // as a live override on the ring you're actually looking at:
-            // `.earConOnly`/`.notApplicable` describe cues with no LED
-            // behavior at all, `.voiceAssistantColor` defers to a platform
-            // color this app doesn't own, and `.custom` only means anything
-            // alongside a cue's free-text `notes` field, which this picker
-            // has no home for. All four stay selectable from the Cue
-            // Library's own "Style" picker (`CueExplorerView`), where they
-            // describe a specific spec-sheet row rather than override the
-            // live preview.
-            // Split so the single-behavior styles read as the default way
-            // to build something and the canned multi-phase ones read as
-            // what they are. Anything in the second group can be built out
-            // of the first plus timeline steps — a composite's hold and
-            // fade are hidden parameters, where a step's are visible and
-            // editable.
-            Section("Basic") {
-                ForEach(selectableStyles.filter { !$0.isComposite }) { style in
-                    Text(style.displayName).tag(LEDPatternStyle?.some(style))
-                }
-            }
-            Section("Multi-phase (Cue Library)") {
-                ForEach(selectableStyles.filter(\.isComposite)) { style in
-                    Text(style.displayName).tag(LEDPatternStyle?.some(style))
-                }
-            }
-        }
-        .pickerStyle(.menu)
-        Text("A single spec-sheet behavior (Spin, Pulse, Flash, Ripple, ...) instead of a continuous loop — overrides Animation Type below when set. The multi-phase entries bake in their own hold and fade; to control those yourself, pick a basic style and sequence it on the timeline.")
+        // The style well — see `StyleWell`. One control for "what does it
+        // do", showing the current choice as a live thumbnail and opening
+        // the gallery to change it.
+        StyleWell(config: config)
+        Text(config.patternStyle == nil
+             ? "A continuous loop. Click the well to browse every style as a live thumbnail."
+             : "A single spec-sheet behaviour. The multi-phase entries bake in their own hold and fade; to control those yourself, pick a basic style and sequence it on the timeline.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -67,23 +37,21 @@ struct AnimationSection: View {
             Stepper("Flash Count: \(config.flashCount)", value: $config.flashCount, in: 1...10)
         }
 
-        Picker("Type", selection: $config.animationType) {
-            ForEach(RingAnimationType.allCases) { type in
-                Text(type.rawValue).tag(type)
-            }
-        }
-        .pickerStyle(.menu)
-        .disabled(config.patternStyle != nil)
-
         // `fixedSize(horizontal: false, vertical: true)` on every caption
         // below: take the width you're given and grow downward, rather than
         // claiming a single-line ideal width. Harmless in a plain stack,
         // and it keeps prose honest if these ever sit in a narrower
         // container again.
-        Text(config.animationType.summary)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        //
+        // The animation's own summary only when an animation is what's
+        // chosen — with a fixed style selected it would describe the loop
+        // you're not looking at.
+        if config.patternStyle == nil {
+            Text(config.animationType.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
 
         LabeledSlider(title: "Speed", value: $config.speed, range: 0.1...3.0, format: "%.1fx")
 
@@ -106,84 +74,6 @@ struct AnimationSection: View {
                 value: $config.trailFraction, range: 0.05...1.0, format: "%.2f"
             )
         }
-        // Diode mode turns every animation into a fixed ring of pixels,
-        // so the diode controls below apply to all of them once it's on —
-        // not just to the types that were already diode-based.
-        Toggle("Diode Mode", isOn: $config.diodeModeEnabled)
-        Text(config.diodeModeEnabled
-             ? "Diodes stay in place and only change brightness and color, the way addressable LED hardware works."
-             : "Render any animation as a fixed ring of diodes instead of moving arcs and gradients.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-        if config.diodeModeEnabled || config.animationType == .alternating
-            || config.animationType == .sparkle || config.animationType == .multiChase {
-            Picker("Diode Shape", selection: $config.diodeShape) {
-                ForEach(DiodeShape.allCases) { shape in
-                    Text(shape.rawValue).tag(shape)
-                }
-            }
-            .pickerStyle(.menu)
-
-            Text(config.diodeShape.summary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if config.diodeModeEnabled {
-                LabeledSlider(title: "Floor", value: $config.diodeFloor, range: 0...1, format: "%.2f")
-                Text("Minimum brightness every diode holds. Lifts and compresses the range rather than clipping the low end.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LabeledSlider(title: "Firmware Tick", value: $config.firmwareTickMs, range: 0...200, format: "%.0f ms")
-                Text(config.firmwareTickMs > 0
-                     ? "Rendering is snapped to this tick, so the preview shows what hardware updating at that rate can actually produce."
-                     : "0 renders continuously. Set a tick to preview at a real driver's update rate.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Picker("Diode Color", selection: $config.diodeColorMode) {
-                    ForEach(DiodeColorMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                Text(config.diodeColorMode.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if config.diodeShape.dividesTheRing {
-                LabeledSlider(title: "Segment Gap", value: $config.diodeGap, range: 0...0.6, format: "%.2f")
-
-                Text("Space between wedges, as a fraction of each one's width. 0 makes them meet edge to edge as one continuous ring.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                LabeledSlider(title: "Diode Size", value: $config.diodeScale, range: 0.4...3.0, format: "%.2fx")
-
-                Text("Relative to the ring's width, which crops them — above 1x the diode is taller than the band and gets trimmed by it, the way an LED reads through a slot.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-
-        if config.diodeModeEnabled || config.animationType == .alternating || config.animationType == .equalizer
-            || config.animationType == .sparkle || config.animationType == .multiChase {
-            LabeledSlider(
-                title: config.animationType == .equalizer ? "Segment Count" : config.animationType == .sparkle ? "Sparkle Count" : "Diode Count",
-                value: $config.diodeCount, range: 8...60, format: "%.0f"
-            )
-        }
-
         if config.animationType == .ripple && config.diodeModeEnabled {
             GroupCaption("Drops")
             LabeledSlider(title: "Drops", value: $config.rippleDropCount, range: 1...12, format: "%.0f")
@@ -247,6 +137,15 @@ struct AnimationSection: View {
             .fixedSize(horizontal: false, vertical: true)
         if config.easingStyle == .spring {
             LabeledSlider(title: "Spring Bounce", value: $config.springBounce, range: 0...1, format: "%.2f")
+        }
+
+        // Scale Pulse is motion, so it lives with the rest of the motion —
+        // it used to be in a separate "Motion Effects" card beside Hue
+        // Shift and Flow, which were about colour, not movement.
+        Toggle("Scale Pulse (Breathing)", isOn: $config.scalePulseEnabled)
+        if config.scalePulseEnabled {
+            LabeledSlider(title: "Amount", value: $config.scalePulseAmount, range: 0.02...0.4, format: "%.2f")
+            LabeledSlider(title: "Speed", value: $config.scalePulseSpeed, range: 0.1...3.0, format: "%.1fx")
         }
     }
 
@@ -322,40 +221,6 @@ struct ShapeSection: View {
             format: "%.0f pt"
         )
         LabeledSlider(title: "Preview Size", value: $config.previewDiameter, range: 80...220, format: "%.0f pt")
-    }
-}
-
-// MARK: - Motion Effects
-
-struct MotionEffectsSection: View {
-    @ObservedObject var config: RingConfig
-
-    var body: some View {
-        Toggle("Scale Pulse (Breathing)", isOn: $config.scalePulseEnabled)
-        if config.scalePulseEnabled {
-            LabeledSlider(title: "Amount", value: $config.scalePulseAmount, range: 0.02...0.4, format: "%.2f")
-            LabeledSlider(title: "Speed", value: $config.scalePulseSpeed, range: 0.1...3.0, format: "%.1fx")
-        }
-
-        Toggle("Flow", isOn: $config.flowEnabled)
-        if config.flowEnabled {
-            LabeledSlider(title: "Speed", value: $config.flowSpeed, range: -2.0...0.9, format: "%.2fx")
-            LabeledSlider(title: "Mix", value: $config.flowMix, range: 0...1, format: "%.2f")
-            Toggle("Offset Colours", isOn: $config.flowOffsetsColors)
-            Text("A second sweep over the first, turning at its own rate — negative runs the other way. Bands slide past each other instead of one pattern spinning. Offset Colours starts the second sweep one colour along.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-
-        Toggle("Color Cycling (Hue Shift)", isOn: $config.hueShiftEnabled)
-        if config.hueShiftEnabled {
-            LabeledSlider(title: "Speed", value: $config.hueShiftSpeed, range: 0.02...1.0, format: "%.2fx")
-            Text("Every configured color trails evenly spaced around the color wheel while active — 180° apart with just Primary/Secondary, closer together with more colors added.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 }
 
@@ -678,37 +543,179 @@ struct LiquidGlassSection: View {
     }
 }
 
-// MARK: - Diffuser
+// MARK: - Hardware
 
-/// The glass diffuser over the LEDs — see `RingConfig.diffuserEnabled`.
-/// Per-state, so a timeline step can bring it in as the resting state
-/// after an animation.
-struct DiffuserSection: View {
+/// How the animation renders on the actual LEDs: a fixed ring of diodes
+/// rather than moving arcs and gradients, and everything that follows
+/// from that. Pulled out of the motion card (2026-09-14) — eight controls
+/// about *how it renders* were buried under *what it does*, while Smooth
+/// and Firmware Fidelity, the same question, sat three cards away.
+struct HardwareSection: View {
     @ObservedObject var config: RingConfig
 
     var body: some View {
-        LabeledSlider(title: "Milkiness", value: $config.diffuserMilkiness, range: 0...1, format: "%.2f")
-        Text("A faint white tint on the glass. Enough to read as frosted rather than clear; 0 is untinted.")
+        // Diode mode turns every animation into a fixed ring of pixels,
+        // so the diode controls below apply to all of them once it's on —
+        // not just to the types that were already diode-based.
+        Toggle("Diode Mode", isOn: $config.diodeModeEnabled)
+        Text(config.diodeModeEnabled
+             ? "Diodes stay in place and only change brightness and color, the way addressable LED hardware works."
+             : "Render any animation as a fixed ring of diodes instead of moving arcs and gradients.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-        LabeledSlider(title: "Opacity", value: $config.diffuserOpacity, range: 0...1, format: "%.2f")
-        Text("The glass layer itself, material and all — not the tint. Lets a state hold the diffuser at half strength, or a sequence ease it in.")
+        if config.diodeModeEnabled || config.animationType == .alternating
+            || config.animationType == .sparkle || config.animationType == .multiChase {
+            Picker("Diode Shape", selection: $config.diodeShape) {
+                ForEach(DiodeShape.allCases) { shape in
+                    Text(shape.rawValue).tag(shape)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text(config.diodeShape.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if config.diodeModeEnabled {
+                LabeledSlider(title: "Floor", value: $config.diodeFloor, range: 0...1, format: "%.2f")
+                Text("Minimum brightness every diode holds. Lifts and compresses the range rather than clipping the low end.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LabeledSlider(title: "Firmware Tick", value: $config.firmwareTickMs, range: 0...200, format: "%.0f ms")
+                Text(config.firmwareTickMs > 0
+                     ? "Rendering is snapped to this tick, so the preview shows what hardware updating at that rate can actually produce."
+                     : "0 renders continuously. Set a tick to preview at a real driver's update rate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Picker("Diode Color", selection: $config.diodeColorMode) {
+                    ForEach(DiodeColorMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text(config.diodeColorMode.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if config.diodeShape.dividesTheRing {
+                LabeledSlider(title: "Segment Gap", value: $config.diodeGap, range: 0...0.6, format: "%.2f")
+
+                Text("Space between wedges, as a fraction of each one's width. 0 makes them meet edge to edge as one continuous ring.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                LabeledSlider(title: "Diode Size", value: $config.diodeScale, range: 0.4...3.0, format: "%.2fx")
+
+                Text("Relative to the ring's width, which crops them — above 1x the diode is taller than the band and gets trimmed by it, the way an LED reads through a slot.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+
+        if config.diodeModeEnabled || config.animationType == .alternating || config.animationType == .equalizer
+            || config.animationType == .sparkle || config.animationType == .multiChase {
+            LabeledSlider(
+                title: config.animationType == .equalizer ? "Segment Count" : config.animationType == .sparkle ? "Sparkle Count" : "Diode Count",
+                value: $config.diodeCount, range: 8...60, format: "%.0f"
+            )
+        }
+
+    }
+}
+
+// MARK: - Sweep
+
+/// How the colours are drawn around the ring — as distinct from *which*
+/// colours, which is the Color card. Split out (2026-09-14) because this
+/// is the live exploration area and was crowding the colour pickers.
+struct SweepSection: View {
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        Toggle("Perceptual Gradient", isOn: $config.perceptualGradient)
+        Text(config.perceptualGradient
+             ? "Sweeps through the colours in OKLab with many stops — no spokes at each colour, and the midpoints stay as vivid as the ends."
+             : "A few stops, blended in sRGB. Each colour is a visible corner as the ring turns, and midpoints go grey.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-        LabeledSlider(title: "Width", value: $config.diffuserWidth, range: 0.1...6, format: "%.1fx")
-        Text("As a multiple of the LED stroke, centred on it. 1x is exactly the LEDs' own band; 0.1x is a hairline; past ~3x it swallows the ring's hole and becomes a disc.")
+        Toggle("Shader Sweep (Metal)", isOn: $config.shaderSweepEnabled)
+        if config.shaderSweepEnabled {
+            // "Undulate", not "Breathe": Scale Pulse is already labelled
+            // Breathing, and this is the bands changing width, not the
+            // ring changing size.
+            LabeledSlider(title: "Undulate", value: $config.shaderWarp, range: 0...1, format: "%.2f")
+            LabeledSlider(title: "Undulate Speed", value: $config.shaderWarpSpeed, range: 0.2...4, format: "%.1fx")
+            Text("Colour computed per pixel, per frame — no stops at all. Undulate lets the bands widen and narrow without blending, so nothing washes out. Wave only. Renders in previews, on iOS, and in GIF/video export.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Toggle("Flow", isOn: $config.flowEnabled)
+        if config.flowEnabled {
+            LabeledSlider(title: "Speed", value: $config.flowSpeed, range: -2.0...0.9, format: "%.2fx")
+            LabeledSlider(title: "Mix", value: $config.flowMix, range: 0...1, format: "%.2f")
+            Toggle("Offset Colours", isOn: $config.flowOffsetsColors)
+            Text("A second sweep over the first, turning at its own rate — negative runs the other way. Blends the two, which softens saturation; the shader's Undulate gets the movement without that.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+// MARK: - Neutral state
+
+/// What the ring is when nothing is happening: LED brightness and the
+/// diffuser, together at last — they were the top of Color and a card of
+/// their own, neither where you'd look. Brightness at zero with the
+/// diffuser on is the frosted-glass resting state.
+struct NeutralStateSection: View {
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        LabeledSlider(title: "LED Brightness", value: $config.ledBrightness, range: 0...1, format: "%.2f")
+        Text(config.ledBrightness == 0
+             ? "Nothing lit. With the diffuser on, this is the frosted-glass resting state."
+             : "Dims ring, glow and particles together. 0 is the neutral state.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-        Text("Neutral state: LED Brightness (Color, above) at zero and only the diffuser remains. Saved with the state, so a sequence can fade it in after an animation.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        Toggle("Diffuser", isOn: $config.diffuserEnabled)
+        if config.diffuserEnabled {
+            LabeledSlider(title: "Milkiness", value: $config.diffuserMilkiness, range: 0...1, format: "%.2f")
+            Text("A faint white tint on the glass. Enough to read as frosted rather than clear; 0 is untinted.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LabeledSlider(title: "Opacity", value: $config.diffuserOpacity, range: 0...1, format: "%.2f")
+            Text("The glass layer itself, material and all — not the tint. Lets a state hold the diffuser at half strength, or a sequence ease it in.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LabeledSlider(title: "Width", value: $config.diffuserWidth, range: 0.1...6, format: "%.1fx")
+            Text("As a multiple of the LED stroke, centred on it. 1x is exactly the LEDs' own band; 0.1x is a hairline; past ~3x it swallows the ring's hole and becomes a disc.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -900,20 +907,6 @@ struct PodContentSection: View {
 struct ColorSection: View {
     @ObservedObject var config: RingConfig
 
-    /// Brightness lives with Color rather than in its own card because
-    /// they are one concern — what light the LEDs emit. Zero is the
-    /// neutral state: nothing lit, and if the diffuser (Global) is on,
-    /// frosted glass is all that shows.
-    @ViewBuilder
-    private var brightness: some View {
-        LabeledSlider(title: "LED Brightness", value: $config.ledBrightness, range: 0...1, format: "%.2f")
-        Text(config.ledBrightness == 0
-             ? "Neutral — nothing lit. With the diffuser on, this is the frosted-glass resting state."
-             : "The LEDs' brightness. Dims ring, glow and particles together; 0 is the neutral state.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
 
     /// Continues Primary/Secondary's naming scheme instead of switching to
     /// "Color 3"/"Color 4" — matches `RingConfig.maxAdditionalColors` (4),
@@ -925,26 +918,6 @@ struct ColorSection: View {
     }
 
     var body: some View {
-        brightness
-
-        Toggle("Perceptual Gradient", isOn: $config.perceptualGradient)
-        Text(config.perceptualGradient
-             ? "Sweeps through the colours in OKLab with many stops — no spokes at each colour, and the midpoints stay as vivid as the ends."
-             : "A few stops, blended in sRGB. Each colour is a visible corner as the ring turns, and midpoints go grey.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-        Toggle("Shader Sweep (Metal)", isOn: $config.shaderSweepEnabled)
-        if config.shaderSweepEnabled {
-            LabeledSlider(title: "Breathe", value: $config.shaderWarp, range: 0...1, format: "%.2f")
-            LabeledSlider(title: "Breathe Speed", value: $config.shaderWarpSpeed, range: 0.2...4, format: "%.1fx")
-            Text("Colour computed per pixel, per frame — no stops at all. Breathe lets the bands widen and narrow without blending, so nothing washes out. Wave only. Renders in previews, on iOS, and in GIF/video export.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-
         ColorPicker("Primary", selection: $config.primaryColor)
         Text(config.primaryColor.hexString).font(.caption).foregroundStyle(.secondary)
         ApprovedColorSwatchGrid(selectedHex: config.primaryColor.hexString) { config.primaryColor = $0 }
@@ -1017,6 +990,18 @@ struct ColorSection: View {
 
         if config.hueShiftEnabled {
             Text("Overridden live while color cycling is on — these are the fallback colors.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        // Hue Shift is colour over time, so it belongs with colour — it
+        // used to sit in "Motion Effects" beside Scale Pulse. It sits last
+        // so the "overridden while cycling" note above reads as a lead-in.
+        Toggle("Color Cycling (Hue Shift)", isOn: $config.hueShiftEnabled)
+        if config.hueShiftEnabled {
+            LabeledSlider(title: "Speed", value: $config.hueShiftSpeed, range: 0.02...1.0, format: "%.2fx")
+            Text("Every configured color trails evenly spaced around the color wheel while active — 180° apart with just Primary/Secondary, closer together with more colors added.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

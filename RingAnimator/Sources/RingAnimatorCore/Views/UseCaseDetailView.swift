@@ -123,14 +123,13 @@ public struct UseCaseDetailView: View {
         _player = StateObject(wrappedValue: TimelinePlayer(fileName: TimelinePlayer.useCaseFileName(preset.id)))
         // Same defaults as Nexus's own Controls panel (`ControlsView.init`).
         _expanded = State(initialValue: [
-            "color": true,
-            "animation": true,
-            "shape": true,
             "motion": true,
+            "shape": true,
+            "color": true,
+            "sweep": true,
             "glow": true,
             "particles": config.particlesEnabled,
-            "playback": config.sequencePlaybackEnabled,
-            "glass": false
+            "playback": config.sequencePlaybackEnabled
         ])
     }
 
@@ -431,17 +430,32 @@ public struct UseCaseDetailView: View {
     /// and Background — see this type's doc comment for why.
     private var controls: some View {
         VStack(spacing: 12) {
+            // Same order as `ControlsView.animationCards` — the order of
+            // operations for making an animation. Liquid Glass is no
+            // longer here: it went app-wide, and presets don't restore it,
+            // so a card that edited it on one use case changed nothing that
+            // was saved.
+            card("motion", "Motion", "play.circle") {
+                MotionSection(config: editingConfig)
+            }
+
+            card("shape", "Shape", "circle.dashed") {
+                ShapeSection(config: editingConfig)
+            }
+
             card("color", "Color", "paintpalette") {
                 ColorSection(config: editingConfig)
             }
 
-            // Same placement and rule as Nexus (see `ControlsView`): above
-            // Animation because it overrides it, and absent when no
-            // firmware pattern is loaded.
-            if editingConfig.firmwarePatternStream != nil || editingConfig.firmwareLevelField != nil {
-                card("fidelity", "Firmware Fidelity", "checkmark.seal") {
-                    FirmwareFidelitySection(config: editingConfig)
-                }
+            card("sweep", "Sweep", "circle.lefthalf.filled.righthalf.striped.horizontal",
+                 footer: "How the colours are drawn around the ring, as distinct from which colours.") {
+                SweepSection(config: editingConfig)
+            }
+
+            card("hardware", "Hardware", "cpu",
+                 footer: "The animation as a fixed ring of diodes, the way addressable LED hardware works.",
+                 masterToggle: $editingConfig.diodeModeEnabled) {
+                HardwareSection(config: editingConfig)
             }
 
             card("smoothing", "Smooth", "drop.halffull",
@@ -450,17 +464,10 @@ public struct UseCaseDetailView: View {
                 SmoothingSection(config: editingConfig)
             }
 
-            card("animation", "Animation", "play.circle") {
-                AnimationSection(config: editingConfig)
-            }
-
-            card("shape", "Shape", "circle.dashed") {
-                ShapeSection(config: editingConfig)
-            }
-
-            card("motion", "Motion Effects", "arrow.triangle.2.circlepath",
-                 footer: "Layer these on top of any animation type above.") {
-                MotionEffectsSection(config: editingConfig)
+            if editingConfig.firmwarePatternStream != nil || editingConfig.firmwareLevelField != nil {
+                card("fidelity", "Firmware Fidelity", "checkmark.seal") {
+                    FirmwareFidelitySection(config: editingConfig)
+                }
             }
 
             card("glow", "Glow & Blend", "sun.max") {
@@ -473,15 +480,15 @@ public struct UseCaseDetailView: View {
                 ParticlesSection(config: editingConfig)
             }
 
+            card("neutral", "Neutral State", "circle.dotted.circle",
+                 footer: "The ring when nothing is happening. Brightness at zero with the diffuser on is the frosted-glass resting state.") {
+                NeutralStateSection(config: editingConfig)
+            }
+
             card("playback", "Playback", "repeat",
                  footer: "Off = loops forever, like a live status indicator. On = plays the same hold/fade envelope the Cue Library uses, so you can preview it as a one-shot cue.",
                  masterToggle: $editingConfig.sequencePlaybackEnabled) {
                 PlaybackSection(config: editingConfig)
-            }
-
-            card("glass", "Liquid Glass", "wand.and.stars",
-                 footer: "The real Glass API's own parameters — style, tint, and interactive — applied to this preview.") {
-                LiquidGlassSection(config: editingConfig)
             }
         }
     }

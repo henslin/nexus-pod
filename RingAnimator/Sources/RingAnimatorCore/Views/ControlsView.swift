@@ -208,10 +208,10 @@ public struct ControlsView: View {
         self.voice = config.elevenLabs
         self.stt = config.voiceConversation.stt
         _expanded = State(initialValue: [
-            "color": true,
-            "animation": true,
-            "shape": true,
             "motion": true,
+            "shape": true,
+            "color": true,
+            "sweep": true,
             "glow": true,
             "particles": config.particlesEnabled,
             "playback": config.sequencePlaybackEnabled,
@@ -251,59 +251,74 @@ public struct ControlsView: View {
     @ViewBuilder
     private var animationCards: some View {
         Group {
-                card("color", "Color", "paintpalette", alignsAsForm: false) {
-                    ColorSection(config: config)
-                }
+            // Top to bottom is the order of operations for making an
+            // animation (2026-09-14): what it does, what it looks like, how
+            // it renders, what finishes it, what it is at rest, how it
+            // plays. Each card answers one question.
 
-                card("diffuser", "Diffuser", "circle.dotted.circle",
-                     footer: "A Liquid Glass ring over the LEDs — the frosted cover on Harpy and Ziris. With LED Brightness at zero this is the neutral state: milky glass, nothing lit, readable in light and dark. Saved with the state, so a timeline step can fade it in. Doesn't appear in exports; ImageRenderer can't rasterize glass.",
-                     masterToggle: $config.diffuserEnabled) {
-                    DiffuserSection(config: config)
-                }
+            // 1. What does it do?
+            card("motion", "Motion", "play.circle") {
+                MotionSection(config: config)
+            }
 
-                // Only when a firmware pattern is loaded — see the type's
-                // doc comment for why it isn't always present.
-                if config.firmwarePatternStream != nil || config.firmwareLevelField != nil {
-                    card("fidelity", "Firmware Fidelity", "checkmark.seal") {
-                        FirmwareFidelitySection(config: config)
-                    }
-                }
+            card("shape", "Shape", "circle.dashed") {
+                ShapeSection(config: config)
+            }
 
-                card("smoothing", "Smooth", "drop.halffull",
-                     footer: "Spreads the hardware render in space and trails it in time — the same animation, without twenty hard edges. Off renders exactly what the device would. Preview only; the code exports stay hardware-accurate.",
-                     masterToggle: $config.smoothingEnabled) {
-                    SmoothingSection(config: config)
-                }
+            // 2. What does it look like?
+            card("color", "Color", "paintpalette", alignsAsForm: false) {
+                ColorSection(config: config)
+            }
 
-                card("animation", "Animation", "play.circle") {
-                    AnimationSection(config: config)
-                }
+            card("sweep", "Sweep", "circle.lefthalf.filled.righthalf.striped.horizontal",
+                 footer: "How the colours are drawn around the ring, as distinct from which colours. Perceptual is the default; the shader is the per-pixel version with room to explore.") {
+                SweepSection(config: config)
+            }
 
-                card("shape", "Shape", "circle.dashed") {
-                    ShapeSection(config: config)
-                }
+            // 3. How does it render? The hardware trio, in order.
+            card("hardware", "Hardware", "cpu",
+                 footer: "The animation as a fixed ring of diodes, the way addressable LED hardware works, and everything that follows from that.",
+                 masterToggle: $config.diodeModeEnabled) {
+                HardwareSection(config: config)
+            }
 
-                card("motion", "Motion Effects", "arrow.triangle.2.circlepath",
-                     footer: "Layer these on top of any animation type above.") {
-                    MotionEffectsSection(config: config)
-                }
+            card("smoothing", "Smooth", "drop.halffull",
+                 footer: "Spreads the hardware render in space and trails it in time — the same animation, without twenty hard edges. Off renders exactly what the device would. Preview only; the code exports stay hardware-accurate.",
+                 masterToggle: $config.smoothingEnabled) {
+                SmoothingSection(config: config)
+            }
 
-                card("glow", "Glow & Blend", "sun.max") {
-                    GlowBlendSection(config: config)
+            // Only when a firmware pattern is loaded — see the type's
+            // doc comment for why it isn't always present.
+            if config.firmwarePatternStream != nil || config.firmwareLevelField != nil {
+                card("fidelity", "Firmware Fidelity", "checkmark.seal") {
+                    FirmwareFidelitySection(config: config)
                 }
+            }
 
-                card("particles", "Particles", "sparkles",
-                     footer: "Raw CAEmitterLayer/CAEmitterCell controls — the same particle system UIKit/AppKit apps use.",
-                     masterToggle: $config.particlesEnabled) {
-                    ParticlesSection(config: config)
-                }
+            // 4. What finishes it?
+            card("glow", "Glow & Blend", "sun.max") {
+                GlowBlendSection(config: config)
+            }
 
-                card("playback", "Playback", "repeat",
-                     footer: "Off = loops forever, like a live status indicator. On = plays the same hold/fade envelope the Cue Library uses, so you can preview it as a one-shot cue.",
-                     masterToggle: $config.sequencePlaybackEnabled) {
-                    PlaybackSection(config: config)
-                }
+            card("particles", "Particles", "sparkles",
+                 footer: "A CAEmitterLayer particle system driven by the ring's own colors and speed.",
+                 masterToggle: $config.particlesEnabled) {
+                ParticlesSection(config: config)
+            }
 
+            // 5. What is it at rest?
+            card("neutral", "Neutral State", "circle.dotted.circle",
+                 footer: "The ring when nothing is happening. Brightness at zero with the diffuser on is the frosted-glass resting state, like Harpy and Ziris at rest. Saved with the state, so a sequence can settle into it.") {
+                NeutralStateSection(config: config)
+            }
+
+            // 6. How does it play?
+            card("playback", "Playback", "play.rectangle",
+                 footer: "Fade in, hold, fade out — the envelope one step plays with in a sequence.",
+                 masterToggle: $config.sequencePlaybackEnabled) {
+                PlaybackSection(config: config)
+            }
         }
     }
 

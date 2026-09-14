@@ -77,15 +77,20 @@ struct ContentView: View {
     /// sections, or a section someone made.
     enum AppSection: Identifiable, Hashable {
         case ringDesigner
+        /// A gallery of every style as a live thumbnail — see
+        /// `StylesGalleryView`. Picking writes into the Nexus animation, so
+        /// its detail pane is Nexus's own stage.
+        case styles
         case cueLibrary
         case useCases
         case user(UUID)
 
-        static let fixed: [AppSection] = [.ringDesigner, .cueLibrary, .useCases]
+        static let fixed: [AppSection] = [.ringDesigner, .styles, .cueLibrary, .useCases]
 
         var id: String {
             switch self {
             case .ringDesigner: return "nexus"
+            case .styles: return "styles"
             case .cueLibrary: return "cues"
             case .useCases: return "useCases"
             case .user(let id): return id.uuidString
@@ -95,6 +100,7 @@ struct ContentView: View {
         var title: String {
             switch self {
             case .ringDesigner: return "Nexus"
+            case .styles: return "Styles"
             case .cueLibrary: return "Cue Library"
             case .useCases: return "Use Cases"
             // A user section's name lives in the store, not in the case —
@@ -107,6 +113,7 @@ struct ContentView: View {
         var icon: String {
             switch self {
             case .ringDesigner: return "sparkles"
+            case .styles: return "square.grid.3x3"
             case .cueLibrary: return "books.vertical"
             case .useCases: return "target"
             case .user: return "folder"
@@ -185,6 +192,11 @@ struct ContentView: View {
                     selectedPresetID: $selectedPresetID
                 )
                     .listColumnWidth()
+            case .styles:
+                // Wider than a list column: it's a grid, and the thumbnails
+                // are the content.
+                StylesGalleryView(config: config)
+                    .frame(minWidth: 360, idealWidth: 480)
             case .cueLibrary:
                 CueListView(store: cueStore, selectedCueID: $selectedCueID, searchText: $cueSearchText)
                     .listColumnWidth()
@@ -211,7 +223,11 @@ struct ContentView: View {
             }
         } detail: {
             switch section {
-            case .ringDesigner:
+            case .ringDesigner, .styles:
+                // Styles shares this detail on purpose: picking a style
+                // writes into the live Nexus config, so the stage and
+                // Controls beside the gallery show the pick land.
+                //
                 // Preview/Export in the middle, Controls pinned to the far
                 // right edge — the Figma/Sketch inspector-panel convention
                 // (layers left, canvas center, properties right) rather
@@ -389,6 +405,7 @@ struct ContentView: View {
     private var sectionTitle: String {
         switch section {
         case .ringDesigner: return "Nexus"
+        case .styles: return "Styles"
         case .cueLibrary: return "Cue Library"
         case .useCases: return "Use Cases"
         case .user(let id):
@@ -414,6 +431,10 @@ struct ContentView: View {
             let count = presetStore.presets.count
             let purpose = "Discovery design for the agentic tab"
             return count == 0 ? purpose : "\(purpose) · \(count) saved"
+        case .styles:
+            let n = MotionChoice.animations.count + MotionChoice.basicStyles.count
+                + MotionChoice.multiPhaseStyles.count + MotionChoice.firmwarePatterns.count
+            return "Every style as a live thumbnail · \(n)"
         case .cueLibrary:
             let tweaked = cueStore.overrides.count
             let base = "The hardware spec, cue by cue · \(LEDCueLibrary.all.count)"
