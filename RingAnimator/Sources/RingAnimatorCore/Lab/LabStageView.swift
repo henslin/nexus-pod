@@ -98,7 +98,9 @@ public struct LabStageView: View {
                         darkStage: lab.darkStage,
                         params: lab.allResolvedParameters(),
                         bands: bands,
-                        glyph: lab.glyph.isEmpty ? nil : lab.glyph)
+                        glyph: lab.glyph.isEmpty ? nil : lab.glyph,
+                        taps: lab.taps,
+                        sinceTap: date.timeIntervalSince(lab.lastTap))
     }
 
     private var stage: some View {
@@ -113,7 +115,11 @@ public struct LabStageView: View {
                     .environment(\.colorScheme, lab.darkStage ? .dark : .light)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if lab.showPod {
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if lab.experiment.isTappable { lab.advance() }
+            }
+            if lab.showPod, !lab.experiment.usesPhoneCanvas {
                 podPreview
                     .padding(20)
             }
@@ -475,6 +481,16 @@ public struct LabExperimentView: View {
             LabRaysView(frame: frame) { ring }
         case .sphere:
             LabSphereView(frame: frame)
+        case .journey:
+            LabJourneyView(frame: frame, config: config)
+        case .agentStates:
+            LabAgentStatesView(frame: frame, config: config)
+        case .waveform:
+            LabWaveformView(frame: frame, config: config)
+        case .edgeGlow:
+            LabEdgeGlowView(frame: frame, config: config)
+        case .caption:
+            LabCaptionView(frame: frame, config: config)
         }
     }
 

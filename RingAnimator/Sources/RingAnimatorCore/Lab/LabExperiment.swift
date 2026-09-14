@@ -29,6 +29,12 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case liquid
     case rays
     case sphere
+    // Flows — the tap-on-Nexus question, on a phone canvas.
+    case journey
+    case agentStates
+    case waveform
+    case edgeGlow
+    case caption
 
     public var id: String { rawValue }
 
@@ -48,6 +54,11 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .liquid:     return "Liquid"
         case .rays:       return "Rays"
         case .sphere:     return "Sphere"
+        case .journey:    return "Journey"
+        case .agentStates: return "Agent States"
+        case .waveform:   return "Waveform"
+        case .edgeGlow:   return "Edge Glow"
+        case .caption:    return "Caption"
         }
     }
 
@@ -69,6 +80,11 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .liquid:     return "Metal · colorEffect"
         case .rays:       return "Metal · layerEffect"
         case .sphere:     return "Metal · colorEffect"
+        case .journey:    return "SwiftUI · Liquid Glass + springs"
+        case .agentStates: return "SwiftUI · state machine"
+        case .waveform:   return "SwiftUI · Canvas"
+        case .edgeGlow:   return "SwiftUI · blur + gradient"
+        case .caption:    return "SwiftUI · text transitions"
         }
     }
 
@@ -88,6 +104,11 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .liquid:     return "drop.circle"
         case .rays:       return "rays"
         case .sphere:     return "circle.hexagongrid"
+        case .journey:    return "iphone.gen3"
+        case .agentStates: return "brain"
+        case .waveform:   return "waveform"
+        case .edgeGlow:   return "iphone.gen3.radiowaves.left.and.right"
+        case .caption:    return "text.bubble"
         }
     }
 
@@ -121,6 +142,16 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "Light streaks: a layerEffect that samples the ring along the line back to the centre and accumulates — a radial blur, added. Gives the ring god-rays. Over Bloom it’s a sun; over Sparks it’s a fire."
         case .sphere:
             return "The After Effects gradient-sphere recipe as one shader: a small gradient shape, box-blurred, pushed around by turbulent displace, wrapped by a lens into a sphere with a thin bright rim. Add Bloom from the post stack for his Deep Glow. Every stage has his controls."
+        case .journey:
+            return "Tap the Nexus tab. The pod grows into a chat sheet; the ring becomes the input’s voice button; a second tap takes it full screen, voice only, the ring as the hero with the edge glowing. Tap the stage to advance, or let it cycle. Every stage is Liquid Glass on a spring."
+        case .agentStates:
+            return "The four things an agent is doing — idle, listening, thinking, speaking — as four motions on the same pod, with the transitions between them. Idle breathes; listening opens and follows you; thinking orbits; speaking pulses with the voice. Tap to advance."
+        case .waveform:
+            return "Voice as a waveform: bars, a line, or a ring of bars around the pod, driven by the spectrum (or a synthetic voice when the mic is off). The chat + voice interface needs one of these next to the ring."
+        case .edgeGlow:
+            return "The iOS 18 Siri signature: a glow that runs round the screen’s edge in the palette, breathing with the voice. The full-screen voice interface probably wants this with the ring in the middle, and it’s a blurred stroke — cheap."
+        case .caption:
+            return "The transcript: words arriving as the agent speaks — fading, blurring in, or typed — with a glow in the palette. The voice interface’s text, to go with Edge Glow and the hero ring."
         }
     }
 
@@ -133,6 +164,18 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         default: return false
         }
     }
+
+    /// Drawn on a phone-shaped canvas rather than a disc: the flows,
+    /// which are about the whole screen.
+    public var usesPhoneCanvas: Bool {
+        switch self {
+        case .journey, .agentStates, .waveform, .edgeGlow, .caption: return true
+        default: return false
+        }
+    }
+
+    /// Advances through stages on tap — see `LabState.advance()`.
+    public var isTappable: Bool { self == .journey || self == .agentStates }
 
     /// The experiment's own knobs, beyond the shared ones. The panel
     /// builds a slider per entry; the experiment reads them back by id
@@ -228,6 +271,50 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("strength", "Strength", 0...3, 1, "How much light the streaks add."),
             .init("decay", "Decay", 0.5...1, 0.92, "How quickly a streak fades along its length."),
             .init("twist", "Twist", -1...1, 0, "Curves the streaks. 0 is straight out."),
+        ]
+        case .journey: return [
+            .init("hold", "Hold", 1...8, 3, "Seconds per stage when cycling.", "%.1f s"),
+            .init("auto", "Auto Cycle", 0...1, 1, "1 cycles on the clock; 0 only advances on tap.", "%.0f"),
+            .init("spring", "Spring", 0.2...1.2, 0.5, "Response — lower is snappier."),
+            .init("bounce", "Bounce", 0...1, 0.15, "Damping headroom."),
+            .init("sheet", "Sheet Height", 0.4...0.95, 0.72, "The chat sheet, as a fraction of the screen."),
+            .init("role", "Ring Role", 0...2, 2, "In chat: 0 hero above messages, 1 avatar on replies, 2 the input’s voice button.", "%.0f"),
+            .init("hero", "Hero Size", 0.3...0.9, 0.55, "The ring in the voice stage, as a fraction of screen width."),
+            .init("glow", "Edge Glow", 0...1, 0.7, "Edge glow in the voice stage."),
+            .init("dim", "Dim", 0...1, 0.6, "How much the app dims behind the sheet."),
+        ]
+        case .agentStates: return [
+            .init("hold", "Hold", 0.5...8, 2.5, "Seconds per state when cycling.", "%.1f s"),
+            .init("auto", "Auto Cycle", 0...1, 1, "1 cycles; 0 only advances on tap.", "%.0f"),
+            .init("breath", "Idle Breath", 0...0.2, 0.05, "Idle scale swing."),
+            .init("open", "Listen Open", 0...0.6, 0.25, "How much the ring opens when listening."),
+            .init("orbit", "Think Orbit", 0.5...4, 1.6, "Thinking comet speed."),
+            .init("pulse", "Speak Pulse", 0...0.5, 0.2, "Speaking scale swing per syllable."),
+            .init("spring", "Spring", 0.2...1.2, 0.45, "Transition response."),
+        ]
+        case .waveform: return [
+            .init("style", "Style", 0...2, 0, "0 bars, 1 line, 2 ring of bars round the pod.", "%.0f"),
+            .init("bars", "Bars", 8...96, 32, "Segments.", "%.0f"),
+            .init("height", "Height", 0.1...1, 0.5, "Peak height as a fraction of the area."),
+            .init("thickness", "Thickness", 1...12, 4, "Bar or line width, points.", "%.0f pt"),
+            .init("smooth", "Smoothing", 0...1, 0.5, "How much neighbours share energy."),
+            .init("mirror", "Mirror", 0...1, 1, "Symmetric about the middle.", "%.0f"),
+            .init("synth", "Synthetic Voice", 0...1, 0.6, "Fake speech energy when the mic is off."),
+        ]
+        case .edgeGlow: return [
+            .init("width", "Width", 2...80, 24, "Glow band, points.", "%.0f pt"),
+            .init("blur", "Blur", 0...60, 22, "Softness, points.", "%.0f pt"),
+            .init("breathe", "Breathe", 0...1, 0.4, "Idle pulsing."),
+            .init("rotate", "Rotate", -1...1, 0.3, "The palette runs round the edge."),
+            .init("inset", "Inset", 0...40, 0, "Distance in from the edge.", "%.0f pt"),
+            .init("ringSize", "Hero Ring", 0...0.9, 0.5, "A ring in the middle, as a fraction of width. 0 hides it."),
+        ]
+        case .caption: return [
+            .init("style", "Style", 0...2, 1, "0 fade, 1 blur in, 2 typewriter.", "%.0f"),
+            .init("rate", "Words / s", 1...12, 4, "Arrival rate.", "%.0f"),
+            .init("size", "Size", 14...44, 24, "Type size.", "%.0f pt"),
+            .init("glow", "Glow", 0...1, 0.4, "Glow behind the newest words."),
+            .init("hold", "Hold", 1...10, 4, "Seconds a sentence stays before the next.", "%.1f s"),
         ]
         case .sphere: return [
             .init("shape", "Shape", 0...2, 0, "0 star, 1 blob, 2 ring.", "%.0f"),
@@ -385,8 +472,19 @@ public final class LabState: ObservableObject {
     @Published public var glyph: String = ""
     /// Continuous hue rotation of the palette, degrees per second.
     @Published public var hueDrift: Double = 0
+    /// Manual stage for the tappable flows: how many taps so far. The
+    /// flow adds this to its clock-driven stage, so a tap always moves
+    /// it on from wherever it is.
+    @Published public var taps: Int = 0
+    @Published public var lastTap: Date = .distantPast
 
     public init() {}
+
+    /// "What happens when I tap on the Nexus tab?" — answered by tapping.
+    public func advance() {
+        taps += 1
+        lastTap = Date()
+    }
 
     public func togglePost(_ effect: LabPostEffect) {
         if let i = post.firstIndex(of: effect) { post.remove(at: i) } else { post.append(effect) }
@@ -438,9 +536,13 @@ public struct LabFrame {
     public var bands: LabAudioBands
     /// An SF Symbol to draw inside, or `nil`.
     public var glyph: String?
+    /// Taps so far on a tappable flow, and when the last one was.
+    public var taps: Int = 0
+    public var sinceTap: Double = .infinity
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
-                params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil) {
+                params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
+                taps: Int = 0, sinceTap: Double = .infinity) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -450,6 +552,8 @@ public struct LabFrame {
         self.params = params
         self.bands = bands
         self.glyph = glyph
+        self.taps = taps
+        self.sinceTap = sinceTap
     }
 
     /// A knob's value, or its declared default when the frame was built

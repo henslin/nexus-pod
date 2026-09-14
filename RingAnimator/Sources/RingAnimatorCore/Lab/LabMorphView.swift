@@ -54,7 +54,7 @@ struct LabMorphView: View {
             content
         }
         .frame(width: size.width, height: size.height)
-        .modifier(GlassShape(cornerRadius: cornerRadius, glass: config.glass))
+        .modifier(LabGlassShape(cornerRadius: cornerRadius, glass: config.glass))
         .animation(spring, value: stage)
         .frame(width: frame.diameter, height: frame.diameter)
     }
@@ -109,22 +109,6 @@ struct LabMorphView: View {
                 Spacer(minLength: 0)
             }
             .padding(20)
-        }
-    }
-}
-
-/// `.glassEffect` behind a `#available` gate, as a modifier so the call
-/// site stays one line. Both platforms named — see `TabBarPreview`'s
-/// header for why an unlisted platform is not "always available".
-private struct GlassShape: ViewModifier {
-    let cornerRadius: CGFloat
-    let glass: Glass
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            content.glassEffect(glass, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        } else {
-            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
     }
 }
