@@ -495,6 +495,8 @@ public struct RingView: View {
     @ViewBuilder
     private func continuousContent(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         switch config.animationType {
+        case .solid:
+            solidRing(elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         case .wave:
             waveRing(phase: phase, elapsed: elapsed, voiceLevel: voiceLevel, scale: scale)
         case .chasing:
@@ -867,6 +869,21 @@ public struct RingView: View {
                 )
             },
             color: all[0],
+            boost: voiceLevel,
+            scale: scale
+        )
+    }
+
+    /// The ring at rest: one steady stroke in the primary colour, drawn
+    /// exactly as the animated variants draw theirs so it matches them in
+    /// size, stroke and glow. Voice still lifts the glow, because a steady
+    /// ring that ignored the room would read as dead rather than at rest.
+    private func solidRing(elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
+        let (p, _) = colors(elapsed: elapsed)
+        return glow(
+            Circle()
+                .stroke(p, style: StrokeStyle(lineWidth: lw(scale), lineCap: .round)),
+            color: p,
             boost: voiceLevel,
             scale: scale
         )
@@ -2243,6 +2260,9 @@ public struct RingView: View {
         let floorBrightness = 0.06
 
         switch config.animationType {
+        case .solid:
+            // Every diode lit, steady, in its own colour.
+            return (ownColor, 1)
         case .wave:
             // A single crest travelling around fixed, individually-colored
             // pixels — the hardware reading of a sweeping gradient.

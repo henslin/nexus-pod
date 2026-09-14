@@ -54,6 +54,11 @@ public enum CodeGenerators {
 
         let animationBody: String
         switch config.animationType {
+        case .solid:
+            animationBody = """
+Circle()
+    .stroke(Color(hex: "\(primaryHex)"), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+"""
         case .wave:
             animationBody = """
 Circle()
@@ -629,6 +634,17 @@ extension Color {
 
         let animationBody: String
         switch config.animationType {
+        case .solid:
+            animationBody = """
+drawArc(
+    color = p,
+    startAngle = 0f,
+    sweepAngle = 360f,
+    useCenter = false,
+    style = Stroke(width = lineWidthPx, cap = StrokeCap.Round),
+    blendMode = blendMode
+)
+"""
         case .wave:
             animationBody = """
 rotate(degrees = Math.toDegrees(phase).toFloat()) {
@@ -1183,6 +1199,15 @@ fun ThinkingRingView(
 
         let drawBody: String
         switch config.animationType {
+        case .solid:
+            drawBody = """
+ctx.beginPath();
+ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+ctx.strokeStyle = p;
+ctx.lineWidth = lineWidth;
+ctx.lineCap = 'round';
+ctx.stroke();
+"""
         case .wave:
             drawBody = """
 const grad = conicGradient(cx, cy, p, s);

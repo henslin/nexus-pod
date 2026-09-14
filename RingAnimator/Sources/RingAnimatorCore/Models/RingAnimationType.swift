@@ -8,6 +8,13 @@ import Foundation
 /// enum with no associated values, so this is a purely additive, always-safe
 /// conformance.
 public enum RingAnimationType: String, CaseIterable, Identifiable, Codable, Sendable {
+    /// A steady ring in the primary colour. First on purpose: it is the
+    /// simplest thing the ring can be, and the resting point everything
+    /// else departs from. Exists as an *animation* type (rather than only
+    /// the cue library's `.solid` style) so it renders through the same
+    /// path as its neighbours — same stroke, same size, same glow — and so
+    /// the gallery's first card is the ring at rest. (Chris, 2026-09-14.)
+    case solid = "Solid"
     case wave = "Wave"
     case chasing = "Chasing"
     case alternating = "Alternating"
@@ -44,6 +51,8 @@ public enum RingAnimationType: String, CaseIterable, Identifiable, Codable, Send
 
     public var summary: String {
         switch self {
+        case .solid:
+            return "A steady ring in the primary colour. Nothing moves; the resting point everything else departs from."
         case .wave:
             return "A smooth gradient sweeps continuously around the ring."
         case .chasing:

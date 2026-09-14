@@ -22,6 +22,11 @@ extension CodeGenerators {
     /// them into the emitted script.
     static func blenderAnimationBody(_ type: RingAnimationType) -> String {
         switch type {
+        case .solid:
+            return """
+            _ring_curve("Nexus_Ring", RADIUS, TUBE, PRIMARY, glow_strength)
+            """
+
         case .wave:
             return """
             # A conic gradient doesn't exist natively on a Blender curve,

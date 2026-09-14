@@ -68,6 +68,12 @@ extension CodeGenerators {
 
     private static func swiftDiodeField(_ type: RingAnimationType) -> String {
         switch type {
+        case .solid:
+            return """
+            // Every diode lit, steady, in its own colour.
+            return (ownColor, 1)
+            """
+
         case .wave:
             return """
             // A single crest travelling around fixed, individually-colored
