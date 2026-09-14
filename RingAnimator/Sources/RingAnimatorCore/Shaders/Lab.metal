@@ -500,3 +500,173 @@ static float lab_star_radius(float theta, float points) {
     float a = mask;
     return half4(half3(lab_linear_to_srgb(lin)) * half(a), half(a));
 }
+
+// MARK: - Kaleido (layerEffect)
+//
+// Folds the angle around `center` into `segments` mirrored wedges and
+// samples the layer there. Anything under it becomes a mandala; the
+// ring becomes a flower. `rotate` spins the fold.
+
+[[ stitchable ]] half4 labKaleido(float2 position, SwiftUI::Layer layer,
+                                  float2 center, float segments, float rotate, float mixAmount)
+{
+    float2 d = position - center;
+    float r = length(d);
+    float a = atan2(d.y, d.x) + rotate;
+    float seg = 2.0f * M_PI_F / max(segments, 1.0f);
+    float folded = fmod(fmod(a, seg) + seg, seg);
+    if (folded > seg * 0.5f) folded = seg - folded;
+    float2 sp = center + float2(cos(folded), sin(folded)) * r;
+    half4 k = layer.sample(sp);
+    half4 src = layer.sample(position);
+    return mix(src, k, half(mixAmount));
+}
+
+// MARK: - Dots (layerEffect)
+//
+// An LED matrix: the layer quantised to cells, each drawn as a round dot
+// of the cell's centre colour. Bright cells get bigger dots, which is
+// what a real matrix looks like through a diffuser. `cell` is in pixels.
+
+[[ stitchable ]] half4 labDots(float2 position, SwiftUI::Layer layer,
+                               float cell, float roundness, float gain)
+{
+    float2 c = floor(position / cell) * cell + cell * 0.5f;
+    half4 s = layer.sample(c);
+    float2 d = (position - c) / (cell * 0.5f);
+    float lum = dot(float3(s.rgb), float3(0.2126f, 0.7152f, 0.0722f));
+    float radius = mix(0.95f, 0.35f + 0.6f * lum, roundness);
+    float dist = length(d);
+    float dot = 1.0f - smoothstep(radius - 0.12f, radius + 0.05f, dist);
+    half4 out = s * half(dot * gain);
+    return half4(out.rgb, min(half(1), out.a));
+}
+
+// MARK: - Grain (layerEffect)
+//
+// Film: fine noise added, a vignette darkening the corners, optional
+// desaturation. Everything looks shot rather than rendered.
+
+[[ stitchable ]] half4 labGrain(float2 position, SwiftUI::Layer layer,
+                                float2 size, float time, float amount, float vignette, float desat)
+{
+    half4 s = layer.sample(position);
+    float n = lab_hash(position + fract(time * 13.7f) * 100.0f) - 0.5f;
+    float2 uv = position / size * 2.0f - 1.0f;
+    float vig = 1.0f - vignette * smoothstep(0.5f, 1.4f, length(uv));
+    half lum = dot(s.rgb, half3(0.2126h, 0.7152h, 0.0722h));
+    half3 rgb = mix(s.rgb, half3(lum), half(desat));
+    rgb = rgb * half(vig) + half(n * amount) * s.a;
+    return half4(rgb, s.a);
+}
+
+// MARK: - Tunnel (colorEffect)
+//
+// Rings flying at the viewer: the log of the radius, scrolled by time,
+// so the rings accelerate toward the edge the way a tunnel does. Colour
+// from the angle through the palette, twisted with depth.
+
+[[ stitchable ]] half4 labTunnel(float2 position, half4 color,
+                                 float2 size, float time, float intensity, float audio,
+                                 device const float *knobs, int knobCount,
+                                 device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float r = length(uv);
+    float mask = 1.0f - smoothstep(0.97f, 1.0f, r);
+    if (mask <= 0.0f || r < 0.001f) return half4(0);
+    float kRings = knobs[0], kSpeed = knobs[1], kTwist = knobs[2], kGlow = knobs[3], kDepth = knobs[4];
+    float depth = -log(max(r, 0.001f));               // 0 at the rim, large at the centre
+    float a = atan2(uv.y, uv.x);
+    float scroll = depth * kRings - time * kSpeed * (1.0f + audio * 0.8f);
+    float ring = 0.5f + 0.5f * cos(scroll * 2.0f * M_PI_F);
+    ring = pow(ring, 2.0f + kGlow * 6.0f);
+    float t = a / (2.0f * M_PI_F) + depth * kTwist * 0.15f + time * 0.03f;
+    float3 c = lab_palette_linear(t, lab, labCount);
+    float fade = exp(-depth * kDepth);                 // the far end goes dark
+    float3 lin = c * ring * fade * (0.8f + intensity * 0.6f) * (1.0f + audio * 0.5f);
+    return half4(half3(lab_linear_to_srgb(lin)) * half(mask), half(mask));
+}
+
+// MARK: - Ink (compute) — feedback simulation
+//
+// A fluid-ish trail buffer: each step, every texel takes the previous
+// frame's colour from a little way *upstream* along a curl-noise flow
+// (advection), fades it, and adds fresh ink from a few emitters orbiting
+// the centre. The trails persist because the buffer does — this is the
+// one thing a SwiftUI shader cannot do, since it never sees the previous
+// frame. Ping-pong between two textures; the view presents the newest.
+//
+// `p` layout: time, dt, decay, flowScale, flowSpeed, injectRadius,
+// emitterCount, audio, orbitRadius, swirl, then 3 floats per palette
+// colour (linear rgb, up to 8).
+
+struct InkParams {
+    float time, dt, decay, flowScale, flowSpeed, injectRadius, emitters, audio, orbit, swirl;
+    float3 colors[8];
+};
+
+static float2 ink_curl(float2 p, float t) {
+    const float e = 0.01f;
+    float n1 = lab_fbm_n(p + float2(0, e) + t, 3), n2 = lab_fbm_n(p - float2(0, e) + t, 3);
+    float n3 = lab_fbm_n(p + float2(e, 0) + t, 3), n4 = lab_fbm_n(p - float2(e, 0) + t, 3);
+    return float2((n1 - n2), -(n3 - n4)) / (2.0f * e);
+}
+
+kernel void inkStep(texture2d<half, access::sample> prev [[texture(0)]],
+                    texture2d<half, access::write> next [[texture(1)]],
+                    constant InkParams &p [[buffer(0)]],
+                    uint2 gid [[thread_position_in_grid]])
+{
+    uint w = next.get_width(), h = next.get_height();
+    if (gid.x >= w || gid.y >= h) return;
+    float2 uv = (float2(gid) + 0.5f) / float2(w, h);
+    float2 c = uv * 2.0f - 1.0f;
+    float aspect = float(w) / float(h);
+    c.x *= aspect;
+
+    // Advect: sample upstream along the flow plus a swirl about the centre.
+    float2 flow = ink_curl(c * p.flowScale, p.time * 0.1f) * p.flowSpeed;
+    float2 tangent = float2(-c.y, c.x);
+    flow += tangent * p.swirl;
+    float2 src = uv - flow * p.dt / float2(aspect, 1.0f);
+    constexpr sampler s(address::clamp_to_edge, filter::linear);
+    half4 prevC = prev.sample(s, src);
+    half4 col = prevC * half(p.decay);
+
+    // Inject: emitters on an orbit, each in its palette colour.
+    int n = clamp(int(p.emitters), 1, 8);
+    for (int i = 0; i < n; i++) {
+        float ph = float(i) / float(n) * 2.0f * M_PI_F;
+        float rad = p.orbit * (1.0f + p.audio * 0.5f);
+        float2 e = float2(cos(p.time * 0.6f + ph), sin(p.time * 0.45f + ph * 1.3f)) * rad;
+        float d = length(c - e);
+        float ink = exp(-d * d / (p.injectRadius * p.injectRadius)) * (0.6f + p.audio);
+        col.rgb += half3(p.colors[i]) * half(ink * p.dt * 18.0f);
+        col.a = max(col.a, half(min(1.0f, ink * 2.0f)));
+    }
+    col.a = max(col.a * half(p.decay), half(0));
+    next.write(min(col, half4(1)), gid);
+}
+
+// Presenting the ink buffer: a full-screen triangle pair sampling the
+// newest texture, premultiplied so it composites over the stage.
+struct InkVertexOut { float4 position [[position]]; float2 uv; };
+
+vertex InkVertexOut inkVertex(uint vid [[vertex_id]]) {
+    float2 quad[6] = { float2(-1, -1), float2(1, -1), float2(-1, 1), float2(-1, 1), float2(1, -1), float2(1, 1) };
+    InkVertexOut o;
+    o.position = float4(quad[vid], 0, 1);
+    o.uv = float2(quad[vid].x * 0.5f + 0.5f, 0.5f - quad[vid].y * 0.5f);
+    return o;
+}
+
+fragment half4 inkFragment(InkVertexOut in [[stage_in]], texture2d<half> tex [[texture(0)]]) {
+    constexpr sampler s(address::clamp_to_edge, filter::linear);
+    half4 c = tex.sample(s, in.uv);
+    // A disc: the buffer is square, the pod is round.
+    float2 d = in.uv * 2.0f - 1.0f;
+    half mask = half(1.0f - smoothstep(0.96f, 1.0f, length(d)));
+    half a = min(half(1), max(c.a, max(c.r, max(c.g, c.b)))) * mask;
+    return half4(c.rgb * mask, a);
+}

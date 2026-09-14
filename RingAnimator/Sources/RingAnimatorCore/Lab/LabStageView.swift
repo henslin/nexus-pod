@@ -100,7 +100,9 @@ public struct LabStageView: View {
                         bands: bands,
                         glyph: lab.glyph.isEmpty ? nil : lab.glyph,
                         taps: lab.taps,
-                        sinceTap: date.timeIntervalSince(lab.lastTap))
+                        sinceTap: date.timeIntervalSince(lab.lastTap),
+                        hero: lab.hero,
+                        heroPost: lab.post)
     }
 
     private var stage: some View {
@@ -176,6 +178,18 @@ public struct LabStageView: View {
                 LabSlider(title: "Size", value: $lab.diameter, range: 62...600, format: "%.0f pt")
                 Toggle("Dark Stage", isOn: $lab.darkStage)
                 Toggle("Pod Preview", isOn: $lab.showPod)
+                if lab.experiment.drawsHero {
+                    Picker("Hero", selection: $lab.hero) {
+                        Text("Ring").tag(LabExperiment?.none)
+                        ForEach(LabExperiment.allCases.filter(\.canBeHero)) { e in
+                            Text(e.name).tag(LabExperiment?.some(e))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    Text("What this flow draws where the ring goes. Any animation lab, with the post stack.")
+                        .font(.caption2).foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Divider()
                 sectionTitle("Colour")
@@ -481,6 +495,20 @@ public struct LabExperimentView: View {
             LabRaysView(frame: frame) { ring }
         case .sphere:
             LabSphereView(frame: frame)
+        case .tunnel:
+            LabTunnelView(frame: frame)
+        case .constellation:
+            LabConstellationView(frame: frame)
+        case .harmonograph:
+            LabHarmonographView(frame: frame)
+        case .ink:
+            LabInkView(frame: frame)
+        case .kaleido:
+            LabKaleidoView(frame: frame) { ring }
+        case .dots:
+            LabDotsView(frame: frame) { ring }
+        case .grain:
+            LabGrainView(frame: frame) { ring }
         case .journey:
             LabJourneyView(frame: frame, config: config)
         case .agentStates:

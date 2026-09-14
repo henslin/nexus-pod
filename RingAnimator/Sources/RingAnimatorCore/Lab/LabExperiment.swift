@@ -29,6 +29,14 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case liquid
     case rays
     case sphere
+    case tunnel
+    case constellation
+    case harmonograph
+    case ink
+    // Post effects with no base of their own.
+    case kaleido
+    case dots
+    case grain
     // Flows — the tap-on-Nexus question, on a phone canvas.
     case journey
     case agentStates
@@ -54,6 +62,13 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .liquid:     return "Liquid"
         case .rays:       return "Rays"
         case .sphere:     return "Sphere"
+        case .tunnel:     return "Tunnel"
+        case .constellation: return "Constellation"
+        case .harmonograph: return "Harmonograph"
+        case .ink:        return "Ink"
+        case .kaleido:    return "Kaleido"
+        case .dots:       return "Dots"
+        case .grain:      return "Grain"
         case .journey:    return "Journey"
         case .agentStates: return "Agent States"
         case .waveform:   return "Waveform"
@@ -80,6 +95,13 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .liquid:     return "Metal · colorEffect"
         case .rays:       return "Metal · layerEffect"
         case .sphere:     return "Metal · colorEffect"
+        case .tunnel:     return "Metal · colorEffect"
+        case .constellation: return "SwiftUI · Canvas"
+        case .harmonograph: return "SwiftUI · Canvas"
+        case .ink:        return "Metal · compute + MTKView"
+        case .kaleido:    return "Metal · layerEffect"
+        case .dots:       return "Metal · layerEffect"
+        case .grain:      return "Metal · layerEffect"
         case .journey:    return "SwiftUI · Liquid Glass + springs"
         case .agentStates: return "SwiftUI · state machine"
         case .waveform:   return "SwiftUI · Canvas"
@@ -104,6 +126,13 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .liquid:     return "drop.circle"
         case .rays:       return "rays"
         case .sphere:     return "circle.hexagongrid"
+        case .tunnel:     return "circle.circle.fill"
+        case .constellation: return "point.3.connected.trianglepath.dotted"
+        case .harmonograph: return "scribble.variable"
+        case .ink:        return "drop.fill"
+        case .kaleido:    return "hexagon"
+        case .dots:       return "circle.grid.3x3.fill"
+        case .grain:      return "film"
         case .journey:    return "iphone.gen3"
         case .agentStates: return "brain"
         case .waveform:   return "waveform"
@@ -142,6 +171,20 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "Light streaks: a layerEffect that samples the ring along the line back to the centre and accumulates — a radial blur, added. Gives the ring god-rays. Over Bloom it’s a sun; over Sparks it’s a fire."
         case .sphere:
             return "The After Effects gradient-sphere recipe as one shader: a small gradient shape, box-blurred, pushed around by turbulent displace, wrapped by a lens into a sphere with a thin bright rim. Add Bloom from the post stack for his Deep Glow. Every stage has his controls."
+        case .tunnel:
+            return "Rings flying at you, the log of the radius scrolled by time so they accelerate toward the edge. Colour from the angle through the palette, twisted with depth. Warp speed, and cheap."
+        case .constellation:
+            return "Points drifting in the disc, joined by lines when they come close — the network look. Lines fade with distance so the graph breathes. Audio pulls the points apart and the lines snap."
+        case .harmonograph:
+            return "A pendulum drawing: a decaying Lissajous curve traced as a single line in the palette. Two frequencies and a phase make an endless family of figures; audio detunes them. The most ‘drawn by hand’ of the set."
+        case .ink:
+            return "Real feedback: a buffer that keeps the last frame, advected along a curl-noise flow and faded, with fresh ink from emitters orbiting the centre. Trails persist. This is the one thing a SwiftUI shader can’t do — it needs Metal compute and its own view."
+        case .kaleido:
+            return "Post: the angle folded into mirrored wedges. Anything under it becomes a mandala; the ring becomes a flower. Mostly a post effect over Aurora or Ink."
+        case .dots:
+            return "Post: an LED matrix. The image quantised to cells drawn as round dots that grow with brightness — what a matrix looks like through a diffuser. If the hardware ever gets a dot display, this is the preview."
+        case .grain:
+            return "Post: film grain, a vignette, optional desaturation. Everything looks shot rather than rendered. Subtle amounts are the ‘expensive’ look; the vignette alone is worth having."
         case .journey:
             return "Tap the Nexus tab. The pod grows into a chat sheet; the ring becomes the input’s voice button; a second tap takes it full screen, voice only, the ring as the hero with the edge glowing. Tap the stage to advance, or let it cycle. Every stage is Liquid Glass on a spring."
         case .agentStates:
@@ -160,10 +203,23 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// underneath for those, so the comparison is "the ring, plus this".
     public var decoratesRing: Bool {
         switch self {
-        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays: return true
+        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays, .kaleido, .dots, .grain: return true
         default: return false
         }
     }
+
+    /// Can stand in for the ring inside the flows — see `LabState.hero`.
+    /// The bases that draw a disc on their own.
+    public var canBeHero: Bool {
+        switch self {
+        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks: return true
+        default: return false
+        }
+    }
+
+    /// Whether the experiment draws the ring somewhere — so the Hero
+    /// picker applies.
+    public var drawsHero: Bool { usesPhoneCanvas || self == .morph }
 
     /// Drawn on a phone-shaped canvas rather than a disc: the flows,
     /// which are about the whole screen.
@@ -271,6 +327,53 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("strength", "Strength", 0...3, 1, "How much light the streaks add."),
             .init("decay", "Decay", 0.5...1, 0.92, "How quickly a streak fades along its length."),
             .init("twist", "Twist", -1...1, 0, "Curves the streaks. 0 is straight out."),
+        ]
+        case .tunnel: return [
+            .init("rings", "Rings", 1...12, 4, "Rings per depth unit.", "%.0f"),
+            .init("speed", "Speed", 0...4, 1, "How fast they fly."),
+            .init("twist", "Twist", -2...2, 0.6, "Colour twists with depth."),
+            .init("glow", "Ring Glow", 0...1, 0.4, "Sharp rings at 0, soft bands at 1."),
+            .init("depth", "Depth Fade", 0...2, 0.5, "How fast the far end goes dark."),
+        ]
+        case .constellation: return [
+            .init("count", "Points", 10...300, 80, "Points.", "%.0f"),
+            .init("link", "Link Distance", 0.05...0.5, 0.2, "How close two points must be to join, as a fraction of the disc."),
+            .init("drift", "Drift", 0...2, 0.6, "How fast they wander."),
+            .init("size", "Point Size", 1...8, 3, "Points.", "%.0f pt"),
+            .init("lineWidth", "Line Width", 0.5...4, 1, "Points.", "%.1f pt"),
+        ]
+        case .harmonograph: return [
+            .init("fx", "Frequency X", 1...9, 3, "Pendulum X.", "%.1f"),
+            .init("fy", "Frequency Y", 1...9, 2, "Pendulum Y.", "%.1f"),
+            .init("phase", "Phase", 0...6.28, 1.57, "Offset between them."),
+            .init("decay", "Decay", 0...1, 0.3, "How fast the figure shrinks along its length."),
+            .init("length", "Length", 0.5...20, 8, "How much curve is drawn."),
+            .init("lineWidth", "Line Width", 0.5...6, 1.5, "Points.", "%.1f pt"),
+            .init("detune", "Detune", 0...0.5, 0.05, "Slow drift of the frequencies, so the figure evolves."),
+        ]
+        case .ink: return [
+            .init("decay", "Persistence", 0.9...0.999, 0.985, "How much of the last frame survives each step."),
+            .init("flowScale", "Flow Scale", 0.3...4, 1.2, "Size of the eddies."),
+            .init("flowSpeed", "Flow Speed", 0...3, 0.8, "How fast the ink is carried."),
+            .init("swirl", "Swirl", -2...2, 0.3, "Rotation about the centre."),
+            .init("emitters", "Emitters", 1...8, 3, "Ink sources, one per palette colour.", "%.0f"),
+            .init("radius", "Ink Radius", 0.02...0.3, 0.08, "Size of each source."),
+            .init("orbit", "Orbit", 0...0.9, 0.45, "How far out the sources circle."),
+        ]
+        case .kaleido: return [
+            .init("segments", "Segments", 2...24, 6, "Mirrored wedges.", "%.0f"),
+            .init("rotate", "Rotate", -2...2, 0.2, "Turns per second-ish."),
+            .init("mix", "Mix", 0...1, 1, "0 leaves the source; 1 is fully folded."),
+        ]
+        case .dots: return [
+            .init("cell", "Cell", 3...40, 10, "Matrix pitch, points.", "%.0f pt"),
+            .init("roundness", "Brightness Size", 0...1, 0.7, "Dots grow with brightness."),
+            .init("gain", "Gain", 0.5...3, 1.4, "Dot brightness."),
+        ]
+        case .grain: return [
+            .init("amount", "Grain", 0...0.5, 0.08, "Noise amplitude."),
+            .init("vignette", "Vignette", 0...1, 0.5, "Corner darkening."),
+            .init("desat", "Desaturate", 0...1, 0, "Toward monochrome."),
         ]
         case .journey: return [
             .init("hold", "Hold", 1...8, 3, "Seconds per stage when cycling.", "%.1f s"),
@@ -403,7 +506,7 @@ public enum LabPalette: String, CaseIterable, Identifiable, Sendable {
 /// demos" into a design space — Aurora with Bloom and a little
 /// Chromatic is a different thing from any of the three alone.
 public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
-    case bloom, rays, ripple, refraction, chromatic
+    case bloom, rays, ripple, refraction, chromatic, kaleido, dots, grain
     public var id: String { rawValue }
     /// The experiment whose knobs this effect uses.
     public var experiment: LabExperiment {
@@ -413,6 +516,9 @@ public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
         case .ripple: return .ripple
         case .refraction: return .refraction
         case .chromatic: return .chromatic
+        case .kaleido: return .kaleido
+        case .dots: return .dots
+        case .grain: return .grain
         }
     }
 }
@@ -472,6 +578,11 @@ public final class LabState: ObservableObject {
     @Published public var glyph: String = ""
     /// Continuous hue rotation of the palette, degrees per second.
     @Published public var hueDrift: Double = 0
+    /// What the flows draw where the ring goes — the ring itself, or any
+    /// of the animation labs (with the post stack). Chris, 2026-09-14:
+    /// "the option to use these new animation labs within the agent
+    /// screens (instead of just the ring)".
+    @Published public var hero: LabExperiment? = nil
     /// Manual stage for the tappable flows: how many taps so far. The
     /// flow adds this to its clock-driven stage, so a tap always moves
     /// it on from wherever it is.
@@ -539,10 +650,15 @@ public struct LabFrame {
     /// Taps so far on a tappable flow, and when the last one was.
     public var taps: Int = 0
     public var sinceTap: Double = .infinity
+    /// What stands in for the ring inside a flow — `nil` is the ring.
+    public var hero: LabExperiment? = nil
+    /// Post effects over the hero.
+    public var heroPost: [LabPostEffect] = []
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
                 params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
-                taps: Int = 0, sinceTap: Double = .infinity) {
+                taps: Int = 0, sinceTap: Double = .infinity,
+                hero: LabExperiment? = nil, heroPost: [LabPostEffect] = []) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -554,6 +670,8 @@ public struct LabFrame {
         self.glyph = glyph
         self.taps = taps
         self.sinceTap = sinceTap
+        self.hero = hero
+        self.heroPost = heroPost
     }
 
     /// A knob's value, or its declared default when the frame was built

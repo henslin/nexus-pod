@@ -101,8 +101,7 @@ struct LabJourneyView: View {
 
                 // The ring, one view, moving between its three homes.
                 let ringFrame = ringFrame(stage, size)
-                RingView(config: config, diameter: ringFrame.width * 0.55, overrideElapsed: frame.time)
-                    .frame(width: ringFrame.width, height: ringFrame.height)
+                LabHeroView(frame: frame, config: config, diameter: ringFrame.width)
                     .position(x: ringFrame.midX, y: ringFrame.midY)
                     .animation(spring, value: stage)
             }
@@ -268,8 +267,7 @@ struct LabAgentStatesView: View {
                     .frame(width: d * 1.35 * (1 + voice * 0.25), height: d * 1.35 * (1 + voice * 0.25))
                     .blur(radius: 8)
                     .animation(spring, value: stage)
-                RingView(config: config, diameter: d, overrideElapsed: t)
-                    .frame(width: d * 1.3, height: d * 1.3)
+                LabHeroView(frame: frame, config: config, diameter: d * 1.3)
                     .scaleEffect(scale)
                     .animation(spring, value: stage)
                 // Comet
@@ -329,8 +327,7 @@ struct LabWaveformView: View {
             ZStack {
                 Color.black.opacity(0.75)
                 if style == 2 {
-                    RingView(config: config, diameter: size.width * 0.3, overrideElapsed: frame.time)
-                        .frame(width: size.width * 0.4, height: size.width * 0.4)
+                    LabHeroView(frame: frame, config: config, diameter: size.width * 0.4)
                 }
                 Canvas { ctx, area in
                     let c = CGPoint(x: area.width / 2, y: area.height / 2)
@@ -464,8 +461,7 @@ struct LabEdgeGlowView: View {
                                   inset: frame.p("inset", .edgeGlow))
                 let hero = frame.p("ringSize", .edgeGlow)
                 if hero > 0 {
-                    RingView(config: config, diameter: size.width * hero, overrideElapsed: frame.time)
-                        .frame(width: size.width * hero * 1.3, height: size.width * hero * 1.3)
+                    LabHeroView(frame: frame, config: config, diameter: size.width * hero * 1.3)
                 }
             }
         }
@@ -551,8 +547,7 @@ struct LabCaptionView: View {
                 Color.black.opacity(0.85)
                 VStack(spacing: 24) {
                     Spacer()
-                    RingView(config: config, diameter: size.width * 0.3, overrideElapsed: frame.time)
-                        .frame(width: size.width * 0.4, height: size.width * 0.4)
+                    LabHeroView(frame: frame, config: config, diameter: size.width * 0.4)
                     LabCaptionWords(frame: frame, width: size.width - 48,
                                     size: frame.p("size", .caption),
                                     style: Int(frame.p("style", .caption)),

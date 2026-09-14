@@ -458,7 +458,221 @@ struct LabPostStack<Base: View>: View {
         case .ripple:     wrapped = AnyView(LabRippleView(frame: frame) { view })
         case .refraction: wrapped = AnyView(LabRefractionView(frame: frame) { view })
         case .chromatic:  wrapped = AnyView(LabChromaticView(frame: frame) { view })
+        case .kaleido:    wrapped = AnyView(LabKaleidoView(frame: frame) { view })
+        case .dots:       wrapped = AnyView(LabDotsView(frame: frame) { view })
+        case .grain:      wrapped = AnyView(LabGrainView(frame: frame) { view })
         }
         return apply(rest, wrapped)
+    }
+}
+
+// MARK: - Hero
+
+/// What a flow draws where the ring goes: the ring, or any animation
+/// lab (with the post stack) in a disc of the same size. The flows call
+/// this instead of `RingView`, so "use Aurora in the chat sheet" is one
+/// picker rather than a rewrite.
+struct LabHeroView: View {
+    let frame: LabFrame
+    @ObservedObject var config: RingConfig
+    /// The disc's diameter. The ring inside a pod is 34 in 62; a hero
+    /// lab fills the disc, so it's drawn at the pod size.
+    let diameter: CGFloat
+
+    var body: some View {
+        if let hero = frame.hero {
+            LabExperimentView(experiment: hero, frame: frame.resized(diameter), config: config, post: frame.heroPost)
+                .frame(width: diameter, height: diameter)
+                .clipShape(Circle())
+        } else {
+            RingView(config: config, diameter: diameter * 0.55, overrideElapsed: frame.time)
+                .frame(width: diameter, height: diameter)
+        }
+    }
+}
+
+// MARK: - Tunnel (Metal · colorEffect)
+
+struct LabTunnelView: View {
+    let frame: LabFrame
+
+    var body: some View {
+        let lab = PerceptualGradient.labTriples(frame.colors)
+        let time = Float(frame.time), intensity = Float(frame.intensity), audio = Float(frame.audio)
+        let knobs = frame.knobs(.tunnel)
+        Rectangle()
+            .fill(Color.white)
+            .frame(width: frame.diameter, height: frame.diameter)
+            .visualEffect { content, proxy in
+                content.colorEffect(
+                    ShaderLibrary.bundle(.module).labTunnel(
+                        .float2(proxy.size), .float(time), .float(intensity), .float(audio),
+                        .floatArray(knobs), .floatArray(lab)
+                    )
+                )
+            }
+    }
+}
+
+// MARK: - Constellation (SwiftUI · Canvas)
+
+struct LabConstellationView: View {
+    let frame: LabFrame
+
+    private struct Point { let a: Double; let b: Double; let fa: Double; let fb: Double; let colorT: Double }
+    private static let points: [Point] = {
+        var g = SeededGenerator(seed: 0xC0FFEE)
+        return (0..<300).map { _ in
+            Point(a: Double.random(in: 0..<(2 * .pi), using: &g), b: Double.random(in: 0..<(2 * .pi), using: &g),
+                  fa: Double.random(in: 0.15...0.5, using: &g), fb: Double.random(in: 0.15...0.5, using: &g),
+                  colorT: Double.random(in: 0..<1, using: &g))
+        }
+    }()
+
+    var body: some View {
+        let count = min(Int(frame.p("count", .constellation)), Self.points.count)
+        let link = frame.p("link", .constellation) * (1 + frame.intensity * 0.5)
+        let drift = frame.p("drift", .constellation)
+        let dot = frame.p("size", .constellation)
+        let lw = frame.p("lineWidth", .constellation)
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 24)
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let R = frame.diameter / 2 * 0.92
+            let t = frame.time * drift
+            let push = 1 + frame.audio * 0.4
+            // Positions: polar, each point circling slowly while its radius
+            // breathes — so they fill the disc. Cartesian Lissajous put
+            // them on a square.
+            let pos: [CGPoint] = Self.points.prefix(count).map { p in
+                let angle = p.a + t * p.fa * 0.4
+                let radius = 0.2 + 0.75 * (0.5 + 0.5 * sin(t * p.fb + p.b))
+                return CGPoint(x: c.x + cos(angle) * radius * R * push, y: c.y + sin(angle) * radius * R * push)
+            }
+            let maxD = link * frame.diameter
+            ctx.blendMode = .plusLighter
+            for i in 0..<pos.count {
+                for j in (i + 1)..<pos.count {
+                    let d = hypot(pos[i].x - pos[j].x, pos[i].y - pos[j].y)
+                    guard d < maxD else { continue }
+                    let alpha = (1 - d / maxD) * 0.8
+                    var path = Path()
+                    path.move(to: pos[i]); path.addLine(to: pos[j])
+                    let color = sweep[Int(Self.points[i].colorT * Double(sweep.count - 1))]
+                    ctx.stroke(path, with: .color(color.opacity(alpha)), lineWidth: lw)
+                }
+            }
+            for (i, p) in pos.enumerated() {
+                let color = sweep[Int(Self.points[i].colorT * Double(sweep.count - 1))]
+                let s = dot * (1 + frame.audio * 0.6)
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - s / 2, y: p.y - s / 2, width: s, height: s)), with: .color(color))
+            }
+        }
+        .frame(width: frame.diameter * 1.3, height: frame.diameter * 1.3)
+    }
+}
+
+// MARK: - Harmonograph (SwiftUI · Canvas)
+
+struct LabHarmonographView: View {
+    let frame: LabFrame
+
+    var body: some View {
+        let fx = frame.p("fx", .harmonograph), fy = frame.p("fy", .harmonograph)
+        let phase = frame.p("phase", .harmonograph)
+        let decay = frame.p("decay", .harmonograph)
+        let length = frame.p("length", .harmonograph) * (0.6 + frame.intensity * 0.8)
+        let lw = frame.p("lineWidth", .harmonograph)
+        let detune = frame.p("detune", .harmonograph)
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 48)
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let R = frame.diameter / 2 * 0.88
+            let t0 = frame.time
+            // Detune drifts the frequencies slowly; audio detunes harder.
+            let dfx = fx + sin(t0 * 0.13) * detune + frame.audio * 0.2
+            let dfy = fy + cos(t0 * 0.11) * detune
+            let steps = 900
+            var last: CGPoint?
+            // Draw the curve from `length` seconds ago to now, colour and
+            // width fading along it so the head is bright and the tail
+            // thin — a pen that is still moving.
+            for i in 0..<steps {
+                let u = Double(i) / Double(steps - 1)          // 0 tail … 1 head
+                let s = t0 - length * (1 - u)
+                let amp = exp(-decay * (1 - u) * 2)
+                let x = sin(s * dfx + phase) * amp
+                let y = sin(s * dfy) * amp
+                let p = CGPoint(x: c.x + x * R, y: c.y + y * R)
+                if let last {
+                    var path = Path()
+                    path.move(to: last); path.addLine(to: p)
+                    let color = sweep[Int(u * Double(sweep.count - 1))]
+                    ctx.stroke(path, with: .color(color.opacity(0.15 + 0.85 * u)), style: StrokeStyle(lineWidth: lw * (0.3 + 0.7 * u), lineCap: .round))
+                }
+                last = p
+            }
+        }
+        .frame(width: frame.diameter, height: frame.diameter)
+    }
+}
+
+// MARK: - Kaleido / Dots / Grain (Metal · layerEffect), post
+
+struct LabKaleidoView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+
+    var body: some View {
+        let segments = Float(frame.p("segments", .kaleido).rounded())
+        let rotate = Float(frame.time * frame.p("rotate", .kaleido) + Double(frame.audio) * 0.5)
+        let mixAmount = Float(frame.p("mix", .kaleido))
+        ring()
+            .visualEffect { content, proxy in
+                content.layerEffect(
+                    ShaderLibrary.bundle(.module).labKaleido(
+                        .float2(CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)),
+                        .float(segments), .float(rotate), .float(mixAmount)
+                    ),
+                    maxSampleOffset: CGSize(width: proxy.size.width, height: proxy.size.height)
+                )
+            }
+    }
+}
+
+struct LabDotsView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+
+    var body: some View {
+        let cell = Float(frame.p("cell", .dots))
+        ring()
+            .layerEffect(
+                ShaderLibrary.bundle(.module).labDots(
+                    .float(cell),
+                    .float(Float(frame.p("roundness", .dots))),
+                    .float(Float(frame.p("gain", .dots) * (1 + frame.audio * 0.4)))
+                ),
+                maxSampleOffset: CGSize(width: CGFloat(cell), height: CGFloat(cell))
+            )
+    }
+}
+
+struct LabGrainView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+
+    var body: some View {
+        let time = Float(frame.time)
+        let amount = Float(frame.p("amount", .grain)), vignette = Float(frame.p("vignette", .grain)), desat = Float(frame.p("desat", .grain))
+        ring()
+            .visualEffect { content, proxy in
+                content.layerEffect(
+                    ShaderLibrary.bundle(.module).labGrain(
+                        .float2(proxy.size), .float(time), .float(amount), .float(vignette), .float(desat)
+                    ),
+                    maxSampleOffset: .zero
+                )
+            }
     }
 }

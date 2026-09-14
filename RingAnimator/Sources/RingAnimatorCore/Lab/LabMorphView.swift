@@ -63,12 +63,10 @@ struct LabMorphView: View {
     private var content: some View {
         switch stage {
         case .pod:
-            RingView(config: config, diameter: 34, overrideElapsed: frame.time)
-                .frame(width: 62, height: 62)
+            LabHeroView(frame: frame, config: config, diameter: 62)
         case .pill:
             HStack(spacing: 10) {
-                RingView(config: config, diameter: 34, overrideElapsed: frame.time)
-                    .frame(width: 44, height: 44)
+                LabHeroView(frame: frame, config: config, diameter: 44)
                 Text("John arrived home.")
                     .font(.system(size: 15, weight: .medium))
                     .lineLimit(1)
@@ -78,8 +76,7 @@ struct LabMorphView: View {
         case .card:
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
-                    RingView(config: config, diameter: 34, overrideElapsed: frame.time)
-                        .frame(width: 44, height: 44)
+                    LabHeroView(frame: frame, config: config, diameter: 44)
                     Text("John arrived home.")
                         .font(.system(size: 17, weight: .semibold))
                     Spacer(minLength: 0)
@@ -94,8 +91,7 @@ struct LabMorphView: View {
         case .sheet:
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
-                    RingView(config: config, diameter: 44, overrideElapsed: frame.time)
-                        .frame(width: 56, height: 56)
+                    LabHeroView(frame: frame, config: config, diameter: 56)
                     Text("Nexus")
                         .font(.system(size: 22, weight: .bold))
                     Spacer(minLength: 0)
