@@ -51,6 +51,17 @@ public enum PerceptualGradient {
         }
     }
 
+    /// The colours as flat OKLab triples, for the Metal shader — see
+    /// `Shaders/RingSweep.metal`. The conversion happens here once per
+    /// frame rather than per pixel in the shader; the shader only ever
+    /// interpolates and converts back.
+    @MainActor public static func labTriples(_ colors: [Color]) -> [Float] {
+        colors.flatMap { c -> [Float] in
+            let lab = OKLab(rgb(c))
+            return [Float(lab.L), Float(lab.a), Float(lab.b)]
+        }
+    }
+
     /// `Color` → `RGB` costs an `NSColor` round trip (see `RGB`'s doc
     /// comment). The sweep is rebuilt every frame but only ever from the
     /// same handful of configured colours, so remember them.

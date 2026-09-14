@@ -625,8 +625,14 @@ public struct RingView: View {
         return (all[0], all[1])
     }
 
-    private func gradient(elapsed: Double) -> AngularGradient {
-        let all = activeColors(elapsed: elapsed)
+    private func gradient(elapsed: Double, colorOffset: Int = 0) -> AngularGradient {
+        var all = activeColors(elapsed: elapsed)
+        if colorOffset > 0, all.count > 1 {
+            // Rotate the palette so the flow layer is out of phase in
+            // colour as well as angle — see `RingConfig.flowOffsetsColors`.
+            let k = colorOffset % all.count
+            all = Array(all[k...] + all[..<k])
+        }
         if config.perceptualGradient {
             // Many stops, interpolated in OKLab — see `PerceptualGradient`
             // for why this and not "re-render the gradient each frame",
@@ -716,12 +722,71 @@ public struct RingView: View {
 
     // MARK: - Animation variants
 
+    /// The sweep through the Metal shader — see `RingConfig.shaderSweepEnabled`.
+    ///
+    /// The stroke is drawn in a flat colour purely to produce coverage
+    /// (alpha); the shader replaces every covered pixel's colour from its
+    /// angle. `.visualEffect` supplies the frame size for the centre
+    /// without changing layout. No `rotationEffect`: phase goes into the
+    /// shader, so the breathing is in ring space and doesn't spin with it.
+    private func shaderSweep(phase: Double, elapsed: Double, style: StrokeStyle) -> some View {
+        let lab = PerceptualGradient.labTriples(activeColors(elapsed: elapsed))
+        // **Reduce to one turn in Double before anything becomes a Float.**
+        // Live, `elapsed` is wall-clock seconds since 2001 — ~8×10⁸ — and
+        // `phase` is that times speed, ~3×10⁹. A Float at 3×10⁹ has a
+        // precision step of 256, so `phase / 2π` arrives with no fractional
+        // part at all and every pixel lands on the same colour. That is
+        // exactly what happened: the ring went single-colour live while
+        // rendering correctly offscreen, where the exporter's `elapsed`
+        // starts at zero. The CPU path never noticed because
+        // `rotationEffect` and `sin` are periodic in Double.
+        let twoPi = 2 * Double.pi
+        let turn = Float(phase.truncatingRemainder(dividingBy: twoPi))
+        let speed = config.shaderWarpSpeed
+        let warpA = Float((elapsed * speed).truncatingRemainder(dividingBy: twoPi))
+        let warpB = Float((elapsed * speed * 0.73).truncatingRemainder(dividingBy: twoPi))
+        let warp = Float(config.shaderWarp)
+        return Circle()
+            .stroke(Color.white, style: style)
+            .visualEffect { content, proxy in
+                content.colorEffect(
+                    ShaderLibrary.bundle(.module).ringSweep(
+                        .float2(proxy.size),
+                        .float(turn),
+                        .float(warpA),
+                        .float(warpB),
+                        .float(warp),
+                        .floatArray(lab)
+                    )
+                )
+            }
+    }
+
     private func waveRing(phase: Double, elapsed: Double, voiceLevel: Double, scale: CGFloat) -> some View {
         let (p, _) = colors(elapsed: elapsed)
+        let style = StrokeStyle(lineWidth: lw(scale), lineCap: .round)
         return glow(
-            Circle()
-                .stroke(gradient(elapsed: elapsed), style: StrokeStyle(lineWidth: lw(scale), lineCap: .round))
-                .rotationEffect(.radians(phase)),
+            Group {
+                if config.shaderSweepEnabled {
+                    shaderSweep(phase: phase, elapsed: elapsed, style: style)
+                } else {
+                    Circle()
+                        .stroke(gradient(elapsed: elapsed), style: style)
+                        .rotationEffect(.radians(phase))
+                }
+            }
+                // Flow — see `RingConfig.flowEnabled`. A second sweep at
+                // its own rate over the first. Plain alpha blend rather
+                // than `.plusLighter`, which blows saturated colours out
+                // to white where the layers agree.
+                .overlay {
+                    if config.flowEnabled {
+                        Circle()
+                            .stroke(gradient(elapsed: elapsed, colorOffset: config.flowOffsetsColors ? 1 : 0), style: style)
+                            .rotationEffect(.radians(phase * config.flowSpeed))
+                            .opacity(config.flowMix)
+                    }
+                },
             color: p,
             boost: voiceLevel,
             scale: scale

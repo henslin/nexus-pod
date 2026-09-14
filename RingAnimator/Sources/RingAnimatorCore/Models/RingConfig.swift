@@ -236,6 +236,61 @@ public final class RingConfig: ObservableObject {
     /// diffuser at half strength or a sequence can ease it in.
     @Published public var diffuserOpacity: Double = 1
 
+    // MARK: Shader sweep
+    //
+    // The per-pixel version of the sweep — see `Shaders/RingSweep.metal`.
+    // Colour is a function of (angle, time) evaluated at every pixel every
+    // frame: no stops, and the angle→colour mapping can *breathe*, so the
+    // bands widen and narrow without blending two layers and washing the
+    // colour out (which is what Flow did, and why it read as worse).
+    // First-party throughout: SwiftUI's `Shader`/`ShaderLibrary` and Metal.
+    //
+    // Opt-in per state. `ImageRenderer` *does* run it — verified by
+    // rendering offscreen, against the expectation that it wouldn't — so
+    // GIF/video export carries the shader sweep. The generated SwiftUI and
+    // Compose code cannot follow it; accepted for an exploration.
+
+    /// Render the wave sweep through the Metal shader.
+    @Published public var shaderSweepEnabled: Bool = false
+
+    /// How much the angle→colour mapping breathes, 0...1. 0 is exactly
+    /// the static perceptual sweep, per pixel.
+    @Published public var shaderWarp: Double = 0.35
+
+    /// How fast it breathes, as a rate multiplier.
+    @Published public var shaderWarpSpeed: Double = 1.2
+
+    // MARK: Flow
+    //
+    // A smooth gradient that rigidly rotates still reads as a texture
+    // spinning — the eye stops seeing stops and starts seeing that the
+    // colour field's *shape* never changes, only its angle. Flow layers a
+    // second sweep over the first, turning at a different rate (or the
+    // other way), so bands widen, narrow and slide past each other. Two
+    // things sliding don't read as one thing spinning.
+    //
+    // Native and cheap: another `AngularGradient` stroke with its own
+    // `rotationEffect`, blended in. Exports, `DiffCheck`, the code
+    // generators and the timeline all keep working. The per-pixel Metal
+    // version of this idea is the ceiling; this is the floor, and it may
+    // be enough.
+
+    /// Layer a second, differently-timed sweep over the ring.
+    @Published public var flowEnabled: Bool = false
+
+    /// The second sweep's speed as a multiple of the ring's. Negative is
+    /// counter-rotation, which reads as the most "alive". 1 would be a
+    /// rigid copy and is excluded from the slider's range.
+    @Published public var flowSpeed: Double = -0.6
+
+    /// How much of the second sweep shows, 0...1.
+    @Published public var flowMix: Double = 0.5
+
+    /// The second sweep's colours are the same set, rotated one position,
+    /// so the two layers are out of phase in colour as well as angle. Off,
+    /// they share colours and only the timing differs.
+    @Published public var flowOffsetsColors: Bool = true
+
     /// Sweep through the colours in OKLab with many stops, instead of a
     /// few sRGB stops — see `PerceptualGradient`. What stops the wave ring
     /// reading as a spun texture. Per-state, because it changes the look.

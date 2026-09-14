@@ -28,6 +28,9 @@ public enum ControlsSectionReset {
         case "color":
             config.ledBrightness = d.ledBrightness
             config.perceptualGradient = d.perceptualGradient
+            config.shaderSweepEnabled = d.shaderSweepEnabled
+            config.shaderWarp = d.shaderWarp
+            config.shaderWarpSpeed = d.shaderWarpSpeed
             config.primaryColor = d.primaryColor
             config.secondaryColor = d.secondaryColor
             config.additionalColors = d.additionalColors
@@ -72,6 +75,10 @@ public enum ControlsSectionReset {
             config.firmwareTickMs = d.firmwareTickMs
 
         case "motion":
+            config.flowEnabled = d.flowEnabled
+            config.flowSpeed = d.flowSpeed
+            config.flowMix = d.flowMix
+            config.flowOffsetsColors = d.flowOffsetsColors
             config.scalePulseEnabled = d.scalePulseEnabled
             config.scalePulseAmount = d.scalePulseAmount
             config.scalePulseSpeed = d.scalePulseSpeed

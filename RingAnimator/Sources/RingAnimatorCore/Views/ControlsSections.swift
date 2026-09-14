@@ -337,6 +337,17 @@ struct MotionEffectsSection: View {
             LabeledSlider(title: "Speed", value: $config.scalePulseSpeed, range: 0.1...3.0, format: "%.1fx")
         }
 
+        Toggle("Flow", isOn: $config.flowEnabled)
+        if config.flowEnabled {
+            LabeledSlider(title: "Speed", value: $config.flowSpeed, range: -2.0...0.9, format: "%.2fx")
+            LabeledSlider(title: "Mix", value: $config.flowMix, range: 0...1, format: "%.2f")
+            Toggle("Offset Colours", isOn: $config.flowOffsetsColors)
+            Text("A second sweep over the first, turning at its own rate — negative runs the other way. Bands slide past each other instead of one pattern spinning. Offset Colours starts the second sweep one colour along.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
         Toggle("Color Cycling (Hue Shift)", isOn: $config.hueShiftEnabled)
         if config.hueShiftEnabled {
             LabeledSlider(title: "Speed", value: $config.hueShiftSpeed, range: 0.02...1.0, format: "%.2fx")
@@ -676,7 +687,7 @@ struct DiffuserSection: View {
     @ObservedObject var config: RingConfig
 
     var body: some View {
-        LabeledSlider(title: "Milkiness", value: $config.diffuserMilkiness, range: 0...0.6, format: "%.2f")
+        LabeledSlider(title: "Milkiness", value: $config.diffuserMilkiness, range: 0...1, format: "%.2f")
         Text("A faint white tint on the glass. Enough to read as frosted rather than clear; 0 is untinted.")
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -688,8 +699,8 @@ struct DiffuserSection: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-        LabeledSlider(title: "Width", value: $config.diffuserWidth, range: 0.5...2.5, format: "%.1fx")
-        Text("As a multiple of the LED stroke. 1x is exactly the LEDs' own band.")
+        LabeledSlider(title: "Width", value: $config.diffuserWidth, range: 0.1...6, format: "%.1fx")
+        Text("As a multiple of the LED stroke, centred on it. 1x is exactly the LEDs' own band; 0.1x is a hairline; past ~3x it swallows the ring's hole and becomes a disc.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -923,6 +934,16 @@ struct ColorSection: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+
+        Toggle("Shader Sweep (Metal)", isOn: $config.shaderSweepEnabled)
+        if config.shaderSweepEnabled {
+            LabeledSlider(title: "Breathe", value: $config.shaderWarp, range: 0...1, format: "%.2f")
+            LabeledSlider(title: "Breathe Speed", value: $config.shaderWarpSpeed, range: 0.2...4, format: "%.1fx")
+            Text("Colour computed per pixel, per frame — no stops at all. Breathe lets the bands widen and narrow without blending, so nothing washes out. Wave only. Renders in previews, on iOS, and in GIF/video export.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
 
         ColorPicker("Primary", selection: $config.primaryColor)
         Text(config.primaryColor.hexString).font(.caption).foregroundStyle(.secondary)

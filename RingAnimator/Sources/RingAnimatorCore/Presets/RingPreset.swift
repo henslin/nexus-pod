@@ -63,9 +63,20 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// See `RingConfig.ledBrightness`. Per-state; 0 is the neutral state.
     public var ledBrightness: Double?
     /// See `RingConfig.perceptualGradient`. `nil` — a preset saved before
-    /// this existed — means the old sparse sRGB sweep, so nothing already
-    /// saved changes its look on load.
+    /// this existed — means **on** (Chris, 2026-09-14: "nice gradient or
+    /// bust"). Older presets do change their look on load, deliberately:
+    /// the sparse sRGB sweep is a rendering defect, not a design choice
+    /// anyone made, and it may end up baked in with no option at all.
     public var perceptualGradient: Bool?
+    /// See `RingConfig.flowEnabled`. Optional so older presets decode and
+    /// mean "no flow".
+    public var shaderSweepEnabled: Bool?
+    public var shaderWarp: Double?
+    public var shaderWarpSpeed: Double?
+    public var flowEnabled: Bool?
+    public var flowSpeed: Double?
+    public var flowMix: Double?
+    public var flowOffsetsColors: Bool?
     /// The diffuser, per-state so a timeline step can bring it in — see
     /// the note on `RingConfig.diffuserEnabled`. Optional like the rest so
     /// presets that predate it decode and mean "no diffuser".
@@ -207,6 +218,13 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         podTintColorHex = config.podTintColor.hexString
         ledBrightness = config.ledBrightness
         perceptualGradient = config.perceptualGradient
+        shaderSweepEnabled = config.shaderSweepEnabled
+        shaderWarp = config.shaderWarp
+        shaderWarpSpeed = config.shaderWarpSpeed
+        flowEnabled = config.flowEnabled
+        flowSpeed = config.flowSpeed
+        flowMix = config.flowMix
+        flowOffsetsColors = config.flowOffsetsColors
         diffuserEnabled = config.diffuserEnabled
         diffuserMilkiness = config.diffuserMilkiness
         diffuserWidth = config.diffuserWidth
@@ -318,7 +336,14 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.podFill = podFill ?? .standard
         config.podTintColor = podTintColorHex.map { Color(hex: $0) } ?? Color(hex: "#2288DD")
         config.ledBrightness = ledBrightness ?? 1
-        config.perceptualGradient = perceptualGradient ?? false
+        config.perceptualGradient = perceptualGradient ?? true
+        config.shaderSweepEnabled = shaderSweepEnabled ?? false
+        config.shaderWarp = shaderWarp ?? 0.35
+        config.shaderWarpSpeed = shaderWarpSpeed ?? 1.2
+        config.flowEnabled = flowEnabled ?? false
+        config.flowSpeed = flowSpeed ?? -0.6
+        config.flowMix = flowMix ?? 0.5
+        config.flowOffsetsColors = flowOffsetsColors ?? true
         config.diffuserEnabled = diffuserEnabled ?? false
         config.diffuserMilkiness = diffuserMilkiness ?? 0.18
         config.diffuserWidth = diffuserWidth ?? 1
