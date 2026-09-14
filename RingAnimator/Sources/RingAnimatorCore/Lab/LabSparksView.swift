@@ -40,7 +40,7 @@ private final class SparksHost {
         cell.lifetimeRange = 0.8
         cell.velocity = 30
         cell.velocityRange = 25
-        cell.emissionRange = .pi * 2
+        cell.emissionLongitude = 0
         cell.scale = 0.10
         cell.scaleRange = 0.06
         cell.scaleSpeed = -0.03
@@ -59,9 +59,21 @@ private final class SparksHost {
         // at ~72% of the pod; sparks come off that edge.
         let ringDiameter = side * 0.72
         emitter.emitterSize = CGSize(width: ringDiameter, height: ringDiameter)
-        cell.birthRate = Float(60 + frame.intensity * 400 + frame.audio * 900)
-        cell.velocity = 20 + frame.intensity * 60 + frame.audio * 120
-        cell.scale = 0.08 + frame.intensity * 0.06 + frame.audio * 0.05
+        cell.birthRate = Float(frame.p("rate", .sparks) * (0.4 + frame.intensity * 1.2) + frame.audio * 900)
+        let inward = frame.p("inward", .sparks)
+        let velocity = frame.p("velocity", .sparks) * (0.5 + frame.intensity) + frame.audio * 120
+        // Inward: emit *toward* the centre. Core Animation has no "aim at
+        // a point", but for an outline emitter a negative velocity is
+        // exactly that — each cell is born facing outward and moves back.
+        cell.velocity = velocity * (1 - 2 * inward)
+        cell.lifetime = Float(frame.p("life", .sparks))
+        cell.lifetimeRange = Float(frame.p("life", .sparks)) * 0.5
+        cell.scale = frame.p("size", .sparks) * (0.7 + frame.intensity * 0.5) + frame.audio * 0.05
+        cell.spin = frame.p("spin", .sparks)
+        // Outward on the emitter's normal rather than every direction:
+        // that is what "off the ring's edge" looks like. A little range
+        // keeps it from reading as spokes.
+        cell.emissionRange = .pi * 0.35
         if frame.colors != colorKey {
             colorKey = frame.colors
             let rgb = PerceptualGradient.rgb(frame.colors.first ?? .white)

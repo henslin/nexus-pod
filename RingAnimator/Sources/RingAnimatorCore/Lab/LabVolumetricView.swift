@@ -45,6 +45,8 @@ struct LabVolumetricView: View {
 public final class LabVolumetricScene: ObservableObject {
     private let root = Entity()
     private var core: ModelEntity?
+    private var shell: ModelEntity?
+    private var glassKey: Double = -1
     private var satellites: [Entity] = []
     private var emitterEntity = Entity()
     var subscription: EventSubscription?
@@ -84,8 +86,9 @@ public final class LabVolumetricScene: ObservableObject {
         // render — no shading, so no sphere. Lit with a satin roughness it
         // takes the key light's falloff and reads as a ball; the emissive
         // term keeps it glowing in its own colour on the dark side.
-        let core = ModelEntity(mesh: .generateSphere(radius: shellRadius * 0.34),
+        let core = ModelEntity(mesh: .generateSphere(radius: shellRadius),
                                materials: [Self.coreMaterial(primary)])
+        core.scale = SIMD3(repeating: Float(frame.p("core", .volumetric)))
         self.core = core
         root.addChild(core)
 
@@ -96,7 +99,7 @@ public final class LabVolumetricScene: ObservableObject {
 
         // Satellites on three tilted orbits, in the secondary colour.
         // The depth cue: they cross in front of and behind the core.
-        satellites = (0..<3).map { i in
+        satellites = (0..<8).map { i in
             let pivot = Entity()
             let tilt = Float(i) * 1.1 + 0.4
             pivot.orientation = simd_quatf(angle: tilt, axis: normalize(SIMD3<Float>(1, 0.2, Float(i) * 0.5)))
@@ -125,7 +128,7 @@ public final class LabVolumetricScene: ObservableObject {
         glass.specular = .init(floatLiteral: 1)
         glass.clearcoat = .init(floatLiteral: 1)
         glass.clearcoatRoughness = .init(floatLiteral: 0.03)
-        glass.blending = .transparent(opacity: .init(floatLiteral: 0.06))
+        glass.blending = .transparent(opacity: .init(floatLiteral: Float(frame.p("glass", .volumetric))))
         glass.faceCulling = .none
         // The shell must not write depth: when it did, every particle
         // inside it was culled — the offscreen render showed the core and
@@ -137,6 +140,7 @@ public final class LabVolumetricScene: ObservableObject {
         // core and satellites). The core is opaque and sorts itself; the
         // shell is the only transparent model and needs no ordering.
         let shell = ModelEntity(mesh: .generateSphere(radius: shellRadius), materials: [glass])
+        self.shell = shell
         root.addChild(shell)
 
         colorKey = frame.colors
@@ -157,6 +161,12 @@ public final class LabVolumetricScene: ObservableObject {
             e.speed = Self.speed(for: frame)
             emitterEntity.components.set(e)
         }
+        let glassOpacity = frame.p("glass", .volumetric)
+        if glassOpacity != glassKey, let shell, var glass = shell.model?.materials.first as? PhysicallyBasedMaterial {
+            glassKey = glassOpacity
+            glass.blending = .transparent(opacity: .init(floatLiteral: Float(glassOpacity)))
+            shell.model?.materials = [glass]
+        }
     }
 
     /// Advances the motion to the current frame's time. Called per frame
@@ -164,12 +174,15 @@ public final class LabVolumetricScene: ObservableObject {
     public func tick() {
         guard let frame else { return }
         let t = frame.time
-        let swell = Float(1 + frame.audio * 0.25)
+        let swell = Float(1 + frame.audio * 0.25) * Float(frame.p("core", .volumetric))
         core?.scale = [swell, swell, swell]
-        root.orientation = simd_quatf(angle: Float(t * 0.15), axis: [0, 1, 0])
+        root.orientation = simd_quatf(angle: Float(t * frame.p("spin", .volumetric)), axis: [0, 1, 0])
+        let visible = Int(frame.p("satellites", .volumetric))
+        let orbit = frame.p("orbit", .volumetric)
         for (i, pivot) in satellites.enumerated() {
+            pivot.isEnabled = i < visible
             let base = pivot.children.first
-            let rate = 0.6 + Double(i) * 0.25
+            let rate = (0.6 + Double(i) * 0.25) * orbit
             base?.position = [
                 shellRadius * 0.62 * Float(cos(t * rate)),
                 0,
@@ -179,11 +192,11 @@ public final class LabVolumetricScene: ObservableObject {
     }
 
     private static func birthRate(for frame: LabFrame) -> Float {
-        Float(200 + frame.intensity * 600 + frame.audio * 1000)
+        Float(frame.p("rate", .volumetric) * (0.4 + frame.intensity * 1.2) + frame.audio * 1000)
     }
 
     private static func speed(for frame: LabFrame) -> Float {
-        Float(0.06 + frame.intensity * 0.08 + frame.audio * 0.04)
+        Float(frame.p("moteSpeed", .volumetric) * (0.6 + frame.intensity * 0.8) + frame.audio * 0.04)
     }
 
     /// Starts from `Presets.magic` — which is what supplies a sprite and

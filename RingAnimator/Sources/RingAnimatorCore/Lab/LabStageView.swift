@@ -49,7 +49,8 @@ public struct LabStageView: View {
                                      audio: level,
                                      colors: colors,
                                      diameter: CGFloat(lab.diameter),
-                                     darkStage: lab.darkStage)
+                                     darkStage: lab.darkStage,
+                                     params: lab.resolvedParameters(of: lab.experiment))
                 experiment(frame)
                     .id(lab.experiment)
                     .environment(\.colorScheme, lab.darkStage ? .dark : .light)
@@ -88,6 +89,24 @@ public struct LabStageView: View {
                 }
                 Toggle("Dark Stage", isOn: $lab.darkStage)
 
+                if !lab.experiment.parameters.isEmpty {
+                    Divider()
+                    HStack {
+                        Text(lab.experiment.name).font(.headline)
+                        Spacer()
+                        Button("Reset") { lab.resetParameters(of: lab.experiment) }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                    }
+                    ForEach(lab.experiment.parameters) { parameter in
+                        LabSlider(title: parameter.name,
+                                  value: lab.binding(parameter, of: lab.experiment),
+                                  range: parameter.range,
+                                  format: parameter.format,
+                                  help: parameter.help)
+                    }
+                }
+
                 Divider()
 
                 Text("Colours come from the Nexus animation's palette — change them in Controls and every experiment follows.")
@@ -105,6 +124,7 @@ struct LabSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     var format: String = "%.2f"
+    var help: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -116,6 +136,12 @@ struct LabSlider: View {
                     .foregroundStyle(.secondary)
             }
             Slider(value: $value, in: range)
+            if let help {
+                Text(help)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
@@ -207,6 +233,12 @@ public struct LabExperimentView: View {
             }
         case .volumetric:
             LabVolumetricView(frame: frame)
+        case .refraction:
+            LabRefractionView(frame: frame) { ring }
+        case .chromatic:
+            LabChromaticView(frame: frame) { ring }
+        case .morph:
+            LabMorphView(frame: frame, config: config)
         }
     }
 
