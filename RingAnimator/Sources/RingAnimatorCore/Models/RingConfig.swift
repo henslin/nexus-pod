@@ -193,6 +193,59 @@ public final class RingConfig: ObservableObject {
     /// Blink modulation layered under `RingAnimationType.multiChase` — see
     /// `BlinkPattern`. `.steady` (no modulation) is the default so adding
     /// this changed nothing about how anything already looked.
+    // MARK: - Diffuser (app-wide) and LED brightness (per-state)
+    //
+    // Harpy and Ziris don't have a milky ring; they have LEDs under a
+    // milky diffuser. What you see in their neutral state *is* the
+    // diffuser with nothing lit behind it. So the model is a Liquid Glass
+    // ring as a permanent top layer over the LED render, and "neutral" is
+    // the LEDs at zero brightness — frosted glass with nothing lit. The
+    // colour states then become what they are on the hardware: light
+    // through a diffuser.
+    //
+    // Glass rather than a pale fill because it has to read in light *and*
+    // dark mode: a white ring vanishes on white, a grey one goes muddy on
+    // dark, and Liquid Glass adapts its own luminance to what is behind
+    // it — measured on the tab-bar project, lighter over pale content and
+    // mid-grey over black.
+    //
+    // **Per-state, all of it** (Chris, 2026-09-14). The first cut made the
+    // diffuser app-wide on the argument that it is a physical constant —
+    // but the product question isn't settled, and one candidate is that
+    // the glass ring *cross-fades in* as the resting state after an
+    // animation. That is a thing the timeline can sequence only if the
+    // diffuser is part of a step's snapshot. So it lives in `RingPreset`
+    // with everything else, and stays there until the aspect is defined.
+
+    /// Draw the glass diffuser ring over the LEDs.
+    @Published public var diffuserEnabled: Bool = false
+
+    /// How milky. A faint white tint on the glass — enough to read as
+    /// frosted rather than clear, and to survive sitting on the pod's own
+    /// glass. 0 is untinted.
+    @Published public var diffuserMilkiness: Double = 0.18
+
+    /// The diffuser band's width, as a multiple of the LED stroke. 1 is
+    /// exactly the LEDs' own band (Chris, 2026-09-14 — 1.6 overhung more
+    /// than it needed to).
+    @Published public var diffuserWidth: Double = 1
+
+    /// The whole diffuser layer's opacity, 0...1. Distinct from
+    /// `diffuserMilkiness`, which is the *tint* on the glass: this fades
+    /// the glass itself, material and all, so a state can hold the
+    /// diffuser at half strength or a sequence can ease it in.
+    @Published public var diffuserOpacity: Double = 1
+
+    /// Sweep through the colours in OKLab with many stops, instead of a
+    /// few sRGB stops — see `PerceptualGradient`. What stops the wave ring
+    /// reading as a spun texture. Per-state, because it changes the look.
+    @Published public var perceptualGradient: Bool = true
+
+    /// The LEDs' brightness, 0...1. **0 is the neutral state.** Applied as
+    /// opacity to the whole LED render — ring, glow, particles — so the
+    /// diffuser is all that is left when it reaches zero.
+    @Published public var ledBrightness: Double = 1
+
     // MARK: - Tab appearance
     //
     // App-wide, not per-state: the host app's own tab bar doesn't rename

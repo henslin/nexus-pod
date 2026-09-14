@@ -222,8 +222,13 @@ struct ContentView: View {
                 HSplitView {
                     designerDetail
                         .frame(minWidth: 420, idealWidth: 640)
-                    ControlsView(config: config)
-                        .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
+                    VStack(spacing: 0) {
+                        if selectedPresetID == nil {
+                            nothingSelectedBanner
+                        }
+                        ControlsView(config: config)
+                    }
+                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
                 }
             case .cueLibrary:
                 cueDetail
@@ -290,6 +295,7 @@ struct ContentView: View {
         }
         .onAppear {
             showingWhatsNew = WhatsNewPresenter.shouldPresent()
+            restoreSelection()
             // Deferred to `.onAppear` rather than done in an initializer:
             // `@StateObject`s aren't guaranteed to be constructed until the
             // view first appears, and binding needs both objects to exist.
@@ -300,11 +306,12 @@ struct ContentView: View {
             let outcome = UseCaseLibrary.sync(into: useCaseStore)
             if outcome.changedAnything { librarySync = outcome }
         }
-        .onChange(of: selectedPresetID) { _, _ in
+        .onChange(of: selectedPresetID) { _, id in
             // Each animation has its own player now, and a player that
             // isn't bound can't load a step into the Controls panel — the
             // strip would move while the ring stayed on the last one.
             timelinePlayers.bind(timelinePlayer, to: config, undoManager: undoManager)
+            UserDefaults.standard.set(id?.uuidString, forKey: Self.selectionKey)
         }
         .alert(
             "Animation Library Updated",
@@ -317,6 +324,50 @@ struct ContentView: View {
         } message: {
             Text(librarySync.map(syncMessage) ?? "")
         }
+    }
+
+    private static let selectionKey = "nexus.selectedPresetID"
+
+    /// Reselect whatever was selected last time, or the first animation.
+    ///
+    /// The Controls panel is an inspector into the *selected* animation
+    /// (Keynote's model — see the timeline notes), so with nothing selected
+    /// every knob turn goes into a scratch player nothing saves. That is
+    /// exactly what the app used to open into, and Chris kept editing
+    /// "to nothing" before noticing. Opening on a real selection removes
+    /// the trap; the banner below covers the case where there's nothing to
+    /// select.
+    private func restoreSelection() {
+        guard selectedPresetID == nil else { return }
+        if let saved = UserDefaults.standard.string(forKey: Self.selectionKey),
+           let id = UUID(uuidString: saved),
+           presetStore.presets.contains(where: { $0.id == id }) {
+            selectedPresetID = id
+        } else {
+            selectedPresetID = presetStore.presets.first?.id
+        }
+    }
+
+    /// Shown above the Controls panel when nothing is selected — the one
+    /// state in which the panel's edits are not saved anywhere.
+    private var nothingSelectedBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Nothing Selected", systemImage: "exclamationmark.triangle")
+                .font(.system(size: 12, weight: .semibold))
+            Text(presetStore.presets.isEmpty
+                 ? "Edits here aren't saved to any animation. Save one from the list to start editing it."
+                 : "Edits here aren't saved to any animation. Select one in the list, or:")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let first = presetStore.presets.first {
+                Button("Select “\(first.name)”") { selectedPresetID = first.id }
+                    .controlSize(.small)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.yellow.opacity(0.12))
     }
 
     /// Says what moved, and — when it applies — that nothing of yours did.

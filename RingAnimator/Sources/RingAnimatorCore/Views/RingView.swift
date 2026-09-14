@@ -28,6 +28,14 @@ public struct RingView: View {
     /// time (unlike the particle layer, which is real `CAEmitterLayer`
     /// physics `AnimationExporter` disables rather than trying to seek).
     var overrideElapsed: Double? = nil
+    /// Whether this instance draws the diffuser (`RingConfig.diffuserEnabled`
+    /// still has to be on). `false` for the pod's blurred backing duplicate:
+    /// that copy exists only to give the capsule's glass something to
+    /// refract, and a second diffuser behind the first — blurred, at 80% —
+    /// stacked a second bevel and body under the real one, which is why the
+    /// pod's ring read as different proportions from the large preview
+    /// drawn from the very same formula.
+    var drawsDiffuser: Bool = true
     /// Updates per second, when this ring is small enough that nobody can
     /// tell. `nil` means the display's own refresh rate.
     ///
@@ -62,12 +70,14 @@ public struct RingView: View {
         config: RingConfig,
         diameter: CGFloat? = nil,
         overrideElapsed: Double? = nil,
-        frameRate: Double? = nil
+        frameRate: Double? = nil,
+        drawsDiffuser: Bool = true
     ) {
         self.config = config
         self.diameter = diameter
         self.overrideElapsed = overrideElapsed
         self.frameRate = frameRate
+        self.drawsDiffuser = drawsDiffuser
     }
 
 
@@ -86,6 +96,24 @@ public struct RingView: View {
             } else {
                 continuousAnimationBody
             }
+        }
+        // The LEDs' brightness — see `RingConfig.ledBrightness`. Opacity on
+        // the whole LED render, so ring, glow and particles all dim
+        // together and the diffuser is what remains at zero.
+        .opacity(config.ledBrightness)
+        // The diffuser sits over the LEDs, not under them — it is the
+        // frosted cover the light comes through. Overlay, after opacity,
+        // so dimming the LEDs never dims the glass.
+        //
+        // Cross-fades rather than pops: the candidate product behaviour is
+        // the glass ring fading *in* as the resting state after an
+        // animation, so the toggle itself should read that way too. Driven
+        // by `.animation(value:)` on the enabled flag, which is what a
+        // timeline step applying a snapshot flips.
+        .overlay {
+            diffuser
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.6), value: config.diffuserEnabled)
         }
         .onAppear {
             // Skip the local mic tap entirely if ElevenLabs is already
@@ -599,6 +627,13 @@ public struct RingView: View {
 
     private func gradient(elapsed: Double) -> AngularGradient {
         let all = activeColors(elapsed: elapsed)
+        if config.perceptualGradient {
+            // Many stops, interpolated in OKLab — see `PerceptualGradient`
+            // for why this and not "re-render the gradient each frame",
+            // which for a closed sweep is the same picture as rotating it.
+            let sweep = PerceptualGradient.closedSweep(through: all.map(PerceptualGradient.rgb))
+            return AngularGradient(colors: sweep, center: .center)
+        }
         // Closes the loop back to the first color so the sweep reads as
         // one continuous band with no hard seam — the same reason the old
         // 2-color version repeated `p` at both ends ([p, s, p]).
@@ -631,6 +666,49 @@ public struct RingView: View {
     }
 
     private func lw(_ scale: CGFloat) -> CGFloat { CGFloat(config.lineWidth) * scale }
+
+    // MARK: - Diffuser
+
+    /// The glass diffuser ring — see `RingConfig.diffuserEnabled`.
+    ///
+    /// Sized from the same formula the LED render uses (`size` and
+    /// `scale` below mirror `patternStyleBody`/`continuousAnimationContent`
+    /// exactly), so the band sits over the LEDs at every preview size
+    /// rather than drifting as `ringScale` or the pod diameter change.
+    ///
+    /// Real Liquid Glass with a faint white tint, in a ring-shaped region.
+    /// The tint is what makes it *milky* rather than clear, and is also
+    /// what keeps it visible sitting on the pod's own glass — glass on
+    /// glass with no tint can read as nothing at all. The band's two edges
+    /// (inner and outer) give the material's refraction and edge highlight
+    /// something to define, which a single filled disc would not.
+    ///
+    /// `ImageRenderer` does not rasterize Liquid Glass, so exports and the
+    /// offscreen check harnesses do not see this layer. Preview and the
+    /// real iOS app do. Known and accepted; a diffuser in a GIF would need
+    /// a different technique entirely.
+    @ViewBuilder
+    private var diffuser: some View {
+        if drawsDiffuser, config.diffuserEnabled {
+            GeometryReader { geo in
+                let size = (diameter ?? min(geo.size.width, geo.size.height)) * ringScale
+                let scale = size / referenceDiameter
+                let band = lw(scale) * CGFloat(config.diffuserWidth)
+                let shape = DiffuserRing(outerDiameter: size + (band - lw(scale)), thickness: band)
+                Group {
+                    if #available(iOS 26.0, macOS 26.0, *) {
+                        Color.clear
+                            .glassEffect(.regular.tint(.white.opacity(config.diffuserMilkiness)), in: shape)
+                    } else {
+                        shape.fill(.ultraThinMaterial)
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .opacity(config.diffuserOpacity)
+                .allowsHitTesting(false)
+            }
+        }
+    }
 
     /// Clamped rather than trusted: a zero or negative scale would collapse
     /// `scale` to 0 and take every derived dimension with it.
@@ -2512,5 +2590,30 @@ extension RingView {
                 streamFrame: nil
             ).brightness
         }
+    }
+}
+
+
+/// A ring-shaped region for the diffuser's glass.
+///
+/// Two concentric circles with the inner one wound the *opposite* way, so
+/// the nonzero winding rule — which is what clipping and `glassEffect(in:)`
+/// use — leaves a hole rather than filling the disc. Even-odd would do the
+/// same for a plain `fill`, but the fill rule isn't something a clip region
+/// honours, and this has to work as a clip.
+struct DiffuserRing: Shape {
+    var outerDiameter: CGFloat
+    var thickness: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let centre = CGPoint(x: rect.midX, y: rect.midY)
+        let outer = max(outerDiameter / 2, 0)
+        let inner = max(outer - thickness, 0)
+        var path = Path()
+        path.addArc(center: centre, radius: outer, startAngle: .zero, endAngle: .degrees(360), clockwise: false)
+        path.closeSubpath()
+        path.addArc(center: centre, radius: inner, startAngle: .zero, endAngle: .degrees(360), clockwise: true)
+        path.closeSubpath()
+        return path
     }
 }

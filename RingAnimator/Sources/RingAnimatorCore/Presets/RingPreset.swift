@@ -60,6 +60,19 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
     /// (`podStatusPresented`) is not, and is excluded — same line the
     /// snapshot already draws around `previewDiameter` and the live voice
     /// fields.
+    /// See `RingConfig.ledBrightness`. Per-state; 0 is the neutral state.
+    public var ledBrightness: Double?
+    /// See `RingConfig.perceptualGradient`. `nil` — a preset saved before
+    /// this existed — means the old sparse sRGB sweep, so nothing already
+    /// saved changes its look on load.
+    public var perceptualGradient: Bool?
+    /// The diffuser, per-state so a timeline step can bring it in — see
+    /// the note on `RingConfig.diffuserEnabled`. Optional like the rest so
+    /// presets that predate it decode and mean "no diffuser".
+    public var diffuserEnabled: Bool?
+    public var diffuserMilkiness: Double?
+    public var diffuserWidth: Double?
+    public var diffuserOpacity: Double?
     public var podStatusEntrance: PodStatusEntrance?
     public var podStatusAutoDismiss: Bool?
     public var podStatusDuration: Double?
@@ -192,6 +205,12 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         podStatus = config.podStatus
         podFill = config.podFill
         podTintColorHex = config.podTintColor.hexString
+        ledBrightness = config.ledBrightness
+        perceptualGradient = config.perceptualGradient
+        diffuserEnabled = config.diffuserEnabled
+        diffuserMilkiness = config.diffuserMilkiness
+        diffuserWidth = config.diffuserWidth
+        diffuserOpacity = config.diffuserOpacity
         podStatusEntrance = config.podStatusEntrance
         podStatusAutoDismiss = config.podStatusAutoDismiss
         podStatusDuration = config.podStatusDuration
@@ -298,6 +317,12 @@ public struct RingPreset: Identifiable, Codable, Equatable, Sendable {
         config.podStatus = podStatus ?? ""
         config.podFill = podFill ?? .standard
         config.podTintColor = podTintColorHex.map { Color(hex: $0) } ?? Color(hex: "#2288DD")
+        config.ledBrightness = ledBrightness ?? 1
+        config.perceptualGradient = perceptualGradient ?? false
+        config.diffuserEnabled = diffuserEnabled ?? false
+        config.diffuserMilkiness = diffuserMilkiness ?? 0.18
+        config.diffuserWidth = diffuserWidth ?? 1
+        config.diffuserOpacity = diffuserOpacity ?? 1
         config.podStatusEntrance = podStatusEntrance ?? .growFromPod
         config.podStatusAutoDismiss = podStatusAutoDismiss ?? true
         config.podStatusDuration = podStatusDuration ?? 4

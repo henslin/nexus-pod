@@ -2110,6 +2110,63 @@ add a card, add its case, and re-run the audit: every `card("id"` in
 `ControlsView` needs a `case "id":`, except `fidelity`, which is
 deliberately not resettable.
 
+## The diffuser, and the neutral state
+
+Added 2026-09-14. The brief: the ring's neutral state should look like
+Harpy's and Ziris' LED rings at rest — no colour, a milky glass-like
+appearance, equally visible in light and dark mode.
+
+**Model the diffuser.** The hardware doesn't have a milky ring; it has LEDs
+under a milky diffuser, and the neutral state *is* the diffuser with
+nothing lit. So `RingView` draws a Liquid Glass annulus (`DiffuserRing`,
+`.glassEffect(.regular.tint(.white.opacity(milkiness)), in:)`) over the
+LED render, and the LEDs get an `ledBrightness` opacity. Neutral is
+brightness at zero: frosted glass, nothing lit. Colour states become what
+they are on the hardware — light through a diffuser. Glass rather than a
+pale fill because it adapts its own luminance to the backdrop, which is
+what "visible in both modes" actually requires.
+
+- **Per-state, not global.** The first cut made the diffuser app-wide
+  ("a physical constant"). Reversed the same day (Chris): one candidate
+  behaviour is the glass ring *cross-fading in* as the resting state after
+  an animation, which the timeline can only sequence if the diffuser is in
+  a step's snapshot. It stays in `RingPreset` until the aspect is settled.
+  A step with LEDs lit and no diffuser, then a step with brightness 0 and
+  the diffuser on, is that behaviour on existing machinery.
+- **Milkiness vs Opacity.** Milkiness is the white *tint* on the glass;
+  Opacity fades the glass *layer itself*. Both needed: one is how frosted,
+  the other is how present.
+- **The pod draws the diffuser once.** `TabBarPreview` renders the ring
+  twice — a blurred backing copy behind the capsule's glass, then the real
+  one — and with the diffuser inside `RingView` the pod got two stacked
+  diffusers, which is why its ring looked like different proportions from
+  the large preview drawn from the *same* formula. `RingView.drawsDiffuser`
+  is `false` for the backing copy.
+- **Not in exports.** `ImageRenderer` can't rasterize Liquid Glass, so
+  GIF/video export and the offscreen checks don't see the diffuser. Known
+  and accepted; a diffuser in a GIF is a different technique.
+- Liquid Glass's edge highlight and shadow are in **points**, not
+  proportional — on a 9pt band at pod size the bevel is most of the band.
+  If the pod still reads thinner than the large preview after the
+  single-diffuser fix, that is why, and the answer is a minimum band width
+  in points, chosen on purpose.
+
+## The app opens on a selection
+
+The Controls panel is an inspector into the *selected* animation
+(Keynote's model). With nothing selected, every knob turn goes into a
+scratch player nothing saves — and the app used to open into exactly that
+state, so edits made straight after launch went to nothing. Chris kept
+hitting it.
+
+Two fixes (2026-09-14): `ContentView.restoreSelection()` reselects the
+last-selected animation on launch (id in `UserDefaults`, validated against
+the store so a deleted one can't be reselected), falling back to the first;
+and a yellow "Nothing Selected" banner sits above the Controls whenever
+`selectedPresetID` is nil, with a one-click select. Don't "simplify" the
+restore away — the trap it closes is invisible until you've lost work to
+it.
+
 ## Open items (not yet done)
 
 - ~~**TestFlight app name**~~ — **done, confirmed 2026-09-10.** App Store

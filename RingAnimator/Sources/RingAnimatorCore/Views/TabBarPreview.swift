@@ -145,7 +145,7 @@ public struct TabBarPreview: View {
     }
 
     private var ringPodBackgroundDuplicate: some View {
-        podContentStack
+        podContent(drawsDiffuser: false)
             .frame(width: CGFloat(RingConfig.tabBarPodDiameter), height: CGFloat(RingConfig.tabBarPodDiameter))
             .blur(radius: 4)
             // Multiplied into the existing 0.8, not replacing it — this
@@ -182,7 +182,7 @@ public struct TabBarPreview: View {
     }
 
     private var ringPod: some View {
-        podContentStack
+        podContent(drawsDiffuser: true)
             .frame(width: CGFloat(RingConfig.tabBarPodDiameter), height: CGFloat(RingConfig.tabBarPodDiameter))
             .opacity(playback?.opacity ?? 1)
     }
@@ -209,13 +209,18 @@ public struct TabBarPreview: View {
     /// comparison of content rather than of two different sizes.
     private var contentDiameter: CGFloat { CGFloat(RingConfig.tabBarRingDiameter) }
 
+    /// `drawsDiffuser` is `false` for the blurred backing copy behind the
+    /// glass — see `RingView.drawsDiffuser`. Two stacked diffusers were
+    /// what made the pod's ring look like different proportions from the
+    /// large preview.
     @ViewBuilder
-    private var podContentStack: some View {
+    private func podContent(drawsDiffuser: Bool) -> some View {
         switch config.podContent {
         case .ring:
             RingView(config: config,
                      diameter: CGFloat(RingConfig.tabBarRingDiameter),
-                     overrideElapsed: playback?.elapsed)
+                     overrideElapsed: playback?.elapsed,
+                     drawsDiffuser: drawsDiffuser)
         case .photo, .glyph:
             // No badge here. The status is a tab bar *accessory* above the
             // bar — see `PodStatusAccessory` — not a mark on the pod.

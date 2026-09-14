@@ -26,6 +26,8 @@ public enum ControlsSectionReset {
         let d = RingConfig()
         switch id {
         case "color":
+            config.ledBrightness = d.ledBrightness
+            config.perceptualGradient = d.perceptualGradient
             config.primaryColor = d.primaryColor
             config.secondaryColor = d.secondaryColor
             config.additionalColors = d.additionalColors
@@ -131,6 +133,12 @@ public enum ControlsSectionReset {
             config.podStatusAutoDismiss = d.podStatusAutoDismiss
             config.podStatusDuration = d.podStatusDuration
             config.podStatusDismissible = d.podStatusDismissible
+
+        case "diffuser":
+            config.diffuserEnabled = d.diffuserEnabled
+            config.diffuserMilkiness = d.diffuserMilkiness
+            config.diffuserWidth = d.diffuserWidth
+            config.diffuserOpacity = d.diffuserOpacity
 
         case "tabs":
             config.tabAppearances = d.tabAppearances

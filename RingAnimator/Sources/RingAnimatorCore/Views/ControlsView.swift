@@ -255,6 +255,12 @@ public struct ControlsView: View {
                     ColorSection(config: config)
                 }
 
+                card("diffuser", "Diffuser", "circle.dotted.circle",
+                     footer: "A Liquid Glass ring over the LEDs — the frosted cover on Harpy and Ziris. With LED Brightness at zero this is the neutral state: milky glass, nothing lit, readable in light and dark. Saved with the state, so a timeline step can fade it in. Doesn't appear in exports; ImageRenderer can't rasterize glass.",
+                     masterToggle: $config.diffuserEnabled) {
+                    DiffuserSection(config: config)
+                }
+
                 // Only when a firmware pattern is loaded — see the type's
                 // doc comment for why it isn't always present.
                 if config.firmwarePatternStream != nil || config.firmwareLevelField != nil {

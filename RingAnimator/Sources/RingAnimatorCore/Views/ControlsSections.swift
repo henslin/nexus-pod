@@ -667,6 +667,40 @@ struct LiquidGlassSection: View {
     }
 }
 
+// MARK: - Diffuser
+
+/// The glass diffuser over the LEDs — see `RingConfig.diffuserEnabled`.
+/// Per-state, so a timeline step can bring it in as the resting state
+/// after an animation.
+struct DiffuserSection: View {
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        LabeledSlider(title: "Milkiness", value: $config.diffuserMilkiness, range: 0...0.6, format: "%.2f")
+        Text("A faint white tint on the glass. Enough to read as frosted rather than clear; 0 is untinted.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+        LabeledSlider(title: "Opacity", value: $config.diffuserOpacity, range: 0...1, format: "%.2f")
+        Text("The glass layer itself, material and all — not the tint. Lets a state hold the diffuser at half strength, or a sequence ease it in.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+        LabeledSlider(title: "Width", value: $config.diffuserWidth, range: 0.5...2.5, format: "%.1fx")
+        Text("As a multiple of the LED stroke. 1x is exactly the LEDs' own band.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+        Text("Neutral state: LED Brightness (Color, above) at zero and only the diffuser remains. Saved with the state, so a sequence can fade it in after an animation.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 // MARK: - Tabs
 
 /// Editable tab names and glyphs — see `TabAppearance`.
@@ -855,6 +889,21 @@ struct PodContentSection: View {
 struct ColorSection: View {
     @ObservedObject var config: RingConfig
 
+    /// Brightness lives with Color rather than in its own card because
+    /// they are one concern — what light the LEDs emit. Zero is the
+    /// neutral state: nothing lit, and if the diffuser (Global) is on,
+    /// frosted glass is all that shows.
+    @ViewBuilder
+    private var brightness: some View {
+        LabeledSlider(title: "LED Brightness", value: $config.ledBrightness, range: 0...1, format: "%.2f")
+        Text(config.ledBrightness == 0
+             ? "Neutral — nothing lit. With the diffuser on, this is the frosted-glass resting state."
+             : "The LEDs' brightness. Dims ring, glow and particles together; 0 is the neutral state.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     /// Continues Primary/Secondary's naming scheme instead of switching to
     /// "Color 3"/"Color 4" — matches `RingConfig.maxAdditionalColors` (4),
     /// covering up to 6 colors total. Falls back to a 1-based "Color N"
@@ -865,6 +914,16 @@ struct ColorSection: View {
     }
 
     var body: some View {
+        brightness
+
+        Toggle("Perceptual Gradient", isOn: $config.perceptualGradient)
+        Text(config.perceptualGradient
+             ? "Sweeps through the colours in OKLab with many stops — no spokes at each colour, and the midpoints stay as vivid as the ends."
+             : "A few stops, blended in sRGB. Each colour is a visible corner as the ring turns, and midpoints go grey.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
         ColorPicker("Primary", selection: $config.primaryColor)
         Text(config.primaryColor.hexString).font(.caption).foregroundStyle(.secondary)
         ApprovedColorSwatchGrid(selectedHex: config.primaryColor.hexString) { config.primaryColor = $0 }
