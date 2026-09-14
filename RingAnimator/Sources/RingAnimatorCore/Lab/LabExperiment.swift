@@ -33,10 +33,25 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case constellation
     case harmonograph
     case ink
+    case lightning
+    case cells
+    case warp
+    case burst
+    case symbols
+    case shapeshift
+    case lattice
+    case stipple
     // Post effects with no base of their own.
     case kaleido
     case dots
     case grain
+    case glitch
+    case crt
+    case neon
+    case frost
+    case duotone
+    case spin
+    case tiles
     // Flows — the tap-on-Nexus question, on a phone canvas.
     case journey
     case agentStates
@@ -66,9 +81,24 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .constellation: return "Constellation"
         case .harmonograph: return "Harmonograph"
         case .ink:        return "Ink"
+        case .lightning:  return "Lightning"
+        case .cells:      return "Cells"
+        case .warp:       return "Warp"
+        case .burst:      return "Burst"
+        case .symbols:    return "Symbols"
+        case .shapeshift: return "Shapeshift"
+        case .lattice:    return "Lattice"
+        case .stipple:    return "Stipple"
+        case .tiles:      return "Tiles"
         case .kaleido:    return "Kaleido"
         case .dots:       return "Dots"
         case .grain:      return "Grain"
+        case .glitch:     return "Glitch"
+        case .crt:        return "CRT"
+        case .neon:       return "Neon"
+        case .frost:      return "Frost"
+        case .duotone:    return "Duotone"
+        case .spin:       return "Spin"
         case .journey:    return "Journey"
         case .agentStates: return "Agent States"
         case .waveform:   return "Waveform"
@@ -99,9 +129,24 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .constellation: return "SwiftUI · Canvas"
         case .harmonograph: return "SwiftUI · Canvas"
         case .ink:        return "Metal · compute + MTKView"
+        case .lightning:  return "SwiftUI · Canvas"
+        case .cells:      return "Metal · colorEffect"
+        case .warp:       return "SwiftUI · Canvas"
+        case .burst:      return "SwiftUI · Canvas, on tap"
+        case .symbols:    return "SwiftUI · SF Symbol effects"
+        case .shapeshift: return "Metal · colorEffect (SDF)"
+        case .lattice:    return "SwiftUI · Canvas"
+        case .stipple:    return "SwiftUI · Canvas"
+        case .tiles:      return "Metal · layerEffect"
         case .kaleido:    return "Metal · layerEffect"
         case .dots:       return "Metal · layerEffect"
         case .grain:      return "Metal · layerEffect"
+        case .glitch:     return "Metal · layerEffect"
+        case .crt:        return "Metal · layerEffect"
+        case .neon:       return "Metal · layerEffect"
+        case .frost:      return "Metal · layerEffect"
+        case .duotone:    return "Metal · layerEffect"
+        case .spin:       return "Metal · layerEffect"
         case .journey:    return "SwiftUI · Liquid Glass + springs"
         case .agentStates: return "SwiftUI · state machine"
         case .waveform:   return "SwiftUI · Canvas"
@@ -130,9 +175,24 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .constellation: return "point.3.connected.trianglepath.dotted"
         case .harmonograph: return "scribble.variable"
         case .ink:        return "drop.fill"
+        case .lightning:  return "bolt.fill"
+        case .cells:      return "hexagon.fill"
+        case .warp:       return "sparkle"
+        case .burst:      return "fireworks"
+        case .symbols:    return "star.circle"
+        case .shapeshift: return "square.on.circle"
+        case .lattice:    return "globe"
+        case .stipple:    return "circle.dotted"
+        case .tiles:      return "square.grid.3x3.square"
         case .kaleido:    return "hexagon"
         case .dots:       return "circle.grid.3x3.fill"
         case .grain:      return "film"
+        case .glitch:     return "waveform.path.badge.minus"
+        case .crt:        return "tv"
+        case .neon:       return "lightbulb.max"
+        case .frost:      return "snowflake"
+        case .duotone:    return "paintpalette"
+        case .spin:       return "arrow.trianglehead.2.clockwise.rotate.90"
         case .journey:    return "iphone.gen3"
         case .agentStates: return "brain"
         case .waveform:   return "waveform"
@@ -185,6 +245,36 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "Post: an LED matrix. The image quantised to cells drawn as round dots that grow with brightness — what a matrix looks like through a diffuser. If the hardware ever gets a dot display, this is the preview."
         case .grain:
             return "Post: film grain, a vignette, optional desaturation. Everything looks shot rather than rendered. Subtle amounts are the ‘expensive’ look; the vignette alone is worth having."
+        case .lightning:
+            return "Arcs from the ring’s edge to its centre — jittered polylines redrawn every frame with a glow. Bolts strike on the beat (or on a synthetic rhythm). An alert state, a ‘thinking hard’ state, or a link to whatever sits in the middle."
+        case .cells:
+            return "Voronoi: the disc split into cells around drifting seeds, each in a palette colour, edges lit where they meet. Energy cells, honeycomb, scales — the knobs decide."
+        case .warp:
+            return "A starfield with depth: points fly outward from the centre, faster the closer they get, streaking on audio. Warp speed. The ‘working on it’ state that says something is happening fast."
+        case .burst:
+            return "A one-shot: tap the stage and particles explode from the pod and fall back — a celebration, a confirmation, an arrival. Event-driven, unlike everything else here. Tap it."
+        case .symbols:
+            return "Apple’s own SF Symbol effects on the glyph — bounce, pulse, variable colour, wiggle, breathe, rotate — and the replace transition between symbols. First-party motion the glyph state gets for free."
+        case .shapeshift:
+            return "A filled shape morphing circle → rounded square → star → blob, as a blend of signed distance fields, so the in-betweens are real shapes. The pod becoming a mark and back. Lit as a slab, edged in the palette."
+        case .lattice:
+            return "The dot-mesh sphere from the references: a lattice of dots on a sphere, each pushed along its normal by noise that flows over time and swells with audio, projected with depth so the near side is bigger and brighter. Colour by latitude and displacement. The most ‘ethereal, responsive’ thing here."
+        case .stipple:
+            return "The particle sphere from the reference: thousands of points on a sphere, weighted to the silhouette so it’s dense and bright at the rim and sparse in the middle — the way light catches dust on a ball. White by default; Tint puts it in the palette."
+        case .tiles:
+            return "Post: the reeded-glass reference — a panel of square glass tiles over the layer, each tile a small lens bending what’s behind it, with grout lines and a frosted haze. Coverage lets the panel sit over half the subject."
+        case .glitch:
+            return "Post: digital damage in bursts — sliced rows, a channel split, inverted blocks — gated by the beat. An error state, or an interruption."
+        case .crt:
+            return "Post: a tube — barrel curvature, scanlines, phosphor bleed. Retro, and oddly right for an LED product."
+        case .neon:
+            return "Post: edges only, coloured by the source — anything becomes a neon sign of itself. Over the ring it’s a wireframe; over Sphere it’s a line drawing."
+        case .frost:
+            return "Post: frosted glass — pixels scattered along a noise field rather than blurred. What the pod looks like behind a diffuser that isn’t clean."
+        case .duotone:
+            return "Post: luminance mapped onto the palette. Makes anything wear the ring’s colours — a photo, Sparks, the whole screenshot."
+        case .spin:
+            return "Post: angular motion blur about the centre, with a radial component. The ring smears into itself; detail streaks round."
         case .journey:
             return "Tap the Nexus tab. The pod grows into a chat sheet; the ring becomes the input’s voice button; a second tap takes it full screen, voice only, the ring as the hero with the edge glowing. Tap the stage to advance, or let it cycle. Every stage is Liquid Glass on a spring."
         case .agentStates:
@@ -203,7 +293,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// underneath for those, so the comparison is "the ring, plus this".
     public var decoratesRing: Bool {
         switch self {
-        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays, .kaleido, .dots, .grain: return true
+        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays, .kaleido, .dots, .grain, .glitch, .crt, .neon, .frost, .duotone, .spin, .tiles: return true
         default: return false
         }
     }
@@ -212,7 +302,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// The bases that draw a disc on their own.
     public var canBeHero: Bool {
         switch self {
-        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks: return true
+        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .lightning, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple: return true
         default: return false
         }
     }
@@ -231,7 +321,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// Advances through stages on tap — see `LabState.advance()`.
-    public var isTappable: Bool { self == .journey || self == .agentStates }
+    public var isTappable: Bool { self == .journey || self == .agentStates || self == .burst || self == .symbols }
 
     /// The experiment's own knobs, beyond the shared ones. The panel
     /// builds a slider per entry; the experiment reads them back by id
@@ -359,6 +449,104 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("emitters", "Emitters", 1...8, 3, "Ink sources, one per palette colour.", "%.0f"),
             .init("radius", "Ink Radius", 0.02...0.3, 0.08, "Size of each source."),
             .init("orbit", "Orbit", 0...0.9, 0.45, "How far out the sources circle."),
+        ]
+        case .lightning: return [
+            .init("bolts", "Bolts", 1...8, 3, "Arcs at once.", "%.0f"),
+            .init("jitter", "Jitter", 0...1, 0.5, "How ragged the path is."),
+            .init("rate", "Strike Rate", 0.5...8, 3, "Strikes per second when there’s no beat.", "%.1f"),
+            .init("glow", "Glow", 0...1, 0.6, "Halo round each bolt."),
+            .init("width", "Width", 0.5...5, 1.5, "Core line, points.", "%.1f pt"),
+            .init("target", "Target", 0...1, 0, "0 strikes the centre, 1 arcs edge-to-edge."),
+        ]
+        case .cells: return [
+            .init("scale", "Scale", 1...8, 3, "Cells across the disc."),
+            .init("drift", "Drift", 0...1, 0.6, "How far seeds wander."),
+            .init("edge", "Edge", 0...1, 0.4, "Lit edge width."),
+            .init("fill", "Fill", 0...1, 0.5, "Cell body brightness."),
+            .init("speed", "Speed", 0...2, 0.5, "Seed motion."),
+        ]
+        case .warp: return [
+            .init("count", "Stars", 50...1500, 500, "Stars.", "%.0f"),
+            .init("speed", "Speed", 0.1...4, 1, "How fast they come."),
+            .init("streak", "Streak", 0...1, 0.5, "Length of the trails."),
+            .init("size", "Size", 0.5...4, 1.5, "Point size at the edge, points."),
+            .init("spread", "Spread", 0.2...1, 0.9, "Field size as a fraction of the disc."),
+        ]
+        case .burst: return [
+            .init("count", "Particles", 20...600, 220, "Per burst.", "%.0f"),
+            .init("speed", "Speed", 50...800, 320, "Initial velocity, points/s.", "%.0f"),
+            .init("gravity", "Gravity", -600...1200, 500, "Fall back down. Negative floats up.", "%.0f"),
+            .init("life", "Lifetime", 0.4...4, 1.6, "Seconds.", "%.1f s"),
+            .init("size", "Size", 1...10, 4, "Points.", "%.0f pt"),
+            .init("spread", "Spread", 0...1, 1, "1 is every direction, 0 is straight up."),
+            .init("auto", "Auto Fire", 0...1, 1, "1 fires every few seconds by itself.", "%.0f"),
+        ]
+        case .symbols: return [
+            .init("effect", "Effect", 0...5, 0, "0 bounce, 1 pulse, 2 variable colour, 3 wiggle, 4 breathe, 5 rotate.", "%.0f"),
+            .init("size", "Size", 0.2...0.8, 0.45, "Glyph as a fraction of the disc."),
+            .init("hold", "Hold", 0.5...6, 2, "Seconds before the glyph is replaced with the next.", "%.1f s"),
+            .init("continuous", "Continuous", 0...1, 1, "1 keeps the effect running; 0 fires it on each replace.", "%.0f"),
+        ]
+        case .shapeshift: return [
+            .init("hold", "Hold", 0.5...6, 2, "Seconds per shape.", "%.1f s"),
+            .init("morph", "Morph", 0.1...1, 0.5, "Fraction of the hold spent morphing."),
+            .init("edge", "Edge", 0...1, 0.4, "Lit edge width."),
+            .init("shade", "Shade", 0...1, 0.6, "Slab lighting."),
+            .init("spin", "Spin", -1...1, 0.15, "Rotation, radians per second."),
+        ]
+        case .lattice: return [
+            .init("cols", "Columns", 16...120, 64, "Dots round the sphere.", "%.0f"),
+            .init("rows", "Rows", 8...60, 32, "Dots pole to pole.", "%.0f"),
+            .init("amp", "Displace", 0...0.6, 0.18, "How far the noise pushes the surface."),
+            .init("scale", "Noise Scale", 0.5...5, 1.8, "Size of the bumps."),
+            .init("flow", "Flow", 0...3, 1, "How fast the noise moves over the surface."),
+            .init("dot", "Dot Size", 0.5...6, 2.2, "Points.", "%.1f pt"),
+            .init("tilt", "Tilt", -1.2...1.2, 0.35, "Camera tilt, radians."),
+            .init("spin", "Spin", -1...1, 0.25, "Rotation, radians per second."),
+            .init("back", "Back Face", 0...1, 0.35, "How much of the far side shows through."),
+        ]
+        case .stipple: return [
+            .init("count", "Points", 500...6000, 3500, "Points.", "%.0f"),
+            .init("rim", "Rim Weight", 0...3, 1.6, "How much the silhouette is favoured."),
+            .init("dot", "Dot Size", 0.5...4, 1.4, "Points.", "%.1f pt"),
+            .init("spin", "Spin", -1...1, 0.15, "Rotation, radians per second."),
+            .init("jitter", "Breathe", 0...0.3, 0.06, "Points drifting off the surface."),
+            .init("tint", "Tint", 0...1, 0, "0 white, 1 palette.", "%.0f"),
+        ]
+        case .tiles: return [
+            .init("cell", "Tile", 8...80, 28, "Tile size, points.", "%.0f pt"),
+            .init("bulge", "Bulge", 0...1.5, 0.6, "How much each tile bends what’s behind it."),
+            .init("frost", "Frost", 0...1, 0.35, "Haze and scatter."),
+            .init("grout", "Grout", 0...1, 0.6, "The lines between tiles."),
+            .init("coverage", "Coverage", 0...1, 1, "How much of the width the panel covers, from the right."),
+        ]
+        case .glitch: return [
+            .init("amount", "Amount", 0...1, 0.5, "Slice offset and split."),
+            .init("blocks", "Blocks", 0...1, 0.4, "Inverted blocks."),
+            .init("idle", "Idle Rate", 0...1, 0.2, "How often it glitches with no beat."),
+        ]
+        case .crt: return [
+            .init("curve", "Curvature", 0...1, 0.4, "Barrel distortion."),
+            .init("lines", "Scanlines", 0...1, 0.5, "Line darkness."),
+            .init("bleed", "Bleed", 0...4, 1.2, "Phosphor colour bleed, points."),
+        ]
+        case .neon: return [
+            .init("thickness", "Thickness", 0.5...6, 1.5, "Edge sample distance, points."),
+            .init("gain", "Gain", 0.5...8, 3, "Edge brightness."),
+            .init("keep", "Keep Source", 0...1, 0.1, "How much of the original shows through."),
+        ]
+        case .frost: return [
+            .init("amount", "Amount", 0...30, 8, "Scatter distance, points.", "%.0f pt"),
+            .init("scale", "Crystal Size", 4...80, 20, "Noise scale, points.", "%.0f pt"),
+            .init("melt", "Melt", 0...2, 0.3, "How fast the pattern moves."),
+        ]
+        case .duotone: return [
+            .init("mix", "Mix", 0...1, 1, "0 leaves the source."),
+            .init("shift", "Shift", 0...1, 0, "Where on the palette black lands."),
+        ]
+        case .spin: return [
+            .init("angle", "Angle", 0...1.5, 0.25, "Arc length of the blur, radians."),
+            .init("radial", "Radial", 0...0.5, 0, "Zoom component."),
         ]
         case .kaleido: return [
             .init("segments", "Segments", 2...24, 6, "Mirrored wedges.", "%.0f"),
@@ -506,7 +694,7 @@ public enum LabPalette: String, CaseIterable, Identifiable, Sendable {
 /// demos" into a design space — Aurora with Bloom and a little
 /// Chromatic is a different thing from any of the three alone.
 public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
-    case bloom, rays, ripple, refraction, chromatic, kaleido, dots, grain
+    case bloom, rays, ripple, refraction, chromatic, kaleido, dots, grain, glitch, crt, neon, frost, duotone, spin, tiles
     public var id: String { rawValue }
     /// The experiment whose knobs this effect uses.
     public var experiment: LabExperiment {
@@ -519,6 +707,13 @@ public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
         case .kaleido: return .kaleido
         case .dots: return .dots
         case .grain: return .grain
+        case .glitch: return .glitch
+        case .crt: return .crt
+        case .neon: return .neon
+        case .frost: return .frost
+        case .duotone: return .duotone
+        case .spin: return .spin
+        case .tiles: return .tiles
         }
     }
 }

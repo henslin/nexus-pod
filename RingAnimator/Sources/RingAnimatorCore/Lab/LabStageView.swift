@@ -509,6 +509,36 @@ public struct LabExperimentView: View {
             LabDotsView(frame: frame) { ring }
         case .grain:
             LabGrainView(frame: frame) { ring }
+        case .lightning:
+            ZStack { ring; LabLightningView(frame: frame) }
+        case .cells:
+            LabCellsView(frame: frame)
+        case .warp:
+            LabWarpView(frame: frame)
+        case .burst:
+            ZStack { ring; LabBurstView(frame: frame) }
+        case .symbols:
+            LabSymbolsView(frame: frame)
+        case .shapeshift:
+            LabShapeshiftView(frame: frame)
+        case .glitch:
+            LabGlitchView(frame: frame) { ring }
+        case .crt:
+            LabCRTView(frame: frame) { ring }
+        case .neon:
+            LabNeonView(frame: frame) { ring }
+        case .frost:
+            LabFrostView(frame: frame) { ring }
+        case .duotone:
+            LabDuotoneView(frame: frame) { ring }
+        case .spin:
+            LabSpinView(frame: frame) { ring }
+        case .lattice:
+            LabLatticeView(frame: frame)
+        case .stipple:
+            LabStippleView(frame: frame)
+        case .tiles:
+            LabTilesView(frame: frame) { ring }
         case .journey:
             LabJourneyView(frame: frame, config: config)
         case .agentStates:

@@ -670,3 +670,269 @@ fragment half4 inkFragment(InkVertexOut in [[stage_in]], texture2d<half> tex [[t
     half a = min(half(1), max(c.a, max(c.r, max(c.g, c.b)))) * mask;
     return half4(c.rgb * mask, a);
 }
+
+// MARK: - Glitch (layerEffect)
+//
+// Digital damage: horizontal slices shifted sideways, a channel split,
+// and blocks of noise, all gated so it happens in bursts. `trigger` is
+// 0…1 — the beat, or a slow pulse when there is no audio.
+
+[[ stitchable ]] half4 labGlitch(float2 position, SwiftUI::Layer layer,
+                                 float2 size, float time, float amount, float trigger, float blocks)
+{
+    float t = floor(time * 12.0f);
+    float rowKey = floor(position.y / (6.0f + 30.0f * (1.0f - amount)));
+    float h = lab_hash(float2(rowKey, t));
+    float gate = step(1.0f - trigger * 0.6f - amount * 0.15f, h);
+    float shift = (lab_hash(float2(rowKey, t + 7.0f)) - 0.5f) * size.x * 0.25f * amount * gate;
+    float split = 3.0f * amount * (0.3f + trigger);
+    half4 r = layer.sample(position + float2(shift + split, 0));
+    half4 g = layer.sample(position + float2(shift, 0));
+    half4 b = layer.sample(position + float2(shift - split, 0));
+    half4 c = half4(r.r, g.g, b.b, max(max(r.a, g.a), b.a));
+    // Blocks: rectangles that go solid or invert for a frame.
+    float2 cell = floor(position / (size / 8.0f));
+    float bh = lab_hash(cell + t * 3.1f);
+    if (bh > 1.0f - blocks * trigger * 0.5f && c.a > 0.01h) {
+        c.rgb = half3(1) - c.rgb;
+    }
+    return c;
+}
+
+// MARK: - CRT (layerEffect)
+//
+// A tube: barrel curvature, scanlines, and a little phosphor bleed.
+
+[[ stitchable ]] half4 labCRT(float2 position, SwiftUI::Layer layer,
+                              float2 size, float curve, float lines, float bleed)
+{
+    float2 uv = position / size * 2.0f - 1.0f;
+    float2 d = uv * (1.0f + curve * 0.25f * dot(uv, uv));
+    float2 sp = (d * 0.5f + 0.5f) * size;
+    if (any(abs(d) > 1.0f)) return half4(0);
+    half4 c = layer.sample(sp);
+    half4 l = layer.sample(sp + float2(bleed * 2.0f, 0));
+    half4 rgt = layer.sample(sp - float2(bleed * 2.0f, 0));
+    c.r = mix(c.r, l.r, half(bleed * 0.5f));
+    c.b = mix(c.b, rgt.b, half(bleed * 0.5f));
+    float scan = 0.5f + 0.5f * sin(sp.y * 3.14159f);
+    c.rgb *= half(1.0f - lines * 0.5f * (1.0f - scan));
+    // Corner darkening, like glass.
+    c.rgb *= half(1.0f - 0.3f * curve * dot(uv, uv));
+    return c;
+}
+
+// MARK: - Neon (layerEffect)
+//
+// Edges only: a Sobel on luminance, coloured by the source, so anything
+// becomes its own wireframe — a neon sign of itself. `keep` mixes the
+// original back in.
+
+[[ stitchable ]] half4 labNeon(float2 position, SwiftUI::Layer layer,
+                               float thickness, float gain, float keep)
+{
+    float t = thickness;
+    half lum[9];
+    int k = 0;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+        half4 s = layer.sample(position + float2(i, j) * t);
+        lum[k++] = dot(s.rgb, half3(0.2126h, 0.7152h, 0.0722h)) * s.a;
+    }
+    half gx = -lum[0] - 2.0h * lum[3] - lum[6] + lum[2] + 2.0h * lum[5] + lum[8];
+    half gy = -lum[0] - 2.0h * lum[1] - lum[2] + lum[6] + 2.0h * lum[7] + lum[8];
+    half edge = min(half(1), sqrt(gx * gx + gy * gy) * half(gain));
+    half4 src = layer.sample(position);
+    half3 col = src.a > 0.01h ? src.rgb / max(src.a, 0.01h) : half3(1);
+    half3 neon = (col * 0.6h + 0.4h) * edge;
+    return half4(neon + src.rgb * half(keep), max(edge, src.a * half(keep)));
+}
+
+// MARK: - Frost (layerEffect)
+//
+// Frosted glass: each pixel samples from a jittered position, the
+// jitter drawn from a noise field, so the image is scattered rather
+// than blurred — the texture of real frost.
+
+[[ stitchable ]] half4 labFrost(float2 position, SwiftUI::Layer layer,
+                                float amount, float scale, float time)
+{
+    float2 n = float2(lab_noise(position / scale + time * 0.2f), lab_noise(position / scale + float2(31.7f, 9.2f) - time * 0.15f)) - 0.5f;
+    float2 j = float2(lab_hash(position), lab_hash(position + 5.3f)) - 0.5f;
+    float2 offset = (n * 2.0f + j * 0.6f) * amount;
+    half4 acc = half4(0);
+    acc += layer.sample(position + offset);
+    acc += layer.sample(position + offset * 0.5f + float2(amount * 0.2f, 0));
+    acc += layer.sample(position + offset * 0.5f - float2(0, amount * 0.2f));
+    acc += layer.sample(position - offset * 0.3f);
+    return acc * 0.25h;
+}
+
+// MARK: - Duotone (layerEffect)
+//
+// Recolours anything into the palette: luminance becomes a position
+// along the sweep. The way to make a photo, or Sparks, wear the
+// ring's colours.
+
+[[ stitchable ]] half4 labDuotone(float2 position, SwiftUI::Layer layer,
+                                  float mixAmount, float shift,
+                                  device const float *lab, int labCount)
+{
+    half4 s = layer.sample(position);
+    if (s.a < 0.001h) return s;
+    float lum = float(dot(s.rgb / max(s.a, 0.01h), half3(0.2126h, 0.7152h, 0.0722h)));
+    float3 c = lab_palette_linear(lum * 0.85f + shift, lab, labCount);
+    half3 mapped = half3(lab_linear_to_srgb(c)) * s.a;
+    return half4(mix(s.rgb, mapped, half(mixAmount)), s.a);
+}
+
+// MARK: - Spin (layerEffect)
+//
+// Angular motion blur about the centre: samples along an arc. A ring
+// smears into itself; anything with detail streaks round.
+
+[[ stitchable ]] half4 labSpin(float2 position, SwiftUI::Layer layer,
+                               float2 center, float angle, float radialAmount)
+{
+    float2 d = position - center;
+    float r = length(d);
+    float a0 = atan2(d.y, d.x);
+    half4 acc = half4(0);
+    const int taps = 16;
+    float jitter = lab_hash(position) - 0.5f;
+    for (int i = 0; i < taps; i++) {
+        float t = (float(i) + jitter) / float(taps) - 0.5f;
+        float a = a0 + t * angle;
+        float rr = r * (1.0f + t * radialAmount);
+        acc += layer.sample(center + float2(cos(a), sin(a)) * rr);
+    }
+    return acc / half(taps);
+}
+
+// MARK: - Cells (colorEffect)
+//
+// Voronoi: the disc split into cells around drifting seeds, each in a
+// palette colour, with lit edges where cells meet. Energy cells, a
+// honeycomb, scales — depending on the knobs.
+
+[[ stitchable ]] half4 labCells(float2 position, half4 color,
+                                float2 size, float time, float intensity, float audio,
+                                device const float *knobs, int knobCount,
+                                device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float r = length(uv);
+    float mask = 1.0f - smoothstep(0.97f, 1.0f, r);
+    if (mask <= 0.0f) return half4(0);
+    float kScale = knobs[0], kDrift = knobs[1], kEdge = knobs[2], kFill = knobs[3], kSpeed = knobs[4];
+    float2 p = uv * kScale;
+    float2 ip = floor(p), fp = fract(p);
+    float d1 = 8.0f, d2 = 8.0f;
+    float2 cellId = float2(0);
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+        float2 g = float2(i, j);
+        float2 h = float2(lab_hash(ip + g), lab_hash(ip + g + 19.1f));
+        float2 o = 0.5f + kDrift * 0.5f * sin(time * kSpeed + h * 6.2831f);
+        float2 diff = g + o - fp;
+        float d = dot(diff, diff);
+        if (d < d1) { d2 = d1; d1 = d; cellId = ip + g; }
+        else if (d < d2) { d2 = d; }
+    }
+    float edge = sqrt(d2) - sqrt(d1);
+    float line = 1.0f - smoothstep(0.0f, kEdge * 0.25f + 0.01f, edge);
+    float3 cellColor = lab_palette_linear(lab_hash(cellId) + time * 0.02f, lab, labCount);
+    float3 lin = cellColor * kFill * (0.5f + 0.5f * (1.0f - sqrt(d1))) * (0.8f + intensity * 0.4f)
+               + cellColor * line * (1.2f + audio * 1.5f);
+    return half4(half3(lab_linear_to_srgb(lin)) * half(mask), half(mask));
+}
+
+// MARK: - Shapeshift (colorEffect)
+//
+// A filled shape morphing between a circle, a rounded square, a star
+// and a blob, as a blend of signed distance fields — so the in-between
+// shapes are real shapes, not cross-fades. Lit as a slab, edged in the
+// palette. The pod becoming a glyph-like mark and back.
+
+static float sd_circle(float2 p) { return length(p) - 0.72f; }
+static float sd_square(float2 p) {
+    float2 q = abs(p) - 0.58f;
+    return length(max(q, 0.0f)) + min(max(q.x, q.y), 0.0f) - 0.14f;
+}
+static float sd_star(float2 p) {
+    float a = atan2(p.y, p.x);
+    float r = 0.55f + 0.22f * cos(a * 5.0f);
+    return length(p) - r;
+}
+static float sd_blob(float2 p, float t) {
+    float a = atan2(p.y, p.x);
+    float r = 0.66f + 0.08f * sin(a * 3.0f + t * 1.3f) + 0.05f * sin(a * 7.0f - t * 0.9f);
+    return length(p) - r;
+}
+
+[[ stitchable ]] half4 labShapeshift(float2 position, half4 color,
+                                     float2 size, float time, float intensity, float audio,
+                                     device const float *knobs, int knobCount,
+                                     device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float kHold = knobs[0], kMorph = knobs[1], kEdge = knobs[2], kShade = knobs[3], kSpin = knobs[4];
+    float a = time * kSpin;
+    float2x2 rot = float2x2(cos(a), sin(a), -sin(a), cos(a));
+    float2 p = rot * uv * (1.0f - audio * 0.1f);
+    // Which two shapes, and how far between them.
+    float cycle = time / max(kHold, 0.2f);
+    int from = int(floor(cycle)) % 4;
+    int to = (from + 1) % 4;
+    float f = fract(cycle);
+    float blend = smoothstep(1.0f - kMorph, 1.0f, f);
+    float ds[4] = { sd_circle(p), sd_square(p), sd_star(p), sd_blob(p, time) };
+    float d = mix(ds[from], ds[to], blend);
+    float fill = 1.0f - smoothstep(-0.01f, 0.01f, d);
+    float edge = (1.0f - smoothstep(0.0f, kEdge * 0.12f + 0.005f, abs(d)));
+    // Slab lighting from the distance gradient near the edge.
+    float dx = mix(ds[from], ds[to], blend);
+    float2 e = float2(0.01f, 0);
+    float gx = (mix(sd_circle(p + e.xy), sd_square(p + e.xy), 0.0f) - dx);
+    float lightness = 0.75f + kShade * 0.5f * clamp(-d * 6.0f, 0.0f, 1.0f) + kShade * 0.2f * gx * 30.0f;
+    float3 body = lab_palette_linear(0.15f + 0.4f * (uv.y * 0.5f + 0.5f) + time * 0.02f, lab, labCount) * lightness * (0.8f + intensity * 0.4f);
+    float3 rim = lab_palette_linear(0.6f + time * 0.05f, lab, labCount) * (1.2f + audio);
+    float3 lin = body * fill + rim * edge;
+    float alpha = max(fill, edge);
+    return half4(half3(lab_linear_to_srgb(lin)) * half(alpha), half(alpha));
+}
+
+// MARK: - Tiles (layerEffect)
+//
+// A panel of glass tiles over the layer — reference: an orange sphere
+// behind a grid of square lenses, each tile bulging so the image inside
+// it is bent and offset, with a soft grout line and a frosted haze.
+// `coverage` is how much of the width, from the right, the panel spans,
+// so it can sit over half the subject the way the reference does.
+
+[[ stitchable ]] half4 labTiles(float2 position, SwiftUI::Layer layer,
+                                float2 size, float cell, float bulge, float frost, float grout, float coverage)
+{
+    float edgeX = size.x * (1.0f - coverage);
+    if (position.x < edgeX) return layer.sample(position);
+    float2 local = float2(position.x - edgeX, position.y);
+    float2 c = floor(local / cell) * cell + cell * 0.5f;
+    float2 uv = (local - c) / (cell * 0.5f);          // -1…1 within the tile
+    float r2 = min(dot(uv, uv), 1.0f);
+    float z = sqrt(1.0f - r2);
+    // A lens per tile: sample from further out toward the tile's edge.
+    float2 offset = uv * (1.0f - z) * bulge * cell;
+    float2 sp = position + offset;
+    // Frost: a little scatter.
+    float2 j = (float2(lab_hash(position), lab_hash(position + 3.1f)) - 0.5f) * frost * 6.0f;
+    half4 s = layer.sample(sp + j);
+    s = (s + layer.sample(sp - j) + layer.sample(sp + float2(j.y, -j.x))) / 3.0h;
+    // Grout: a soft dark line at the tile edge and a lit bevel just inside.
+    float edge = max(abs(uv.x), abs(uv.y));
+    float line = smoothstep(0.86f, 1.0f, edge) * grout;
+    float bevel = smoothstep(0.7f, 0.86f, edge) * (1.0f - smoothstep(0.86f, 0.95f, edge)) * grout * 0.5f;
+    // Grout and haze only where there is something behind the glass —
+    // over empty stage the panel would otherwise draw itself as a grey
+    // grid, which is right for the reference's wall and wrong for a pod.
+    half3 rgb = s.rgb * half(1.0f - line * 0.5f) + half3(bevel * 0.35f) * s.a;
+    half haze = half(0.04f + frost * 0.06f) * s.a;
+    return half4(rgb + haze, s.a);
+}

@@ -461,6 +461,13 @@ struct LabPostStack<Base: View>: View {
         case .kaleido:    wrapped = AnyView(LabKaleidoView(frame: frame) { view })
         case .dots:       wrapped = AnyView(LabDotsView(frame: frame) { view })
         case .grain:      wrapped = AnyView(LabGrainView(frame: frame) { view })
+        case .glitch:     wrapped = AnyView(LabGlitchView(frame: frame) { view })
+        case .crt:        wrapped = AnyView(LabCRTView(frame: frame) { view })
+        case .neon:       wrapped = AnyView(LabNeonView(frame: frame) { view })
+        case .frost:      wrapped = AnyView(LabFrostView(frame: frame) { view })
+        case .duotone:    wrapped = AnyView(LabDuotoneView(frame: frame) { view })
+        case .spin:       wrapped = AnyView(LabSpinView(frame: frame) { view })
+        case .tiles:      wrapped = AnyView(LabTilesView(frame: frame) { view })
         }
         return apply(rest, wrapped)
     }
