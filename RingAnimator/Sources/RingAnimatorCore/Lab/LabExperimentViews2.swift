@@ -886,3 +886,151 @@ struct LabFocusView<Base: View>: View {
             }
     }
 }
+
+// MARK: - Thinking Orbs (SwiftUI · Canvas) — the libraries.dev reference
+
+/// A cloud of dots with nine states of motion — Working, Searching,
+/// Solving, Listening, Connecting, Weaving, Composing, Breathing,
+/// Shaping — the "Thinking orbs" library Chris pointed at (2026-09-15),
+/// done natively. Every position is a function of time and the dot's
+/// seed, so there is no simulation and the state switches are clean.
+struct LabThinkingOrbsView: View {
+    let frame: LabFrame
+
+    private struct Dot { let a: Double; let b: Double; let r: Double; let k: Double; let s: Double }
+    private static let dots: [Dot] = {
+        var g = SeededGenerator(seed: 0x7411)
+        return (0..<200).map { _ in
+            Dot(a: Double.random(in: 0..<(2 * .pi), using: &g), b: Double.random(in: 0..<(2 * .pi), using: &g),
+                r: Double.random(in: 0.2...1, using: &g), k: Double.random(in: 0..<1, using: &g), s: Double.random(in: 0.6...1.4, using: &g))
+        }
+    }()
+
+    var body: some View {
+        let state = Int(frame.p("state", .thinkingOrbs))
+        let count = min(Int(frame.p("count", .thinkingOrbs)), Self.dots.count)
+        let dotSize = frame.p("dotSize", .thinkingOrbs)
+        let orbits = frame.p("orbits", .thinkingOrbs)
+        let particles = Int(frame.p("particles", .thinkingOrbs))
+        let colourMode = Int(frame.p("colour", .thinkingOrbs))
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 24)
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let R = frame.diameter / 2 * 0.82
+            let t = frame.time * (0.7 + frame.intensity * 0.6)
+            let audio = frame.audio
+            func color(_ k: Double, _ alpha: Double) -> Color {
+                switch colourMode {
+                case 1: return sweep[Int(k * Double(sweep.count - 1))].opacity(alpha)
+                case 2: return (frame.colors.first ?? .white).opacity(alpha)
+                default: return Color.white.opacity(alpha)
+                }
+            }
+            // Orbit paths: faint rings the Working / Weaving states move on.
+            if orbits > 0, state == 0 || state == 5 {
+                for i in 0..<3 {
+                    var path = Path()
+                    let tilt = Double(i) * 1.05 + 0.4
+                    for k in 0...72 {
+                        let a = Double(k) / 72 * 2 * .pi
+                        let p = Self.ring(a, tilt: tilt, spin: t * (0.3 + Double(i) * 0.15), R: R)
+                        let pt = CGPoint(x: c.x + p.x, y: c.y + p.y)
+                        if k == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+                    }
+                    ctx.stroke(path, with: .color(.white.opacity(0.12 * orbits)), lineWidth: 0.8)
+                }
+            }
+            ctx.blendMode = .plusLighter
+            var positions: [CGPoint] = []
+            positions.reserveCapacity(count)
+            for (i, d) in Self.dots.prefix(count).enumerated() {
+                var p = CGPoint.zero
+                var depth = 1.0
+                switch state {
+                case 0: // Working — three tilted rings, like an atom.
+                    let ring = i % 3
+                    let tilt = Double(ring) * 1.05 + 0.4
+                    let q = Self.ring(d.a + t * (0.5 + Double(ring) * 0.2), tilt: tilt, spin: t * (0.3 + Double(ring) * 0.15), R: R * (0.85 + 0.15 * d.r))
+                    p = CGPoint(x: q.x, y: q.y); depth = q.z
+                case 1: // Searching — a sweep: dots along spiral arms, a bright wedge scanning round.
+                    let arm = Double(i % 4) / 4 * 2 * .pi
+                    let rr = d.r * R
+                    let a = arm + rr / R * 2.2 + t * 0.6
+                    p = CGPoint(x: cos(a) * rr, y: sin(a) * rr)
+                    let wedge = (a - t * 1.8).truncatingRemainder(dividingBy: 2 * .pi)
+                    depth = 0.4 + 0.6 * max(0, cos(wedge))
+                case 2: // Solving — waves converging and diverging.
+                    let phase = sin(t * 1.4 - d.r * 4)
+                    let rr = R * (0.25 + 0.7 * d.r) * (0.75 + 0.25 * phase)
+                    p = CGPoint(x: cos(d.a + t * 0.2) * rr, y: sin(d.a + t * 0.2) * rr)
+                    depth = 0.5 + 0.5 * phase
+                case 3: // Listening — rings rippling inward from the rim, more with audio.
+                    let ripple = 1 - ((t * 0.5 + d.k) .truncatingRemainder(dividingBy: 1))
+                    let rr = R * (0.3 + 0.7 * ripple) * (1 + audio * 0.2)
+                    p = CGPoint(x: cos(d.a) * rr, y: sin(d.a) * rr)
+                    depth = ripple
+                case 4: // Connecting — a slow drift; lines drawn between neighbours below.
+                    let x = sin(t * 0.3 * d.s + d.a) * 0.8, y = cos(t * 0.25 * d.s + d.b) * 0.8
+                    p = CGPoint(x: x * R, y: y * R)
+                case 5: // Weaving — figure-eights, phased.
+                    let u = t * 0.8 * d.s + d.a
+                    let q = Self.ring(u, tilt: 0.9, spin: t * 0.2, R: R)
+                    p = CGPoint(x: q.x * cos(u * 0.5), y: q.y)
+                    depth = q.z
+                case 6: // Composing — dots settle onto a lattice, then scatter.
+                    let n = Int(ceil(sqrt(Double(count))))
+                    let gx = Double(i % n) / Double(max(n - 1, 1)) - 0.5, gy = Double(i / n) / Double(max(n - 1, 1)) - 0.5
+                    let settle = 0.5 + 0.5 * sin(t * 0.6)
+                    let sx = sin(d.a + t * 0.4) * 0.8, sy = cos(d.b + t * 0.3) * 0.8
+                    p = CGPoint(x: (gx * 1.5 * settle + sx * (1 - settle)) * R, y: (gy * 1.5 * settle + sy * (1 - settle)) * R)
+                    depth = 0.6 + 0.4 * settle
+                case 7: // Breathing — the cloud swelling and settling.
+                    let breath = 0.75 + 0.25 * sin(t * 0.9) + audio * 0.2
+                    let rr = R * d.r * breath
+                    p = CGPoint(x: cos(d.a) * rr * 0.9 + sin(d.b) * 5, y: sin(d.a) * rr * 0.9)
+                    depth = 0.5 + 0.5 * d.r
+                default: // Shaping — the outline morphing circle → square → circle.
+                    let m = 0.5 + 0.5 * sin(t * 0.7)
+                    let ca = cos(d.a), sa = sin(d.a)
+                    let sq = max(abs(ca), abs(sa))
+                    let rr = R * 0.9 * (1 - m + m / max(sq, 0.001) * 0.72) * (0.85 + 0.15 * d.r)
+                    p = CGPoint(x: ca * rr, y: sa * rr)
+                }
+                let pt = CGPoint(x: c.x + p.x, y: c.y + p.y)
+                positions.append(pt)
+                let s = dotSize * d.s * (0.5 + 0.5 * depth) * (1 + audio * 0.3)
+                ctx.fill(Path(ellipseIn: CGRect(x: pt.x - s / 2, y: pt.y - s / 2, width: s, height: s)), with: .color(color(d.k, 0.35 + 0.65 * depth)))
+            }
+            if state == 4 {
+                // Connecting: short lines between close neighbours.
+                let maxD = R * 0.28
+                for i in 0..<positions.count {
+                    for j in (i + 1)..<positions.count {
+                        let dd = hypot(positions[i].x - positions[j].x, positions[i].y - positions[j].y)
+                        guard dd < maxD else { continue }
+                        var path = Path()
+                        path.move(to: positions[i]); path.addLine(to: positions[j])
+                        ctx.stroke(path, with: .color(color(Self.dots[i].k, (1 - dd / maxD) * 0.5)), lineWidth: 0.8)
+                    }
+                }
+            }
+            // Particles: a few brighter sparkles drifting through.
+            for k in 0..<particles {
+                let fk = Double(k)
+                let a = t * 0.5 + fk * 2.1, rr = R * (0.3 + 0.6 * (0.5 + 0.5 * sin(t * 0.7 + fk)))
+                let pt = CGPoint(x: c.x + cos(a) * rr, y: c.y + sin(a * 1.3) * rr)
+                let s = dotSize * 1.8
+                ctx.fill(Path(ellipseIn: CGRect(x: pt.x - s / 2, y: pt.y - s / 2, width: s, height: s)), with: .color(color(fk / 3, 0.9)))
+            }
+        }
+        .frame(width: frame.diameter, height: frame.diameter)
+    }
+
+    /// A point on a tilted ring, rotated about Y — returns x, y in the
+    /// plane and z for depth.
+    private static func ring(_ a: Double, tilt: Double, spin: Double, R: Double) -> (x: Double, y: Double, z: Double) {
+        let x0 = cos(a) * R, y0 = sin(a) * R * cos(tilt), z0 = sin(a) * R * sin(tilt)
+        let x = x0 * cos(spin) + z0 * sin(spin), z = -x0 * sin(spin) + z0 * cos(spin)
+        return (x, y0, (z / R + 1) / 2)
+    }
+}

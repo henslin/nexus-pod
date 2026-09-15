@@ -243,16 +243,25 @@ struct LabStarRating: View {
 struct LabKnobsSheet: View {
     @ObservedObject var lab: LabState
     @ObservedObject var config: RingConfig
+    @StateObject private var presets = LabPresetStore()
+    @State private var saving = false
+    @State private var name = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Form {
-                Section(lab.experiment.name) {
+                Section {
                     ForEach(lab.experiment.parameters) { p in
-                        LabSlider(title: p.name, value: lab.binding(p, of: lab.experiment), range: p.range, format: p.format)
+                        LabKnob(parameter: p, value: lab.binding(p, of: lab.experiment))
                     }
                     Button("Reset") { lab.resetParameters(of: lab.experiment) }
+                } header: {
+                    HStack {
+                        Text(lab.experiment.name)
+                        Spacer()
+                        LabPresetsMenu(presets: presets, lab: lab, saving: $saving, name: $name)
+                    }
                 }
                 Section("Stage") {
                     LabSlider(title: "Intensity", value: $lab.intensity, range: 0...1)
@@ -286,7 +295,7 @@ struct LabKnobsSheet: View {
                     ForEach(lab.post, id: \.self) { effect in
                         DisclosureGroup(effect.experiment.name + " knobs") {
                             ForEach(effect.experiment.parameters) { p in
-                                LabSlider(title: p.name, value: lab.binding(p, of: effect.experiment), range: p.range, format: p.format)
+                                LabKnob(parameter: p, value: lab.binding(p, of: effect.experiment))
                             }
                         }
                     }
@@ -294,6 +303,11 @@ struct LabKnobsSheet: View {
             }
             .navigationTitle("Knobs")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .alert("Save Preset", isPresented: $saving) {
+                TextField("Name", text: $name)
+                Button("Save") { if !name.isEmpty { presets.save(name, from: lab); name = "" } }
+                Button("Cancel", role: .cancel) {}
+            }
         }
     }
 }

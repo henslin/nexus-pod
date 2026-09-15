@@ -17,8 +17,11 @@ public struct LabStageView: View {
     @ObservedObject var lab: LabState
     @ObservedObject var config: RingConfig
     @StateObject private var audio = AudioSpectrumMonitor()
+    @StateObject private var presets = LabPresetStore()
     @State private var appeared = Date()
     @State private var savedFrameMessage: String?
+    @State private var savingPreset = false
+    @State private var presetName = ""
     /// Which post effect's knobs are open in the panel.
     @State private var openPost: LabPostEffect?
 
@@ -42,6 +45,13 @@ public struct LabStageView: View {
         .onChange(of: lab.audioAttack, initial: true) { _, v in audio.attack = v }
         .onChange(of: lab.audioRelease, initial: true) { _, v in audio.release = v }
         .onDisappear { audio.stop() }
+        .alert("Save Preset", isPresented: $savingPreset) {
+            TextField("Name", text: $presetName)
+            Button("Save") { if !presetName.isEmpty { presets.save(presetName, from: lab); presetName = "" } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The \(lab.experiment.name) knobs, the post stack, the hero and the palette.")
+        }
     }
 
     private func colors(at time: Double) -> [Color] {
@@ -223,6 +233,7 @@ public struct LabStageView: View {
                     HStack {
                         sectionTitle(lab.experiment.name)
                         Spacer()
+                        LabPresetsMenu(presets: presets, lab: lab, saving: $savingPreset, name: $presetName)
                         Button("Reset") { lab.resetParameters(of: lab.experiment) }
                             .buttonStyle(.borderless)
                             .font(.caption)
@@ -262,11 +273,7 @@ public struct LabStageView: View {
                     .font(.subheadline.weight(.semibold))
                     .padding(.top, i == 0 ? 0 : 8)
             }
-            LabSlider(title: parameter.name,
-                      value: lab.binding(parameter, of: experiment),
-                      range: parameter.range,
-                      format: parameter.format,
-                      help: parameter.help)
+            LabKnob(parameter: parameter, value: lab.binding(parameter, of: experiment))
         }
     }
 
@@ -575,6 +582,7 @@ public struct LabExperimentView: View {
         case .slick: LabSlickView(frame: frame)
         case .deep: LabDeepView(frame: frame)
         case .nebula: LabNebulaView(frame: frame)
+        case .thinkingOrbs: LabThinkingOrbsView(frame: frame)
         case .water: LabWaterView(frame: frame) { ring }
         case .haze: LabHazeView(frame: frame) { ring }
         case .fizz: LabFizzView(frame: frame) { ring }
@@ -604,5 +612,124 @@ public struct LabExperimentView: View {
     private var ring: some View {
         RingView(config: config, diameter: frame.diameter * 0.72, overrideElapsed: frame.time)
             .frame(width: frame.diameter, height: frame.diameter)
+    }
+}
+
+/// One knob, drawn as the right control for its kind: a slider with the
+/// value and unit on the right, chips for an enumerated choice, a toggle
+/// for a two-way one. The structure the libraries.dev rail has (Chris,
+/// 2026-09-15) — a segmented control switches what is shown, a slider
+/// sets a value — applied to every experiment at once.
+struct LabKnob: View {
+    let parameter: LabParameter
+    @Binding var value: Double
+
+    var body: some View {
+        if let choices = parameter.choices {
+            if parameter.isToggle {
+                Toggle(isOn: Binding(get: { value >= 0.5 }, set: { value = $0 ? 1 : 0 })) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(parameter.name)
+                        Text(parameter.help).font(.caption2).foregroundStyle(.tertiary)
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(parameter.name).font(.callout)
+                    LabChips(choices: choices, selection: Binding(
+                        get: { Int((value - parameter.range.lowerBound).rounded()) },
+                        set: { value = parameter.range.lowerBound + Double($0) }))
+                    Text(parameter.help).font(.caption2).foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            LabSlider(title: parameter.name, value: $value, range: parameter.range, format: parameter.format, help: parameter.help)
+        }
+    }
+}
+
+/// A row of chips — capsules, one selected — wrapping onto more rows
+/// when there are many. Glass-styled selection like the aspect switcher.
+struct LabChips: View {
+    let choices: [String]
+    @Binding var selection: Int
+
+    var body: some View {
+        LabWrap(spacing: 6) {
+            ForEach(Array(choices.enumerated()), id: \.offset) { i, label in
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { selection = i }
+                } label: {
+                    Text(label)
+                        .font(.callout)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(i == selection ? AnyShapeStyle(.fill.secondary) : AnyShapeStyle(.fill.quaternary)))
+                        .overlay(Capsule().strokeBorder(i == selection ? Color.primary.opacity(0.25) : .clear, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+/// A wrapping HStack, for chips. `Layout`, so it works on both platforms.
+struct LabWrap: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 300
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x + s.width > width, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
+            x += s.width + spacing
+            rowH = max(rowH, s.height)
+        }
+        return CGSize(width: width, height: y + rowH)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowH: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x + s.width > bounds.maxX, x > bounds.minX { x = bounds.minX; y += rowH + spacing; rowH = 0 }
+            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing
+            rowH = max(rowH, s.height)
+        }
+    }
+}
+
+/// The Presets menu for the current experiment: apply one, save the
+/// current knobs as one, delete one.
+struct LabPresetsMenu: View {
+    @ObservedObject var presets: LabPresetStore
+    @ObservedObject var lab: LabState
+    @Binding var saving: Bool
+    @Binding var name: String
+
+    var body: some View {
+        let mine = presets.presets(for: lab.experiment)
+        Menu {
+            if mine.isEmpty {
+                Text("No presets yet")
+            } else {
+                ForEach(mine) { p in
+                    Button(p.name) { presets.apply(p, to: lab) }
+                }
+                Divider()
+                Menu("Delete") {
+                    ForEach(mine) { p in Button(p.name, role: .destructive) { presets.delete(p) } }
+                }
+            }
+            Divider()
+            Button("Save Preset…") { saving = true }
+        } label: {
+            Label("Presets", systemImage: "square.stack").font(.caption)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 }
