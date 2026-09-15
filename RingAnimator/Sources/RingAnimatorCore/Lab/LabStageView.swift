@@ -85,8 +85,10 @@ public struct LabStageView: View {
             TimelineView(.animation) { timeline in
                 let pod = CGFloat(RingConfig.tabBarPodDiameter)
                 let ring = CGFloat(RingConfig.tabBarRingDiameter)
+                // Pod Fill: the whole 62pt, edge to edge. Off: the ring's
+                // own proportion inside the pod, for comparison with today.
                 let inner = LabExperimentView(experiment: lab.experiment,
-                                              frame: frame(at: timeline.date, diameter: ring * 1.3),
+                                              frame: frame(at: timeline.date, diameter: lab.podFill ? pod : ring * 1.3),
                                               config: config,
                                               post: lab.post)
                     .frame(width: pod, height: pod)
@@ -100,7 +102,7 @@ public struct LabStageView: View {
                 }
                 .environment(\.colorScheme, lab.darkStage ? .dark : .light)
             }
-            Text("Pod · 62pt")
+            Text(lab.podFill ? "Pod · 62pt · filled" : "Pod · 62pt")
                 .font(.caption2)
                 .foregroundStyle(lab.darkStage ? Color.white.opacity(0.5) : Color.black.opacity(0.5))
         }
@@ -129,6 +131,10 @@ public struct LabStageView: View {
                           help: "Scales the experiment to fill the circle. 1 is edge to edge; past it crops.")
                 Toggle("Dark Stage", isOn: $lab.darkStage)
                 Toggle("Pod Preview", isOn: $lab.showPod)
+                if lab.showPod {
+                    Toggle("Fill Pod", isOn: $lab.podFill)
+                        .padding(.leading, 12)
+                }
                 if lab.experiment.drawsHero {
                     Picker("Hero", selection: $lab.hero) {
                         Text("Ring").tag(LabExperiment?.none)

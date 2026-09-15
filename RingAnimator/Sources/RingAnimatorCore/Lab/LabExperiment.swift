@@ -1186,6 +1186,10 @@ public final class LabState: ObservableObject {
     @Published public var post: [LabPostEffect] = []
     /// Show the experiment at pod size in a glass pod, in the corner.
     @Published public var showPod: Bool = true
+    /// In the pod preview, draw the experiment across the whole 62pt pod
+    /// rather than the ring's 34pt-in-62 proportion. On by default —
+    /// whatever ships will fill the circle (Chris, 2026-09-15).
+    @Published public var podFill: Bool = true
     /// An SF Symbol drawn inside Orb, Refraction and Liquid — the glyph
     /// state of the pod, inside the effect. Empty for none.
     @Published public var glyph: String = ""
