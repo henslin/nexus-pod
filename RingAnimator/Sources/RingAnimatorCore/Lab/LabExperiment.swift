@@ -342,7 +342,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .chromatic:
             return "The ring split into its red, green and blue by a radial offset, the way a cheap lens fringes. Tiny amounts read as expensive glass; large amounts on a beat read as impact."
         case .morph:
-            return "Liquid Glass itself: one glass shape morphing from the pod’s circle to a pill to a sheet-sized panel and back, with the content riding inside. This is the pod-to-sheet expansion, and it is a container Apple already ships."
+            return "Liquid Glass itself: one glass shape morphing through the states below — pod, pill, card, sheet, full screen — with the content riding inside. Add states, remove them, and give any state (or all of them) an edge glow, a waveform, a caption. This is the pod-to-sheet expansion as a container Apple already ships, and the workbench for what each state carries."
         case .liquid:
             return "Metaballs: a handful of blobs orbiting inside the disc, drawn as one distance field so they merge and split like mercury. Each blob carries a palette colour; where they meet, the colours blend. Audio pulls them apart."
         case .rays:
@@ -540,6 +540,16 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// Responds to press-and-hold — see `LabState.hold`.
     public var isHoldable: Bool { self == .hold }
 
+    /// Hidden from the lists but kept in code — the UI room narrowed to
+    /// Morph (Chris, 2026-09-15: "comment these out"). Their pieces live
+    /// on as Morph adornments (edge glow, waveform, caption).
+    public var isHidden: Bool {
+        switch self {
+        case .buttonGlow, .sheet, .waveform, .edgeGlow, .caption: return true
+        default: return false
+        }
+    }
+
     /// Which room of the Lab this lives in.
     public var section: LabSection {
         switch self {
@@ -627,9 +637,11 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         ]
         case .morph: return [
             .init("hold", "Hold", 0.5...6, 2, "Seconds in each state.", "%.1f s"),
-            .init("stages", "Stages", 1...3, 3, "1 circle↔pill, 2 adds a card, 3 adds the sheet.", "%.0f"),
             .init("spring", "Spring", 0.2...1.2, 0.55, "Response — lower is snappier."),
             .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom."),
+            .init("glowWidth", "Glow Width", 2...40, 14, "Edge glow band, points, where a state has it.", "%.0f pt"),
+            .init("glowBlur", "Glow Blur", 0...30, 10, "Edge glow softness, points.", "%.0f pt"),
+            .init("pingpong", "Ping-pong", 0...1, 1, "1 goes up the states and back down; 0 cycles round.", "%.0f"),
         ]
         case .liquid: return [
             .init("blobs", "Blobs", 2...8, 5, "How many.", "%.0f"),
@@ -1104,6 +1116,52 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// One state of the Morph: what shape the glass takes, and what rides
+/// on it.
+public enum LabMorphKind: String, CaseIterable, Identifiable, Codable, Sendable {
+    case pod, pill, card, sheet, fullScreen
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .pod: return "Pod"
+        case .pill: return "Pill"
+        case .card: return "Card"
+        case .sheet: return "Sheet"
+        case .fullScreen: return "Full Screen"
+        }
+    }
+}
+
+/// A UI animation a state can carry — the pieces of the hidden UI labs.
+public enum LabMorphAdornment: String, CaseIterable, Identifiable, Codable, Sendable {
+    case edgeGlow, waveform, caption
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .edgeGlow: return "Edge Glow"
+        case .waveform: return "Waveform"
+        case .caption: return "Caption"
+        }
+    }
+    public var symbol: String {
+        switch self {
+        case .edgeGlow: return "iphone.gen3.radiowaves.left.and.right"
+        case .waveform: return "waveform"
+        case .caption: return "text.bubble"
+        }
+    }
+}
+
+public struct LabMorphState: Identifiable, Equatable, Sendable {
+    public var id = UUID()
+    public var kind: LabMorphKind
+    public var adornments: Set<LabMorphAdornment> = []
+    public init(_ kind: LabMorphKind, _ adornments: Set<LabMorphAdornment> = []) {
+        self.kind = kind
+        self.adornments = adornments
+    }
+}
+
 /// The Lab's three rooms (Chris, 2026-09-15): what the thing is, what
 /// it sits in, and what a touch does.
 public enum LabSection: String, CaseIterable, Identifiable, Sendable {
@@ -1130,7 +1188,7 @@ public enum LabSection: String, CaseIterable, Identifiable, Sendable {
         case .flows: return "hand.tap"
         }
     }
-    public var experiments: [LabExperiment] { LabExperiment.allCases.filter { $0.section == self } }
+    public var experiments: [LabExperiment] { LabExperiment.allCases.filter { $0.section == self && !$0.isHidden } }
     /// Orb splits into bases and post effects.
     public var bases: [LabExperiment] { experiments.filter { !$0.decoratesRing } }
     public var posts: [LabExperiment] { experiments.filter { $0.decoratesRing } }
@@ -1310,6 +1368,23 @@ public final class LabState: ObservableObject {
     @Published public var taps: Int = 0
     @Published public var lastTap: Date = .distantPast
 
+    /// The Morph's states, in order. Add, remove, adorn.
+    @Published public var morphStates: [LabMorphState] = [LabMorphState(.pod), LabMorphState(.pill), LabMorphState(.card), LabMorphState(.sheet)]
+
+    public func addMorphState(_ kind: LabMorphKind) { morphStates.append(LabMorphState(kind)) }
+    public func removeMorphState(_ id: UUID) { morphStates.removeAll { $0.id == id } }
+    public func toggle(_ adornment: LabMorphAdornment, on id: UUID) {
+        guard let i = morphStates.firstIndex(where: { $0.id == id }) else { return }
+        if morphStates[i].adornments.contains(adornment) { morphStates[i].adornments.remove(adornment) }
+        else { morphStates[i].adornments.insert(adornment) }
+    }
+    /// On every state, or off every state.
+    public func setAll(_ adornment: LabMorphAdornment, on: Bool) {
+        for i in morphStates.indices {
+            if on { morphStates[i].adornments.insert(adornment) } else { morphStates[i].adornments.remove(adornment) }
+        }
+    }
+
     /// Press-and-hold, for the Hold flow: when the press began, or nil.
     @Published public var holdStart: Date? = nil
     /// When the last hold ended — the flow's "talking" runs from here.
@@ -1389,12 +1464,14 @@ public struct LabFrame {
     /// hold ended, or infinity.
     public var holding: Double = 0
     public var sinceHold: Double = .infinity
+    /// The Morph's states — see `LabState.morphStates`.
+    public var morphStates: [LabMorphState] = []
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
                 params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
                 taps: Int = 0, sinceTap: Double = .infinity,
                 hero: LabExperiment? = nil, heroPost: [LabPostEffect] = [], fill: Double = 1,
-                holding: Double = 0, sinceHold: Double = .infinity) {
+                holding: Double = 0, sinceHold: Double = .infinity, morphStates: [LabMorphState] = []) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -1411,6 +1488,7 @@ public struct LabFrame {
         self.fill = fill
         self.holding = holding
         self.sinceHold = sinceHold
+        self.morphStates = morphStates
     }
 
     /// A knob's value, or its declared default when the frame was built
@@ -1471,7 +1549,8 @@ extension LabState {
                         heroPost: post,
                         fill: fill,
                         holding: holdStart.map { date.timeIntervalSince($0) } ?? 0,
-                        sinceHold: date.timeIntervalSince(holdEnd))
+                        sinceHold: date.timeIntervalSince(holdEnd),
+                        morphStates: morphStates)
     }
 
     private static func hueShifted(_ color: Color, by turns: Double) -> Color {

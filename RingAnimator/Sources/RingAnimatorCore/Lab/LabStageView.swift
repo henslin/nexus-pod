@@ -58,12 +58,21 @@ public struct LabStageView: View {
         ZStack(alignment: .bottomLeading) {
             (lab.darkStage ? Color(white: 0.06) : Color(white: 0.94))
             TimelineView(.animation) { timeline in
-                LabExperimentView(experiment: lab.experiment,
-                                  frame: frame(at: timeline.date, diameter: CGFloat(lab.diameter)),
-                                  config: config,
-                                  post: lab.post)
-                    .id(lab.experiment)
-                    .environment(\.colorScheme, lab.darkStage ? .dark : .light)
+                let f = frame(at: timeline.date, diameter: CGFloat(lab.diameter))
+                Group {
+                    if lab.experiment == .morph {
+                        // The workbench: hero on top, every state below.
+                        ScrollView(.vertical) {
+                            LabMorphStage(lab: lab, config: config, frame: f)
+                                .padding(.vertical, 24)
+                                .frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.post)
+                    }
+                }
+                .id(lab.experiment)
+                .environment(\.colorScheme, lab.darkStage ? .dark : .light)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
