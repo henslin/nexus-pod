@@ -42,7 +42,12 @@ struct LabMorphView: View {
         let state = states.isEmpty ? LabMorphState(.pod) : states[min(index, states.count - 1)]
         let spring = Animation.spring(response: frame.p("spring", .morph),
                                       dampingFraction: 1 - frame.p("bounce", .morph) * 0.45)
-        LabMorphPanel(state: state, frame: frame, config: config, diameter: frame.diameter)
+        // Where we are within this state's hold — the transitions run
+        // off it. Deterministic, like everything else on the clock.
+        let hold = max(frame.p("hold", .morph), 0.2)
+        let sinceChange = frame.time.truncatingRemainder(dividingBy: hold)
+        LabMorphPanel(state: state, frame: frame, config: config, diameter: frame.diameter,
+                      sinceChange: sinceChange, untilChange: hold - sinceChange)
             .animation(spring, value: state.id)
             .frame(width: frame.diameter, height: frame.diameter)
     }
@@ -56,6 +61,39 @@ struct LabMorphPanel: View {
     let frame: LabFrame
     @ObservedObject var config: RingConfig
     let diameter: CGFloat
+    /// Seconds since this state became current, and until it stops
+    /// being — the transitions' clock. Infinity for a still card.
+    var sinceChange: Double = .infinity
+    var untilChange: Double = .infinity
+
+    /// 0 → 1 as the content arrives, 1 → 0 as it leaves.
+    private var envelope: Double {
+        let tin = max(frame.p("transIn", .morph), 0.05)
+        let tout = max(frame.p("transOut", .morph), 0.05)
+        let arriving = state.enter == .none ? 1 : min(1, sinceChange / tin)
+        let leaving = state.exit == .none ? 1 : min(1, untilChange / tout)
+        let e = min(arriving, leaving)
+        return e * e * (3 - 2 * e)
+    }
+
+    /// The glow's extra brightness on a flare entrance, decaying.
+    private var flare: Double {
+        guard state.enter == .flare, sinceChange.isFinite else { return 0 }
+        let tin = max(frame.p("transIn", .morph), 0.05)
+        return max(0, 1 - sinceChange / (tin * 2)) * 1.5
+    }
+
+    /// Content offset/scale for grow and slide, from the envelope.
+    private var contentScale: CGFloat {
+        let leavingGrow = state.exit == .grow, enteringGrow = state.enter == .grow
+        guard enteringGrow || leavingGrow else { return 1 }
+        return CGFloat(0.6 + 0.4 * envelope)
+    }
+    private var contentOffset: CGFloat {
+        let slide = state.enter == .slide || state.exit == .slide
+        guard slide else { return 0 }
+        return CGFloat((1 - envelope) * 28)
+    }
 
     private var size: CGSize {
         let d = diameter
@@ -79,22 +117,38 @@ struct LabMorphPanel: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let env = envelope
         ZStack {
             content
+                .opacity(state.enter == .none && state.exit == .none ? 1 : env)
+                .scaleEffect(contentScale)
+                .offset(y: contentOffset)
         }
         .frame(width: size.width, height: size.height)
+        // Everything the state carries is clipped to the state's own
+        // shape — captions, waveforms, the glow. Nothing spills.
+        .clipShape(shape)
         .modifier(LabGlassShape(cornerRadius: cornerRadius, glass: config.glass))
         .background {
-            // Edge glow sits *under* the glass so the glass refracts it —
-            // the same construction as Button Glow.
+            // Edge glow *inside* the container's edge, clipped by it — the
+            // iOS 18 Siri construction — and under the glass so the glass
+            // refracts it. It arrives and leaves with the content, and a
+            // flare entrance overshoots then settles.
             if state.adornments.contains(.edgeGlow) {
                 let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 48)
                 let width = frame.p("glowWidth", .morph), blur = frame.p("glowBlur", .morph)
-                shape.strokeBorder(AngularGradient(colors: sweep, center: .center, angle: .degrees(frame.time * 40)), lineWidth: width)
-                    .padding(-width * 0.5)
-                    .blur(radius: blur)
-                    .opacity(0.8 + frame.audio * 0.4)
-                    .blendMode(.plusLighter)
+                let inset = frame.p("glowInset", .morph)
+                ZStack {
+                    shape.strokeBorder(AngularGradient(colors: sweep, center: .center, angle: .degrees(frame.time * 40)), lineWidth: width)
+                        .padding(inset)
+                        .blur(radius: blur)
+                    shape.strokeBorder(AngularGradient(colors: sweep, center: .center, angle: .degrees(frame.time * 40)), lineWidth: 2)
+                        .padding(inset)
+                        .opacity(0.8)
+                }
+                .opacity(min(1.6, (0.8 + frame.audio * 0.4) * env + flare))
+                .blendMode(.plusLighter)
+                .clipShape(shape)
             }
         }
     }
@@ -115,6 +169,7 @@ struct LabMorphPanel: View {
                     Text(hasCaption ? "Listening…" : "John arrived home.")
                         .font(.system(size: 15, weight: .medium))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     Spacer(minLength: 0)
                 }
             }
@@ -229,6 +284,18 @@ struct LabMorphStage: View {
                     }
                     .buttonStyle(.bordered)
                 }
+                Menu {
+                    Section("All enter with") {
+                        ForEach(LabMorphTransition.allCases) { t in Button(t.label) { lab.setAllTransitions(enter: t, exit: nil) } }
+                    }
+                    Section("All leave with") {
+                        ForEach(LabMorphTransition.allCases.filter { $0 != .flare }) { t in Button(t.label) { lab.setAllTransitions(enter: nil, exit: t) } }
+                    }
+                } label: {
+                    Label("Transitions", systemImage: "arrow.left.arrow.right").font(.caption)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
         }
     }
@@ -253,6 +320,20 @@ struct LabMorphStage: View {
                             }
                         }
                     }
+                    Section("Enters") {
+                        ForEach(LabMorphTransition.allCases) { t in
+                            Button { lab.setEnter(t, on: state.id) } label: {
+                                Label(t.label, systemImage: state.enter == t ? "checkmark" : "arrow.down.right")
+                            }
+                        }
+                    }
+                    Section("Leaves") {
+                        ForEach(LabMorphTransition.allCases.filter { $0 != .flare }) { t in
+                            Button { lab.setExit(t, on: state.id) } label: {
+                                Label(t.label, systemImage: state.exit == t ? "checkmark" : "arrow.up.left")
+                            }
+                        }
+                    }
                     Section("Shape") {
                         ForEach(LabMorphKind.allCases) { kind in
                             Button(kind.label) {
@@ -268,7 +349,7 @@ struct LabMorphStage: View {
                 .fixedSize()
             }
             .frame(width: cardDiameter)
-            // What it carries, as chips.
+            // What it carries, and how it comes and goes, as chips.
             HStack(spacing: 4) {
                 ForEach(LabMorphAdornment.allCases.filter { state.adornments.contains($0) }) { a in
                     Label(a.label, systemImage: a.symbol)
@@ -276,6 +357,9 @@ struct LabMorphStage: View {
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Capsule().fill(.fill.tertiary))
                 }
+                Text("\(state.enter.label) → \(state.exit.label)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 Spacer(minLength: 0)
             }
             .frame(width: cardDiameter)

@@ -642,6 +642,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("glowWidth", "Glow Width", 2...40, 14, "Edge glow band, points, where a state has it.", "%.0f pt"),
             .init("glowBlur", "Glow Blur", 0...30, 10, "Edge glow softness, points.", "%.0f pt"),
             .init("pingpong", "Ping-pong", 0...1, 1, "1 goes up the states and back down; 0 cycles round.", "%.0f"),
+            .init("transIn", "Enter Time", 0.1...2, 0.5, "How long a state's content and adornments take to arrive.", "%.1f s"),
+            .init("transOut", "Leave Time", 0.1...2, 0.35, "How long they take to leave before the next state.", "%.1f s"),
+            .init("glowInset", "Glow Inset", 0...30, 0, "Edge glow pulled in from the container's edge, points.", "%.0f pt"),
         ]
         case .liquid: return [
             .init("blobs", "Blobs", 2...8, 5, "How many.", "%.0f"),
@@ -1152,10 +1155,37 @@ public enum LabMorphAdornment: String, CaseIterable, Identifiable, Codable, Send
     }
 }
 
+/// How a state's content and adornments arrive and leave. The glass
+/// panel itself always morphs on the spring; this is what rides on it.
+public enum LabMorphTransition: String, CaseIterable, Identifiable, Codable, Sendable {
+    case none, fade, grow, slide, flare
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .none: return "Cut"
+        case .fade: return "Fade"
+        case .grow: return "Grow"
+        case .slide: return "Slide up"
+        case .flare: return "Flare"
+        }
+    }
+    public var summary: String {
+        switch self {
+        case .none: return "Appears at once."
+        case .fade: return "Fades in over the transition time."
+        case .grow: return "Scales up from small, fading in."
+        case .slide: return "Rises from below, fading in."
+        case .flare: return "Fades in, and the edge glow flares bright then settles — light announcing the state."
+        }
+    }
+}
+
 public struct LabMorphState: Identifiable, Equatable, Sendable {
     public var id = UUID()
     public var kind: LabMorphKind
     public var adornments: Set<LabMorphAdornment> = []
+    public var enter: LabMorphTransition = .fade
+    public var exit: LabMorphTransition = .fade
     public init(_ kind: LabMorphKind, _ adornments: Set<LabMorphAdornment> = []) {
         self.kind = kind
         self.adornments = adornments
@@ -1379,6 +1409,19 @@ public final class LabState: ObservableObject {
         else { morphStates[i].adornments.insert(adornment) }
     }
     /// On every state, or off every state.
+    public func setEnter(_ t: LabMorphTransition, on id: UUID) {
+        if let i = morphStates.firstIndex(where: { $0.id == id }) { morphStates[i].enter = t }
+    }
+    public func setExit(_ t: LabMorphTransition, on id: UUID) {
+        if let i = morphStates.firstIndex(where: { $0.id == id }) { morphStates[i].exit = t }
+    }
+    public func setAllTransitions(enter: LabMorphTransition?, exit: LabMorphTransition?) {
+        for i in morphStates.indices {
+            if let enter { morphStates[i].enter = enter }
+            if let exit { morphStates[i].exit = exit }
+        }
+    }
+
     public func setAll(_ adornment: LabMorphAdornment, on: Bool) {
         for i in morphStates.indices {
             if on { morphStates[i].adornments.insert(adornment) } else { morphStates[i].adornments.remove(adornment) }
