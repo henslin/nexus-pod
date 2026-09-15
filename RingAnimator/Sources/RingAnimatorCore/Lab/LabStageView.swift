@@ -70,6 +70,12 @@ public struct LabStageView: View {
             .onTapGesture {
                 if lab.experiment.isTappable { lab.advance() }
             }
+            // Press and hold, for the Hold flow: begins on touch-down,
+            // ends on release — `DragGesture(minimumDistance: 0)` is the
+            // one gesture that reports both.
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in if lab.experiment.isHoldable { lab.beginHold() } }
+                .onEnded { _ in lab.endHold() })
             if lab.showPod, !lab.experiment.usesPhoneCanvas {
                 podPreview
                     .padding(20)
@@ -371,21 +377,37 @@ public struct LabListView: View {
             get: { lab.experiment },
             set: { if let it = $0 { lab.experiment = it } }
         )
-        List(LabExperiment.allCases, selection: selection) { experiment in
-            HStack(spacing: 10) {
-                Image(systemName: experiment.symbol)
-                    .frame(width: 22)
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(experiment.name)
-                    Text(experiment.technology)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        List(selection: selection) {
+            ForEach(LabSection.allCases) { section in
+                Section {
+                    ForEach(section.bases) { row($0) }
+                    if !section.posts.isEmpty {
+                        Text("Post effects — stack these over any base")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                            .listRowSeparator(.hidden)
+                        ForEach(section.posts) { row($0) }
+                    }
+                } header: {
+                    Label(section.title, systemImage: section.symbol)
                 }
             }
-            .padding(.vertical, 2)
-            .tag(experiment)
         }
+    }
+
+    private func row(_ experiment: LabExperiment) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: experiment.symbol)
+                .frame(width: 22)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(experiment.name)
+                Text(experiment.technology)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+        .tag(experiment)
     }
 }
 
@@ -542,6 +564,10 @@ public struct LabExperimentView: View {
         case .fizz: LabFizzView(frame: frame) { ring }
         case .glints: LabGlintsView(frame: frame) { ring }
         case .parallax: LabParallaxView(frame: frame) { ring }
+        case .focus: LabFocusView(frame: frame) { ring }
+        case .buttonGlow: LabButtonGlowView(frame: frame, config: config)
+        case .sheet: LabSheetView(frame: frame, config: config)
+        case .hold: LabHoldView(frame: frame, config: config)
         case .journey:
             LabJourneyView(frame: frame, config: config)
         case .agentStates:

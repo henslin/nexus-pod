@@ -864,3 +864,25 @@ struct LabParallaxView<Base: View>: View {
                 maxSampleOffset: CGSize(width: off + soften, height: off + soften))
     }
 }
+
+// MARK: - Focus (Metal · layerEffect), post — depth of field
+
+struct LabFocusView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+    var body: some View {
+        let radius = frame.p("radius", .focus) * (0.5 + frame.intensity) + frame.audio * 10
+        let drift = frame.p("drift", .focus)
+        let fx = Float(frame.p("x", .focus) + sin(frame.time * 0.5) * drift * 0.3)
+        let fy = Float(frame.p("y", .focus) + cos(frame.time * 0.37) * drift * 0.3)
+        ring()
+            .padding(radius)
+            .visualEffect { content, proxy in
+                content.layerEffect(
+                    ShaderLibrary.bundle(.module).labFocus(.float2(proxy.size), .float2(CGPoint(x: CGFloat(fx), y: CGFloat(fy))),
+                                                            .float(Float(radius)), .float(Float(frame.p("band", .focus))),
+                                                            .float(Float(frame.p("falloff", .focus))), .float(Float(frame.p("bokeh", .focus)))),
+                    maxSampleOffset: CGSize(width: radius, height: radius))
+            }
+    }
+}

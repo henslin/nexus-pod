@@ -2157,3 +2157,36 @@ static float lab_fbm3(float3 p, int octaves) {
     half a = s.a + shadowA + lightA;
     return half4(rgb, min(a, 1.0h));
 }
+
+// MARK: - Focus (layerEffect), post — depth of field
+//
+// A camera's shallow focus without a depth buffer: sharp at a focal
+// point (or along a focal band), blurring with distance from it, and the
+// blur is a *disc* — jittered taps on a circle — so bright points bloom
+// into bokeh rather than smearing. `focus` in 0…1 across the layer,
+// `radius` the maximum blur in pixels, `band` 0 radial / 1 horizontal.
+
+[[ stitchable ]] half4 labFocus(float2 position, SwiftUI::Layer layer,
+                                float2 size, float2 focus, float radius, float band, float falloff, float bokeh)
+{
+    float2 uv = position / size;
+    float dist = band < 0.5f ? length((uv - focus) * float2(size.x / size.y, 1.0f)) : abs(uv.y - focus.y);
+    float amount = clamp(pow(dist * 2.0f, falloff), 0.0f, 1.0f) * radius;
+    if (amount < 0.5f) return layer.sample(position);
+    half4 acc = half4(0);
+    half wsum = half(0);
+    float jitter = lab_hash(position) * 6.2831f;
+    float rj = lab_hash(position + 9.7f);
+    const int taps = 24;
+    for (int i = 0; i < taps; i++) {
+        float a = jitter + float(i) / float(taps) * 6.2831f;
+        float rs = sqrt(fract(rj + float(i) * 0.618034f));
+        half4 s = layer.sample(position + float2(cos(a), sin(a)) * amount * rs);
+        // Bokeh: bright samples weigh more, so highlights stay discs.
+        half l = dot(s.rgb, half3(0.2126h, 0.7152h, 0.0722h));
+        half w = 1.0h + half(bokeh) * l * l * 6.0h;
+        acc += s * w;
+        wsum += w;
+    }
+    return acc / max(wsum, half(0.001));
+}

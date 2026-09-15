@@ -561,3 +561,185 @@ struct LabCaptionView: View {
         }
     }
 }
+
+// MARK: - Button Glow (UI)
+
+struct LabButtonGlowView: View {
+    let frame: LabFrame
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        let width = frame.p("width", .buttonGlow), blur = frame.p("blur", .buttonGlow)
+        let rotate = frame.p("rotate", .buttonGlow), breathe = frame.p("breathe", .buttonGlow)
+        let count = Int(frame.p("buttons", .buttonGlow))
+        let orb = frame.p("orb", .buttonGlow)
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 48)
+        let pulse = 0.75 + 0.25 * sin(frame.time * 1.6) * breathe + frame.audio * 0.4
+        LabPhoneCanvas(frame: frame) { size in
+            ZStack {
+                Color.black.opacity(frame.darkStage ? 0.6 : 0.15)
+                VStack(spacing: 22) {
+                    Spacer()
+                    LabHeroView(frame: frame, config: config, diameter: size.width * orb)
+                    Spacer().frame(height: 10)
+                    ForEach(0..<count, id: \.self) { i in
+                        let label = ["Ask Nexus", "Talk", "Send"][i % 3]
+                        Text(label)
+                            .font(.system(size: 17, weight: .semibold))
+                            .padding(.horizontal, 28)
+                            .frame(height: 52)
+                            .frame(minWidth: size.width * 0.6)
+                            .modifier(LabGlassShape(cornerRadius: 26, glass: config.glass))
+                            .background {
+                                // The glow: the palette round the capsule's
+                                // edge, blurred, breathing — under the glass
+                                // so the glass refracts it.
+                                Capsule()
+                                    .strokeBorder(AngularGradient(colors: sweep, center: .center, angle: .degrees(frame.time * rotate * 60 + Double(i) * 90)), lineWidth: width)
+                                    .blur(radius: blur)
+                                    .opacity(pulse)
+                                    .padding(-width * 0.5)
+                                    .blendMode(.plusLighter)
+                            }
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Sheet (UI)
+
+struct LabSheetView: View {
+    let frame: LabFrame
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        let height = frame.p("height", .sheet)
+        let hero = frame.p("hero", .sheet)
+        let showWave = frame.p("waveform", .sheet) >= 0.5
+        let dim = frame.p("dim", .sheet)
+        LabPhoneCanvas(frame: frame) { size in
+            ZStack(alignment: .bottom) {
+                Color.black.opacity(dim * 0.7)
+                VStack(spacing: 14) {
+                    LabHeroView(frame: frame, config: config, diameter: size.width * hero)
+                        .padding(.top, 22)
+                    LabCaptionWords(frame: frame, width: size.width - 48, size: 17, style: 1, rate: 4, glow: 0.3, hold: 4)
+                        .frame(height: 70)
+                    Spacer()
+                    HStack(spacing: 10) {
+                        Group {
+                            if showWave {
+                                LabWaveformBars(frame: frame, bars: 28, height: 22)
+                            } else {
+                                Text("Message").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14)
+                            }
+                        }
+                        .frame(height: 44)
+                        .frame(maxWidth: .infinity)
+                        .background(Capsule().fill(.fill.tertiary))
+                        LabHeroView(frame: frame, config: config, diameter: 44)
+                    }
+                    .padding(16)
+                }
+                .frame(width: size.width, height: size.height * height)
+                .modifier(LabGlassShape(cornerRadius: 34, glass: config.glass))
+            }
+        }
+    }
+}
+
+/// A small inline waveform for input bars — the bars style of
+/// `LabWaveformView`, at a given height.
+struct LabWaveformBars: View {
+    let frame: LabFrame
+    let bars: Int
+    let height: Double
+
+    var body: some View {
+        let energies = LabWaveformView.energies(frame: frame, count: bars, smooth: 0.5, synth: 0.6)
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: max(bars, 2))
+        Canvas { ctx, size in
+            let gap = size.width / CGFloat(bars)
+            for (i, e) in energies.enumerated() {
+                let h = max(3, height * e)
+                let x = gap * (CGFloat(i) + 0.5)
+                let rect = CGRect(x: x - 1.5, y: size.height / 2 - h / 2, width: 3, height: h)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(sweep[i % sweep.count]))
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+}
+
+// MARK: - Hold (Flow) — press and hold into full-screen listening
+
+struct LabHoldView: View {
+    let frame: LabFrame
+    @ObservedObject var config: RingConfig
+
+    private enum Phase { case idle, growing, listening, talking }
+
+    var body: some View {
+        let grow = frame.p("grow", .hold)
+        let talk = frame.p("talk", .hold)
+        let spring = Animation.spring(response: frame.p("spring", .hold), dampingFraction: 1 - frame.p("bounce", .hold) * 0.45)
+        // Progress 0…1: the hold grows it; release within `talk` seconds
+        // keeps it open and talking; then it settles.
+        let phase: Phase = frame.holding > 0 ? (frame.holding < grow ? .growing : .listening)
+                         : (frame.sinceHold < talk ? .talking : .idle)
+        let progress: Double = {
+            switch phase {
+            case .growing: return min(frame.holding / grow, 1)
+            case .listening, .talking: return 1
+            case .idle: return 0
+            }
+        }()
+        let eased = progress * progress * (3 - 2 * progress)
+        LabPhoneCanvas(frame: frame) { size in
+            ZStack {
+                Color.black.opacity(0.92 * eased)
+                    .animation(spring, value: phase)
+                LabEdgeGlowStroke(frame: frame, size: size, width: 18, blur: 20,
+                                  strength: frame.p("glow", .hold) * eased * (phase == .talking ? 1.2 : 1),
+                                  rotate: 0.3, inset: 0)
+                VStack {
+                    Spacer()
+                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32)
+                        .allowsHitTesting(false)
+                        .padding(.bottom, 24)
+                        .opacity(1 - eased)
+                        .offset(y: 80 * eased)
+                }
+                // The orb: from the pod to the hero, by the hold.
+                let pod = CGFloat(RingConfig.tabBarPodDiameter)
+                let podCenter = CGPoint(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
+                let heroD = size.width * frame.p("hero", .hold)
+                let heroCenter = CGPoint(x: size.width / 2, y: size.height * 0.42)
+                let d = pod + (heroD - pod) * eased
+                let c = CGPoint(x: podCenter.x + (heroCenter.x - podCenter.x) * eased, y: podCenter.y + (heroCenter.y - podCenter.y) * eased)
+                LabHeroView(frame: frame, config: config, diameter: d)
+                    .scaleEffect(phase == .talking ? 1 + frame.audio * 0.15 + 0.03 * sin(frame.time * 9) : 1)
+                    .position(c)
+                    .animation(spring, value: phase)
+                VStack(spacing: 10) {
+                    Spacer()
+                    Text(phase == .talking ? "Speaking" : phase == .listening ? "Listening…" : "Hold to talk")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .contentTransition(.numericText())
+                    if phase == .talking {
+                        LabCaptionWords(frame: frame, width: size.width - 48, size: 20, style: 1, rate: 4, glow: 0.4, hold: talk)
+                            .frame(height: 100)
+                    } else {
+                        Spacer().frame(height: 100)
+                    }
+                    Spacer().frame(height: 60)
+                }
+                .opacity(eased)
+            }
+        }
+    }
+}

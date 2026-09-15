@@ -25,7 +25,7 @@ public struct LabViewerView: View {
 
     /// The experiments in viewing order: the pod-shaped ones first, then
     /// the flows. Post-only experiments are reached through the stack.
-    private static let order: [LabExperiment] = LabExperiment.allCases.filter { !$0.decoratesRing || $0 == .sparks || $0 == .bloom }
+    private static let order: [LabExperiment] = LabSection.allCases.flatMap { $0.bases }
 
     public init() {
         // The viewer is a room, not a desk: audio on, a bigger stage.
@@ -104,6 +104,9 @@ public struct LabViewerView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { if experiment.isTappable { lab.advance() } }
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { _ in if experiment.isHoldable { lab.beginHold() } }
+            .onEnded { _ in lab.endHold() })
     }
 
     // MARK: - Chrome
@@ -336,22 +339,32 @@ struct LabPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List(order) { e in
-                Button {
-                    lab.experiment = e
-                    dismiss()
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: e.symbol).frame(width: 24).foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(e.name)
-                            Text(e.technology).font(.caption).foregroundStyle(.secondary)
+            List {
+                ForEach(LabSection.allCases) { section in
+                    Section {
+                        ForEach(section.bases) { e in
+                            Button {
+                                lab.experiment = e
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: e.symbol).frame(width: 24).foregroundStyle(.secondary)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(e.name)
+                                        Text(e.technology).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if e == lab.experiment { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                                }
+                            }
+                            .buttonStyle(.plain)
                         }
-                        Spacer()
-                        if e == lab.experiment { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    } header: {
+                        Label(section.title, systemImage: section.symbol)
+                    } footer: {
+                        Text(section.caption)
                     }
                 }
-                .buttonStyle(.plain)
             }
             .navigationTitle("Experiments")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

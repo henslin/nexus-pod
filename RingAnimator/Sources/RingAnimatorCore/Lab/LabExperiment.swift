@@ -80,6 +80,12 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case fizz
     case glints
     case parallax
+    case focus
+    // UI — surfaces the orb sits in.
+    case buttonGlow
+    case sheet
+    // Flows — what a touch does.
+    case hold
     // Flows — the tap-on-Nexus question, on a phone canvas.
     case journey
     case agentStates
@@ -146,6 +152,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .fizz:       return "Fizz"
         case .glints:     return "Glints"
         case .parallax:   return "Parallax"
+        case .focus:      return "Focus"
+        case .buttonGlow: return "Button Glow"
+        case .sheet:      return "Sheet"
+        case .hold:       return "Hold"
         case .kaleido:    return "Kaleido"
         case .dots:       return "Dots"
         case .grain:      return "Grain"
@@ -210,7 +220,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .tide:       return "Metal · colorEffect (ray-marched)"
         case .droplet, .pour, .pool, .caustics, .lava, .jelly, .slick, .deep: return "Metal · colorEffect"
         case .nebula:     return "Metal · colorEffect (ray-marched)"
-        case .water, .haze, .fizz, .glints, .parallax: return "Metal · layerEffect"
+        case .water, .haze, .fizz, .glints, .parallax, .focus: return "Metal · layerEffect"
+        case .buttonGlow: return "SwiftUI · Liquid Glass + glow"
+        case .sheet:      return "SwiftUI · Liquid Glass"
+        case .hold:       return "SwiftUI · long press + springs"
         case .kaleido:    return "Metal · layerEffect"
         case .dots:       return "Metal · layerEffect"
         case .grain:      return "Metal · layerEffect"
@@ -285,6 +298,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .fizz:       return "bubbles.and.sparkles"
         case .glints:     return "sparkle"
         case .parallax:   return "square.3.layers.3d"
+        case .focus:      return "camera.aperture"
+        case .buttonGlow: return "capsule"
+        case .sheet:      return "rectangle.bottomhalf.inset.filled"
+        case .hold:       return "hand.tap"
         case .kaleido:    return "hexagon"
         case .dots:       return "circle.grid.3x3.fill"
         case .grain:      return "film"
@@ -420,6 +437,14 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "Post: a star filter — bright points throw four thin streaks. The sparkle on a wet surface, or on Stipple’s rim."
         case .parallax:
             return "Post: depth for a flat thing — a dark, softened copy offset one way (its shadow on the glass behind) and a light copy the other (the light on its edge). Under Liquid Glass this is what makes a layer read as an object with thickness."
+        case .focus:
+            return "Post: depth of field. Sharp at a focal point you place, blurring with distance from it — and the blur is a disc of jittered taps, so highlights bloom into bokeh rather than smearing. Band mode focuses a horizontal slice instead, like a tilt-shift."
+        case .buttonGlow:
+            return "UI: the orb’s glow escaping onto a control — a Liquid Glass capsule button with the palette running round its edge, breathing with the voice, the orb beside it. For the send button, the mic button, a pill that’s ‘live’."
+        case .sheet:
+            return "UI: the agent sheet on its own — Liquid Glass, the hero at the top, a transcript arriving, a waveform in the input bar — without the flow around it, so the sheet itself can be designed. The hero is whatever Hero says."
+        case .hold:
+            return "Flow: press and hold the stage. The pod grows with the hold into a full-screen listening UI — edge glow, hero, ‘Listening…’ — and letting go turns it into talking, then it settles back. The long-press question, answered by holding."
         case .glitch:
             return "Post: digital damage in bursts — sliced rows, a channel split, inverted blocks — gated by the beat. An error state, or an interruption."
         case .crt:
@@ -450,7 +475,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// underneath for those, so the comparison is "the ring, plus this".
     public var decoratesRing: Bool {
         switch self {
-        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays, .kaleido, .dots, .grain, .glitch, .crt, .neon, .frost, .duotone, .spin, .tiles, .chrome, .water, .haze, .fizz, .glints, .parallax: return true
+        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays, .kaleido, .dots, .grain, .glitch, .crt, .neon, .frost, .duotone, .spin, .tiles, .chrome, .water, .haze, .fizz, .glints, .parallax, .focus: return true
         default: return false
         }
     }
@@ -481,7 +506,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .droplet: return 0.92
         case .pour, .nebula: return 0.92
         case .jelly: return 0.93
-        case .bloom, .ripple, .sparks, .rays, .chromatic, .kaleido, .dots, .grain, .glitch, .crt, .neon, .frost, .duotone, .spin, .tiles, .chrome, .water, .haze, .fizz, .glints, .parallax:
+        case .bloom, .ripple, .sparks, .rays, .chromatic, .kaleido, .dots, .grain, .glitch, .crt, .neon, .frost, .duotone, .spin, .tiles, .chrome, .water, .haze, .fizz, .glints, .parallax, .focus:
             return 0.72   // the ring underneath
         default: return 0.97
         }
@@ -504,13 +529,25 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// which are about the whole screen.
     public var usesPhoneCanvas: Bool {
         switch self {
-        case .journey, .agentStates, .waveform, .edgeGlow, .caption: return true
+        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold: return true
         default: return false
         }
     }
 
     /// Advances through stages on tap — see `LabState.advance()`.
     public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols }
+
+    /// Responds to press-and-hold — see `LabState.hold`.
+    public var isHoldable: Bool { self == .hold }
+
+    /// Which room of the Lab this lives in.
+    public var section: LabSection {
+        switch self {
+        case .journey, .agentStates, .hold: return .flows
+        case .waveform, .edgeGlow, .caption, .morph, .buttonGlow, .sheet: return .ui
+        default: return .orb
+        }
+    }
 
     /// The experiment's own knobs, beyond the shared ones. The panel
     /// builds a slider per entry; the experiment reads them back by id
@@ -931,6 +968,37 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("light", "Light", 0...1, 0.5, "The light copy."),
             .init("soften", "Soften", 0...12, 4, "Shadow blur, points.", "%.0f pt"),
         ]
+        case .focus: return [
+            .init("x", "Focus X", 0...1, 0.5, "Focal point, across."),
+            .init("y", "Focus Y", 0...1, 0.5, "Focal point, down."),
+            .init("radius", "Blur", 0...40, 14, "Maximum blur, points.", "%.0f pt"),
+            .init("band", "Tilt-shift", 0...1, 0, "1 focuses a horizontal band instead of a point.", "%.0f"),
+            .init("falloff", "Falloff", 0.5...4, 1.6, "How quickly it goes soft away from focus."),
+            .init("bokeh", "Bokeh", 0...1, 0.6, "Highlights kept as discs."),
+            .init("drift", "Drift", 0...1, 0, "The focal point wanders."),
+        ]
+        case .buttonGlow: return [
+            .init("width", "Glow Width", 2...40, 14, "Points.", "%.0f pt"),
+            .init("blur", "Blur", 0...30, 12, "Softness, points.", "%.0f pt"),
+            .init("rotate", "Rotate", -2...2, 0.5, "Palette running round the edge."),
+            .init("breathe", "Breathe", 0...1, 0.5, "Idle pulse."),
+            .init("buttons", "Buttons", 1...3, 2, "How many controls to show.", "%.0f"),
+            .init("orb", "Orb Size", 0.1...0.4, 0.2, "The orb beside them, as a fraction of width."),
+        ]
+        case .sheet: return [
+            .init("height", "Height", 0.4...1, 0.72, "Sheet height as a fraction of the screen."),
+            .init("hero", "Hero Size", 0.15...0.6, 0.3, "The orb at the top, as a fraction of width."),
+            .init("waveform", "Waveform", 0...1, 1, "A waveform in the input bar.", "%.0f"),
+            .init("dim", "Dim", 0...1, 0.5, "How much the app dims behind."),
+        ]
+        case .hold: return [
+            .init("grow", "Grow Time", 0.2...2, 0.7, "Seconds of hold to reach full screen.", "%.1f s"),
+            .init("spring", "Spring", 0.2...1.2, 0.45, "Response."),
+            .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom."),
+            .init("talk", "Talk Time", 1...8, 3, "Seconds it talks after release before settling.", "%.1f s"),
+            .init("hero", "Hero Size", 0.3...0.9, 0.55, "Full-screen orb, as a fraction of width."),
+            .init("glow", "Edge Glow", 0...1, 0.8, "Edge glow while listening."),
+        ]
         case .glitch: return [
             .init("amount", "Amount", 0...1, 0.5, "Slice offset and split."),
             .init("blocks", "Blocks", 0...1, 0.4, "Inverted blocks."),
@@ -1036,6 +1104,38 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// The Lab's three rooms (Chris, 2026-09-15): what the thing is, what
+/// it sits in, and what a touch does.
+public enum LabSection: String, CaseIterable, Identifiable, Sendable {
+    case orb, ui, flows
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .orb: return "Orb"
+        case .ui: return "UI"
+        case .flows: return "Flows"
+        }
+    }
+    public var caption: String {
+        switch self {
+        case .orb: return "What lives in the circle. Bases, and post effects that stack over any of them."
+        case .ui: return "The surfaces it sits in — buttons, the sheet, the screen’s edge."
+        case .flows: return "What a touch does — tap, hold, listen, talk."
+        }
+    }
+    public var symbol: String {
+        switch self {
+        case .orb: return "circle.fill"
+        case .ui: return "rectangle.on.rectangle"
+        case .flows: return "hand.tap"
+        }
+    }
+    public var experiments: [LabExperiment] { LabExperiment.allCases.filter { $0.section == self } }
+    /// Orb splits into bases and post effects.
+    public var bases: [LabExperiment] { experiments.filter { !$0.decoratesRing } }
+    public var posts: [LabExperiment] { experiments.filter { $0.decoratesRing } }
+}
+
 /// Which audio signal an experiment listens to.
 public enum LabAudioSource: String, CaseIterable, Identifiable, Sendable {
     case level, bass, mid, treble, beat
@@ -1106,7 +1206,7 @@ public enum LabPalette: String, CaseIterable, Identifiable, Sendable {
 /// demos" into a design space — Aurora with Bloom and a little
 /// Chromatic is a different thing from any of the three alone.
 public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
-    case bloom, rays, ripple, refraction, chromatic, kaleido, dots, grain, glitch, crt, neon, frost, duotone, spin, tiles, chrome, water, haze, fizz, glints, parallax
+    case bloom, rays, ripple, refraction, chromatic, kaleido, dots, grain, glitch, crt, neon, frost, duotone, spin, tiles, chrome, water, haze, fizz, glints, parallax, focus
     public var id: String { rawValue }
     /// The experiment whose knobs this effect uses.
     public var experiment: LabExperiment {
@@ -1132,6 +1232,7 @@ public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
         case .fizz: return .fizz
         case .glints: return .glints
         case .parallax: return .parallax
+        case .focus: return .focus
         }
     }
 }
@@ -1209,7 +1310,15 @@ public final class LabState: ObservableObject {
     @Published public var taps: Int = 0
     @Published public var lastTap: Date = .distantPast
 
+    /// Press-and-hold, for the Hold flow: when the press began, or nil.
+    @Published public var holdStart: Date? = nil
+    /// When the last hold ended — the flow's "talking" runs from here.
+    @Published public var holdEnd: Date = .distantPast
+
     public init() {}
+
+    public func beginHold() { if holdStart == nil { holdStart = Date() } }
+    public func endHold() { if holdStart != nil { holdStart = nil; holdEnd = Date() } }
 
     /// "What happens when I tap on the Nexus tab?" — answered by tapping.
     public func advance() {
@@ -1276,11 +1385,16 @@ public struct LabFrame {
     public var heroPost: [LabPostEffect] = []
     /// See `LabState.fill`.
     public var fill: Double = 1
+    /// Seconds the stage has been held, or 0; seconds since the last
+    /// hold ended, or infinity.
+    public var holding: Double = 0
+    public var sinceHold: Double = .infinity
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
                 params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
                 taps: Int = 0, sinceTap: Double = .infinity,
-                hero: LabExperiment? = nil, heroPost: [LabPostEffect] = [], fill: Double = 1) {
+                hero: LabExperiment? = nil, heroPost: [LabPostEffect] = [], fill: Double = 1,
+                holding: Double = 0, sinceHold: Double = .infinity) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -1295,6 +1409,8 @@ public struct LabFrame {
         self.hero = hero
         self.heroPost = heroPost
         self.fill = fill
+        self.holding = holding
+        self.sinceHold = sinceHold
     }
 
     /// A knob's value, or its declared default when the frame was built
@@ -1353,7 +1469,9 @@ extension LabState {
                         sinceTap: date.timeIntervalSince(lastTap),
                         hero: hero,
                         heroPost: post,
-                        fill: fill)
+                        fill: fill,
+                        holding: holdStart.map { date.timeIntervalSince($0) } ?? 0,
+                        sinceHold: date.timeIntervalSince(holdEnd))
     }
 
     private static func hueShifted(_ color: Color, by turns: Double) -> Color {

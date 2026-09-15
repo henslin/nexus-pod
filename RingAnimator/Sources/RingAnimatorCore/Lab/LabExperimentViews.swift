@@ -474,6 +474,7 @@ struct LabPostStack<Base: View>: View {
         case .fizz:       wrapped = AnyView(LabFizzView(frame: frame) { view })
         case .glints:     wrapped = AnyView(LabGlintsView(frame: frame) { view })
         case .parallax:   wrapped = AnyView(LabParallaxView(frame: frame) { view })
+        case .focus:      wrapped = AnyView(LabFocusView(frame: frame) { view })
         }
         return apply(rest, wrapped)
     }
