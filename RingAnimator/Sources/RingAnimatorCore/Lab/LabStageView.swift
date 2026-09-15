@@ -44,65 +44,14 @@ public struct LabStageView: View {
         .onDisappear { audio.stop() }
     }
 
-    /// The palette, hue-drifted if asked. Drift rotates every colour's
-    /// hue by the same angle, so the palette's relationships hold.
     private func colors(at time: Double) -> [Color] {
-        let base = lab.palette.colors ?? ([config.primaryColor, config.secondaryColor] + config.additionalColors)
-        guard lab.hueDrift != 0 else { return base }
-        let shift = (time * lab.hueDrift / 360).truncatingRemainder(dividingBy: 1)
-        return base.map { Self.hueShifted($0, by: shift) }
+        lab.colors(config: config, at: time)
     }
 
-    private static func hueShifted(_ color: Color, by turns: Double) -> Color {
-        let rgb = PerceptualGradient.rgb(color)
-        var h = 0.0, sat = 0.0, v = 0.0
-        Self.rgbToHSV(rgb, &h, &sat, &v)
-        h = (h + turns).truncatingRemainder(dividingBy: 1)
-        if h < 0 { h += 1 }
-        return Color(hue: h, saturation: sat, brightness: v)
-    }
-
-    private static func rgbToHSV(_ c: RGB, _ h: inout Double, _ s: inout Double, _ v: inout Double) {
-        let mx = max(c.red, c.green, c.blue), mn = min(c.red, c.green, c.blue)
-        v = mx
-        let d = mx - mn
-        s = mx == 0 ? 0 : d / mx
-        if d == 0 { h = 0; return }
-        if mx == c.red { h = ((c.green - c.blue) / d).truncatingRemainder(dividingBy: 6) }
-        else if mx == c.green { h = (c.blue - c.red) / d + 2 }
-        else { h = (c.red - c.green) / d + 4 }
-        h /= 6
-        if h < 0 { h += 1 }
-    }
-
-    private var bands: LabAudioBands {
-        var b = LabAudioBands()
-        guard lab.audioReactive else { return b }
-        let k = lab.audioSensitivity
-        b.level = min(audio.level * k, 1.5)
-        b.bass = min(audio.bass * k, 1.5)
-        b.mid = min(audio.mid * k, 1.5)
-        b.treble = min(audio.treble * k, 1.5)
-        b.beat = min(audio.beat * k, 1.5)
-        return b
-    }
+    private var bands: LabAudioBands { lab.bands(from: audio) }
 
     private func frame(at date: Date, diameter: CGFloat) -> LabFrame {
-        let elapsed = date.timeIntervalSince(appeared) * lab.speed
-        let bands = self.bands
-        return LabFrame(time: elapsed,
-                        intensity: lab.intensity,
-                        audio: bands.value(lab.audioSource),
-                        colors: colors(at: elapsed),
-                        diameter: diameter,
-                        darkStage: lab.darkStage,
-                        params: lab.allResolvedParameters(),
-                        bands: bands,
-                        glyph: lab.glyph.isEmpty ? nil : lab.glyph,
-                        taps: lab.taps,
-                        sinceTap: date.timeIntervalSince(lab.lastTap),
-                        hero: lab.hero,
-                        heroPost: lab.post)
+        lab.frame(at: date, since: appeared, diameter: diameter, config: config, audio: audio)
     }
 
     private var stage: some View {
@@ -563,6 +512,14 @@ public struct LabExperimentView: View {
             LabOrreryView(frame: frame)
         case .bokeh:
             LabBokehView(frame: frame)
+        case .frostOrb:
+            LabFrostOrbView(frame: frame)
+        case .globe:
+            LabGlobeView(frame: frame)
+        case .silk:
+            LabSilkView(frame: frame)
+        case .liquidRing:
+            LabLiquidRingView(frame: frame)
         case .journey:
             LabJourneyView(frame: frame, config: config)
         case .agentStates:

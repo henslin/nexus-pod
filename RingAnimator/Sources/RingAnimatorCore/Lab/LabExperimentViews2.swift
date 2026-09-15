@@ -840,3 +840,25 @@ struct LabBokehView: View {
         return p
     }
 }
+
+// MARK: - Frost Orb / Globe / Silk / Liquid Ring (Metal · colorEffect)
+
+struct LabFrostOrbView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .frostOrb, name: "labFrostOrb") }
+}
+
+struct LabGlobeView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .globe, name: "labGlobe") }
+}
+
+struct LabSilkView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .silk, name: "labSilk") }
+}
+
+struct LabLiquidRingView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .liquidRing, name: "labLiquidRing") }
+}

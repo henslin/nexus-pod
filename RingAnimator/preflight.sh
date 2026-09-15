@@ -145,6 +145,12 @@ xcodebuild -project ../RingAnimatoriOS/RingAnimatoriOS.xcodeproj \
     SYMROOT="$SCRATCH/ios" build >/dev/null 2>&1
 result $? "RingAnimatoriOS"
 
+step "Nexus Lab (iOS viewer) builds"
+xcodebuild -project ../NexusLab/NexusLab.xcodeproj \
+    -target NexusLab -sdk iphonesimulator -configuration Debug \
+    SYMROOT="$SCRATCH/lab" build >/dev/null 2>&1
+result $? "NexusLab"
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
     printf '\033[32mReady to release.\033[0m Bump Packaging/Info.plist, then Packaging/build_and_sign.sh\n'

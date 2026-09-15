@@ -16,6 +16,15 @@ core library:
 - **RingAnimatoriOS** (`RingAnimatoriOS/`) — the real iOS app. A separate
   Xcode project (`RingAnimatoriOS.xcodeproj`) that depends on the same core
   via a local Swift Package reference.
+- **NexusLab** (`NexusLab/`) — the team viewer, iOS. A third Xcode project
+  (`NexusLab.xcodeproj`, cloned from RingAnimatoriOS's, same local package
+  reference). Its whole UI is `LabViewerView` in Core: every Lab
+  experiment full screen, swipe between them, mic on by default, a
+  rating and note per option, ratings exported as text. Built for the
+  team to hold each option and narrow the field (Chris, 2026-09-15).
+  Launch arguments for screenshots: `-lab.experiment frostOrb -lab.light
+  1 -lab.mic 0`. The simulator ignores `simctl privacy grant microphone`
+  for the first-run prompt — reboot the simulator after granting.
 - **RingAnimatorCore** (`RingAnimator/Sources/RingAnimatorCore/`) — shared
   library both targets build on: the ring renderer, `RingConfig`,
   `RingPreset`/`RingPresetStore`, use-case models, cue library, demo-app

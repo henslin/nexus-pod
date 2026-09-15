@@ -147,6 +147,7 @@ static float lab_fbm(float2 p) { return lab_fbm_n(p, 5); }
 {
     float kLight = knobs[0] * M_PI_F / 180.0f, kRim = knobs[1], kSpec = knobs[2], kGloss = knobs[3];
     float kSwirl = knobs[4], kSwirlSpeed = knobs[5];
+    float kBands = knobCount > 6 ? knobs[6] : 0.0f;
     float2 uv = (position / size) * 2.0f - 1.0f;
     float radius = 0.96f + audio * 0.03f;
     float r = length(uv) / radius;
@@ -162,6 +163,10 @@ static float lab_fbm(float2 p) { return lab_fbm_n(p, 5); }
     float2x2 rot = float2x2(cos(a), sin(a), -sin(a), cos(a));
     float2 sp = rot * (n.xy * (1.2f + 0.4f * (1.0f - n.z)));
     float swirl = lab_fbm(sp * kSwirl + float2(time * 0.2f, -time * 0.13f) + audio * 0.6f);
+    // Bands: sharpen the swirl into glossy stripes — the marble / lollipop
+    // reference — by pushing the noise through a steep curve.
+    float banded = 0.5f + 0.5f * sin(swirl * 12.0f + time * 0.5f);
+    swirl = mix(swirl, banded, kBands);
     float3 base = lab_palette_linear(swirl * 1.1f + time * 0.04f, lab, labCount);
 
     // Light angle: 0° is right, 90° is up (screen y is down, so flip).
@@ -1274,4 +1279,220 @@ static float sd_capsule(float2 p, float halfLen, float rad) {
     float3 c = lab_palette_linear(v * 0.6f + atan2(uv.y, uv.x) / 6.2831f * 0.2f + time * 0.02f, lab, labCount);
     float3 lin = c * (0.15f + v * 1.1f) * (0.8f + intensity * 0.4f);
     return half4(half3(lab_linear_to_srgb(lin)) * half(mask), half(mask));
+}
+
+// MARK: - Frost Orb (colorEffect)
+//
+// The light-mode family from the references: a frosted glass sphere on
+// a pale ground with colour *inside* it — soft blobs of the palette
+// drifting behind a milky shell — a white Fresnel rim, and a soft
+// shadow beneath. The colour is a sum of gaussians round moving
+// centres, which blurs for free. `knobs`: blobs, blur, frost, rim,
+// shadow, drift, saturation.
+
+[[ stitchable ]] half4 labFrostOrb(float2 position, half4 color,
+                                   float2 size, float time, float intensity, float audio,
+                                   device const float *knobs, int knobCount,
+                                   device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    int blobs = clamp(int(knobs[0] + 0.5f), 1, 8);
+    float kBlur = knobs[1], kFrost = knobs[2], kRim = knobs[3], kShadow = knobs[4], kDrift = knobs[5], kSat = knobs[6];
+    int n = max(labCount / 3, 1);
+    // The sphere sits slightly above centre so the shadow has room.
+    float2 c = float2(0, -0.06f);
+    float radius = 0.78f;
+    float2 p = (uv - c) / radius;
+    float r = length(p);
+
+    // Shadow: a soft ellipse below, outside the sphere.
+    float2 sp = (uv - float2(0, 0.62f)) / float2(0.75f, 0.22f);
+    float shadow = exp(-dot(sp, sp) * 1.6f) * kShadow * 0.35f;
+
+    float mask = 1.0f - smoothstep(0.985f, 1.0f, r);
+    if (mask <= 0.0f) {
+        // Only the shadow out here — a darkening, premultiplied.
+        return half4(0, 0, 0, half(shadow));
+    }
+    float rr = min(r, 1.0f);
+    float z = sqrt(max(0.0f, 1.0f - rr * rr));
+    float fresnel = pow(1.0f - z, 2.0f);
+
+    // Colour: gaussian blobs on slow orbits, each a palette colour,
+    // summed (so they blend where they overlap) then normalised.
+    float3 col = float3(0);
+    float wsum = 0.0f;
+    for (int i = 0; i < blobs; i++) {
+        float fi = float(i);
+        float2 bc = float2(sin(time * kDrift * (0.31f + fi * 0.11f) + fi * 1.9f),
+                           cos(time * kDrift * (0.23f + fi * 0.13f) + fi * 1.3f)) * (0.35f + 0.15f * fract(fi * 0.618f)) * (1.0f + audio * 0.5f);
+        float sigma = 0.25f + kBlur * 0.5f;
+        float w = exp(-dot(p - bc, p - bc) / (2.0f * sigma * sigma)) * (0.8f + 0.4f * sin(time * 0.7f + fi));
+        float3 bcol = lab_oklab_to_linear(float3(lab[(i % n) * 3], lab[(i % n) * 3 + 1], lab[(i % n) * 3 + 2]));
+        col += bcol * w;
+        wsum += w;
+    }
+    float coverage = min(1.0f, wsum * (0.9f + intensity * 0.5f));
+    col = wsum > 0.0f ? col / wsum : float3(1);
+    // Saturation: pull toward the colour's own luminance.
+    float lum = dot(col, float3(0.2126f, 0.7152f, 0.0722f));
+    col = mix(float3(lum), col, kSat);
+
+    // Frost: the shell is milky white, more so toward the rim, and the
+    // colour shows through the middle. Light-mode: the base is white.
+    float milk = kFrost * (0.35f + 0.65f * fresnel);
+    float3 lin = mix(mix(float3(1.0f), col, coverage * 0.85f), float3(1.0f), milk);
+    // Rim: a bright white edge line, and a faint darker line just inside
+    // so the sphere separates from a white ground.
+    float rimLine = smoothstep(0.9f, 0.975f, rr) * (1.0f - smoothstep(0.975f, 1.0f, rr));
+    float inner = smoothstep(0.82f, 0.9f, rr) * (1.0f - smoothstep(0.9f, 0.95f, rr));
+    lin = lin * (1.0f - inner * 0.08f * kRim) + float3(1.0f) * rimLine * 0.5f * kRim;
+    // A soft highlight upper-left.
+    float3 nrm = float3(p, z);
+    float hl = pow(max(dot(nrm, normalize(float3(-0.5f, -0.6f, 0.65f))), 0.0f), 6.0f);
+    lin = mix(lin, float3(1.0f), hl * 0.35f);
+
+    float alpha = mask;
+    return half4(half3(lab_linear_to_srgb(lin)) * half(alpha), half(alpha));
+}
+
+// MARK: - Globe (colorEffect)
+//
+// A clear glass sphere with liquid in it, the surface a wave — the
+// pink-fill reference. Light-mode. `knobs`: level, wave, wave speed,
+// tint, glass, tilt.
+
+[[ stitchable ]] half4 labGlobe(float2 position, half4 color,
+                                float2 size, float time, float intensity, float audio,
+                                device const float *knobs, int knobCount,
+                                device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float kLevel = knobs[0], kWave = knobs[1], kSpeed = knobs[2], kTint = knobs[3], kGlass = knobs[4], kTilt = knobs[5];
+    float ca = cos(kTilt), sa = sin(kTilt);
+    float2 p = float2(uv.x * ca - uv.y * sa, uv.x * sa + uv.y * ca) / 0.9f;
+    float r = length(p);
+    float mask = 1.0f - smoothstep(0.985f, 1.0f, r);
+    if (mask <= 0.0f) return half4(0);
+    float rr = min(r, 1.0f);
+    float z = sqrt(max(0.0f, 1.0f - rr * rr));
+    float fresnel = pow(1.0f - z, 2.5f);
+
+    float level = clamp(kLevel + audio * 0.2f, 0.0f, 1.0f);
+    float surface = 1.0f - level * 2.0f;                          // y of the surface, screen-down
+    float wave = kWave * 0.12f * sin(p.x * 5.0f + time * kSpeed * 2.0f)
+               + kWave * 0.05f * sin(p.x * 11.0f - time * kSpeed * 3.1f + 1.0f)
+               + audio * 0.06f * sin(p.x * 8.0f + time * 6.0f);
+    float liquid = smoothstep(surface + wave - 0.015f, surface + wave + 0.015f, p.y);
+    // Liquid colour: palette, deeper toward the bottom, lit through the glass.
+    float3 liq = lab_palette_linear(0.1f + (p.y * 0.5f + 0.5f) * 0.25f + time * 0.01f, lab, labCount);
+    float depth = smoothstep(surface, 1.0f, p.y);
+    float3 liqLin = mix(liq * 1.6f, liq * 0.8f, depth) * (0.8f + intensity * 0.4f);
+    // Surface line: a bright meniscus and a soft caustic under it.
+    float men = 1.0f - smoothstep(0.0f, 0.02f, abs(p.y - surface - wave));
+    float caustic = (1.0f - smoothstep(0.0f, 0.12f, p.y - surface - wave)) * liquid;
+    // Compose over a near-white glass body.
+    float3 glass = float3(0.97f);
+    float3 lin = mix(glass, liqLin, liquid * kTint);
+    lin += liq * caustic * 0.35f + float3(1.0f) * men * 0.6f;
+    // Fresnel: whiter at the rim; a rim line; a highlight.
+    lin = mix(lin, float3(1.0f), fresnel * 0.5f * kGlass);
+    float rimLine = smoothstep(0.93f, 0.985f, rr) * (1.0f - smoothstep(0.985f, 1.0f, rr));
+    lin = lin * (1.0f - smoothstep(0.86f, 0.93f, rr) * 0.06f) + float3(1.0f) * rimLine * 0.4f * kGlass;
+    float3 nrm = float3(p, z);
+    float hl = pow(max(dot(nrm, normalize(float3(-0.5f, -0.7f, 0.6f))), 0.0f), 30.0f);
+    lin = mix(lin, float3(1.0f), hl * 0.7f);
+    return half4(half3(lab_linear_to_srgb(lin)) * half(mask), half(mask));
+}
+
+// MARK: - Silk (colorEffect)
+//
+// A translucent pastel membrane that folds — the reference's near-white
+// sphere with colour only at the folds. The silhouette is a disc whose
+// radius is pushed by low-frequency noise; inside, the surface is lit
+// as a thin sheet: white where it faces you, saturating toward the
+// palette where it is seen edge-on (folds and rim). `knobs`: fold,
+// fold speed, tint, rim, softness.
+
+[[ stitchable ]] half4 labSilk(float2 position, half4 color,
+                               float2 size, float time, float intensity, float audio,
+                               device const float *knobs, int knobCount,
+                               device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float kFold = knobs[0], kSpeed = knobs[1], kTint = knobs[2], kRim = knobs[3], kSoft = knobs[4];
+    float ang = atan2(uv.y, uv.x);
+    // Silhouette: the radius wanders with noise round the angle.
+    float rad = 0.8f + kFold * 0.15f * (lab_fbm_n(float2(cos(ang), sin(ang)) * 1.5f + time * kSpeed * 0.2f, 3) - 0.5f) * 2.0f
+              + audio * 0.05f * sin(ang * 4.0f + time * 5.0f);
+    float r = length(uv) / rad;
+    float mask = 1.0f - smoothstep(1.0f - 0.03f * kSoft - 0.005f, 1.0f, r);
+    if (mask <= 0.0f) return half4(0);
+    // Folds: a second noise field across the surface gives creases —
+    // where its gradient is steep the sheet is seen edge-on.
+    float2 fp = uv * 2.0f + float2(time * kSpeed * 0.15f, -time * kSpeed * 0.1f);
+    const float e = 0.02f;
+    float n0 = lab_fbm_n(fp, 3);
+    float gx = lab_fbm_n(fp + float2(e, 0), 3) - n0;
+    float gy = lab_fbm_n(fp + float2(0, e), 3) - n0;
+    float crease = clamp(length(float2(gx, gy)) / e * kFold * 0.35f, 0.0f, 1.0f);
+    float rr = min(r, 1.0f);
+    float edgeOn = pow(rr, 4.0f) * kRim + crease;
+    edgeOn = clamp(edgeOn, 0.0f, 1.0f);
+    // Colour where edge-on, through the palette by position.
+    float3 tint = lab_palette_linear(n0 * 0.6f + ang / 6.2831f * 0.2f + time * 0.02f, lab, labCount);
+    float3 lin = mix(float3(1.0f), tint, edgeOn * kTint * (0.7f + intensity * 0.5f));
+    // The membrane is translucent: alpha grows where it is edge-on.
+    float alpha = (0.35f + 0.65f * edgeOn) * mask;
+    return half4(half3(lab_linear_to_srgb(lin)) * half(alpha), half(alpha));
+}
+
+// MARK: - Liquid Ring (colorEffect)
+//
+// The ring as a fluid: a band whose inner and outer edges are pushed by
+// flowing noise, white-hot where the flow bunches, with a faint dot
+// field inside — the reference's temperature dial. `knobs`: width,
+// turbulence, flow, heat, dots, dot density.
+
+[[ stitchable ]] half4 labLiquidRing(float2 position, half4 color,
+                                     float2 size, float time, float intensity, float audio,
+                                     device const float *knobs, int knobCount,
+                                     device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float kWidth = knobs[0], kTurb = knobs[1], kFlow = knobs[2], kHeat = knobs[3], kDots = knobs[4], kDensity = knobs[5];
+    float r = length(uv);
+    float ang = atan2(uv.y, uv.x);
+    float2 dir = float2(cos(ang), sin(ang));
+    // Two noise fields round the ring: one pushes the edges, one lights
+    // the band. Both flow round with time.
+    float n1 = lab_fbm_n(dir * 2.2f + float2(time * kFlow * 0.3f, 0), 3) - 0.5f;
+    float n2 = lab_fbm_n(dir * 3.5f - float2(0, time * kFlow * 0.45f) + 7.0f, 3);
+    float turb = kTurb * (1.0f + audio * 1.5f);
+    float outer = 0.9f + n1 * 0.1f * turb;
+    float inner = outer - kWidth * (0.5f + 0.5f * n2 + audio * 0.4f);
+    float band = smoothstep(inner - 0.01f, inner + 0.02f, r) * (1.0f - smoothstep(outer - 0.02f, outer + 0.01f, r));
+    // Heat: the band's brightness follows n2; hot spots go white.
+    float heat = pow(n2, 2.0f) * kHeat * (1.0f + audio);
+    float3 base = lab_palette_linear(n2 * 0.4f + time * 0.03f, lab, labCount);
+    float3 lin = base * band * (0.6f + intensity * 0.6f) + float3(1.0f) * band * heat;
+    // A soft glow inside the ring, in the palette.
+    float glow = (1.0f - smoothstep(inner - 0.25f, inner, r)) * smoothstep(inner - 0.6f, inner, r) * 0.25f;
+    lin += base * glow;
+    // Dot field inside: a polar grid of dots, dimmer toward the centre,
+    // rippling with the flow.
+    if (kDots > 0.0f && r < inner) {
+        float rings = kDensity;
+        float ringIdx = floor(r * rings);
+        float count = max(6.0f, floor(ringIdx * 6.5f));
+        float a = fract(ang / 6.2831f * count + time * kFlow * 0.05f * (fmod(ringIdx, 2.0f) == 0.0f ? 1.0f : -1.0f));
+        float rf = fract(r * rings);
+        float dd = length(float2((a - 0.5f) * 2.0f, (rf - 0.5f) * 2.0f));
+        float dot = 1.0f - smoothstep(0.15f, 0.3f, dd);
+        float ripple = 0.5f + 0.5f * sin(r * 20.0f - time * 3.0f + n1 * 4.0f);
+        lin += base * dot * kDots * (0.35f + 0.65f * ripple) * smoothstep(0.1f, 0.9f, r / inner);
+    }
+    float alpha = min(1.0f, max(band, glow + (r < inner ? kDots * 0.3f : 0.0f)));
+    alpha = max(alpha, max(max(lin.r, lin.g), lin.b) * 0.8f);
+    return half4(half3(lab_linear_to_srgb(lin)) * half(min(alpha, 1.0f)), half(min(alpha, 1.0f)));
 }

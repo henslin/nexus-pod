@@ -52,6 +52,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case moire
     case orrery
     case bokeh
+    case frostOrb
+    case globe
+    case silk
+    case liquidRing
     // Post effects with no base of their own.
     case kaleido
     case dots
@@ -114,6 +118,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .moire:      return "Moiré"
         case .orrery:     return "Orrery"
         case .bokeh:      return "Bokeh"
+        case .frostOrb:   return "Frost Orb"
+        case .globe:      return "Globe"
+        case .silk:       return "Silk"
+        case .liquidRing: return "Liquid Ring"
         case .kaleido:    return "Kaleido"
         case .dots:       return "Dots"
         case .grain:      return "Grain"
@@ -174,6 +182,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .moire:      return "Metal · colorEffect"
         case .orrery:     return "SwiftUI · Canvas"
         case .bokeh:      return "SwiftUI · Canvas"
+        case .frostOrb:   return "Metal · colorEffect"
+        case .globe:      return "Metal · colorEffect"
+        case .silk:       return "Metal · colorEffect"
+        case .liquidRing: return "Metal · colorEffect"
         case .kaleido:    return "Metal · layerEffect"
         case .dots:       return "Metal · layerEffect"
         case .grain:      return "Metal · layerEffect"
@@ -232,6 +244,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .moire:      return "circle.grid.cross"
         case .orrery:     return "globe.americas"
         case .bokeh:      return "camera.aperture"
+        case .frostOrb:   return "cloud.circle"
+        case .globe:      return "drop.circle.fill"
+        case .silk:       return "leaf"
+        case .liquidRing: return "circle.dotted.and.circle"
         case .kaleido:    return "hexagon"
         case .dots:       return "circle.grid.3x3.fill"
         case .grain:      return "film"
@@ -335,6 +351,14 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "Rings in 3D on tilted axes, each turning at its own rate, drawn with the Prism dispersion edges — an armillary sphere, a gyroscope. A ‘thinking’ state with real depth, and a natural home for the ring itself."
         case .bokeh:
             return "Out-of-focus lights: discs in the palette at different depths — far ones big and soft, near ones small and sharp — with the bright edge ring a real lens gives. Focus slides which depth is sharp. Ethereal behind a glyph; the blobs-behind-glass reference, photographed."
+        case .frostOrb:
+            return "The light-mode family from the references: a frosted glass sphere on a pale ground with the colour inside it — soft palette blobs drifting behind a milky shell — a white Fresnel rim, a highlight, a soft shadow beneath. Put a glyph on it. Turn Dark Stage off; this one was born for daylight."
+        case .globe:
+            return "A clear glass sphere with liquid sloshing inside, the surface a wave, a bright meniscus and a caustic under it. Light-mode. Level is a knob or the audio, like Vessel — but round, so it can be the pod."
+        case .silk:
+            return "A translucent pastel membrane that folds: nearly white where it faces you, colour only where it’s seen edge-on — the folds and the rim — with a silhouette that wanders. The softest thing here. Light-mode."
+        case .liquidRing:
+            return "The ring as a fluid: a band whose edges are pushed by flowing noise, white-hot where the flow bunches, with a faint dot field rippling inside — the temperature-dial reference. This is the ring’s own identity, reimagined."
         case .glitch:
             return "Post: digital damage in bursts — sliced rows, a channel split, inverted blocks — gated by the beat. An error state, or an interruption."
         case .crt:
@@ -374,7 +398,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// The bases that draw a disc on their own.
     public var canBeHero: Bool {
         switch self {
-        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .lightning, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .vessel, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh: return true
+        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .lightning, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .vessel, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing: return true
         default: return false
         }
     }
@@ -416,6 +440,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("gloss", "Gloss", 8...400, 90, "Highlight tightness.", "%.0f"),
             .init("swirl", "Swirl Scale", 0.5...6, 2.2, "Size of the pattern on the surface."),
             .init("swirlSpeed", "Swirl Speed", 0...2, 0.35, "How fast it turns."),
+            .init("bands", "Bands", 0...1, 0, "Sharpens the swirl into glossy stripes — the marble."),
         ]
         case .bloom: return [
             .init("radius", "Radius", 2...80, 24, "How far the glow reaches, points.", "%.0f pt"),
@@ -683,6 +708,38 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("drift", "Drift", 0...2, 0.5, "How fast they wander."),
             .init("sides", "Aperture", 0...9, 0, "0 round; 5–9 blades.", "%.0f"),
             .init("focus", "Focus", 0...1, 0.8, "Which depth is sharp. Sweep it."),
+        ]
+        case .frostOrb: return [
+            .init("blobs", "Blobs", 1...8, 3, "Colour sources inside.", "%.0f"),
+            .init("blur", "Blur", 0...1, 0.3, "How soft the colour is."),
+            .init("frost", "Frost", 0...1, 0.55, "The milky shell."),
+            .init("rim", "Rim", 0...2, 1, "Edge definition against a white ground."),
+            .init("shadow", "Shadow", 0...1, 0.6, "The soft shadow beneath."),
+            .init("drift", "Drift", 0...2, 0.6, "How fast the colour moves."),
+            .init("saturation", "Saturation", 0...1.5, 1, "Colour strength."),
+        ]
+        case .globe: return [
+            .init("level", "Level", 0...1, 0.45, "How full. Audio adds to it."),
+            .init("wave", "Wave", 0...1, 0.5, "Surface height."),
+            .init("speed", "Wave Speed", 0...3, 1, "Surface motion."),
+            .init("tint", "Tint", 0...1, 0.85, "Liquid colour strength."),
+            .init("glass", "Glass", 0...2, 1, "Rim and Fresnel."),
+            .init("tilt", "Tilt", -0.8...0.8, 0, "Rotation, radians."),
+        ]
+        case .silk: return [
+            .init("fold", "Fold", 0...1, 0.5, "How creased the membrane is, and how far its edge wanders."),
+            .init("speed", "Fold Speed", 0...2, 0.6, "How fast it moves."),
+            .init("tint", "Tint", 0...1.5, 0.9, "Colour at the folds."),
+            .init("rim", "Rim", 0...1.5, 0.8, "Colour at the edge."),
+            .init("softness", "Softness", 0...1, 0.5, "Edge softness."),
+        ]
+        case .liquidRing: return [
+            .init("width", "Width", 0.05...0.5, 0.16, "Band width as a fraction of the radius."),
+            .init("turbulence", "Turbulence", 0...1, 0.5, "How much the edges move."),
+            .init("flow", "Flow", 0...2, 0.6, "How fast the fluid runs round."),
+            .init("heat", "Heat", 0...2, 0.6, "White-hot highlights."),
+            .init("dots", "Dots", 0...1, 0.6, "The dot field inside."),
+            .init("density", "Dot Density", 4...30, 14, "Rings of dots.", "%.0f"),
         ]
         case .glitch: return [
             .init("amount", "Amount", 0...1, 0.5, "Slice offset and split."),
@@ -1046,5 +1103,67 @@ public struct LabFrame {
         var f = self
         f.diameter = d
         return f
+    }
+}
+
+// MARK: - Frame building, shared by the Mac stage and the iOS viewer
+
+extension LabState {
+    /// The palette, hue-drifted if asked. Drift rotates every colour's
+    /// hue by the same angle, so the palette's relationships hold.
+    public func colors(config: RingConfig, at time: Double) -> [Color] {
+        let base = palette.colors ?? ([config.primaryColor, config.secondaryColor] + config.additionalColors)
+        guard hueDrift != 0 else { return base }
+        let shift = (time * hueDrift / 360).truncatingRemainder(dividingBy: 1)
+        return base.map { Self.hueShifted($0, by: shift) }
+    }
+
+    public func bands(from audio: AudioSpectrumMonitor) -> LabAudioBands {
+        var b = LabAudioBands()
+        guard audioReactive else { return b }
+        let k = audioSensitivity
+        b.level = min(audio.level * k, 1.5)
+        b.bass = min(audio.bass * k, 1.5)
+        b.mid = min(audio.mid * k, 1.5)
+        b.treble = min(audio.treble * k, 1.5)
+        b.beat = min(audio.beat * k, 1.5)
+        return b
+    }
+
+    /// One frame of the current experiment: the clock since `since`
+    /// times `speed`, the resolved knobs, the audio, the palette.
+    public func frame(at date: Date, since: Date, diameter: CGFloat, config: RingConfig, audio: AudioSpectrumMonitor) -> LabFrame {
+        let elapsed = date.timeIntervalSince(since) * speed
+        let bands = self.bands(from: audio)
+        return LabFrame(time: elapsed,
+                        intensity: intensity,
+                        audio: bands.value(audioSource),
+                        colors: colors(config: config, at: elapsed),
+                        diameter: diameter,
+                        darkStage: darkStage,
+                        params: allResolvedParameters(),
+                        bands: bands,
+                        glyph: glyph.isEmpty ? nil : glyph,
+                        taps: taps,
+                        sinceTap: date.timeIntervalSince(lastTap),
+                        hero: hero,
+                        heroPost: post)
+    }
+
+    private static func hueShifted(_ color: Color, by turns: Double) -> Color {
+        let rgb = PerceptualGradient.rgb(color)
+        let mx = max(rgb.red, rgb.green, rgb.blue), mn = min(rgb.red, rgb.green, rgb.blue)
+        let v = mx, d = mx - mn
+        let s = mx == 0 ? 0 : d / mx
+        var h = 0.0
+        if d > 0 {
+            if mx == rgb.red { h = ((rgb.green - rgb.blue) / d).truncatingRemainder(dividingBy: 6) }
+            else if mx == rgb.green { h = (rgb.blue - rgb.red) / d + 2 }
+            else { h = (rgb.red - rgb.green) / d + 4 }
+            h /= 6
+        }
+        h = (h + turns).truncatingRemainder(dividingBy: 1)
+        if h < 0 { h += 1 }
+        return Color(hue: h, saturation: s, brightness: v)
     }
 }
