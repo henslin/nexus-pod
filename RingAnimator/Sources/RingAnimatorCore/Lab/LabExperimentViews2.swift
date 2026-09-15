@@ -42,61 +42,6 @@ struct LabKnobShaderView: View {
     }
 }
 
-// MARK: - Lightning (SwiftUI · Canvas)
-
-struct LabLightningView: View {
-    let frame: LabFrame
-
-    var body: some View {
-        let bolts = Int(frame.p("bolts", .lightning))
-        let jitter = frame.p("jitter", .lightning)
-        let rate = frame.p("rate", .lightning)
-        let glow = frame.p("glow", .lightning)
-        let width = frame.p("width", .lightning)
-        let target = frame.p("target", .lightning)
-        let primary = frame.colors.first ?? .white
-        let secondary = frame.colors.count > 1 ? frame.colors[1] : primary
-        Canvas { ctx, size in
-            let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let R = frame.diameter / 2 * 0.9
-            // A strike lasts ~120 ms; strikes come on the beat, or on the
-            // clock. Each bolt's path is seeded by the strike index so it
-            // holds still for its life instead of boiling every frame.
-            let strike = frame.bands.beat > 0.5 ? frame.time : floor(frame.time * rate) / rate
-            let age = frame.time - strike
-            let life = 0.12 + frame.intensity * 0.15
-            guard age < life else { return }
-            let fade = 1 - age / life
-            let seed = UInt64(strike * 1000)
-            for b in 0..<bolts {
-                var g = SeededGenerator(seed: seed &+ UInt64(b) &* 977)
-                let a0 = Double.random(in: 0..<(2 * .pi), using: &g)
-                let start = CGPoint(x: c.x + cos(a0) * R, y: c.y + sin(a0) * R)
-                let end: CGPoint = target < 0.5
-                    ? CGPoint(x: c.x + Double.random(in: -8...8, using: &g), y: c.y + Double.random(in: -8...8, using: &g))
-                    : CGPoint(x: c.x + cos(a0 + .pi + Double.random(in: -0.6...0.6, using: &g)) * R, y: c.y + sin(a0 + .pi + Double.random(in: -0.6...0.6, using: &g)) * R)
-                var path = Path()
-                path.move(to: start)
-                let segments = 14
-                for i in 1..<segments {
-                    let t = Double(i) / Double(segments)
-                    let px = start.x + (end.x - start.x) * t, py = start.y + (end.y - start.y) * t
-                    let n = CGPoint(x: -(end.y - start.y), y: end.x - start.x)
-                    let len = max(hypot(n.x, n.y), 1)
-                    let off = Double.random(in: -1...1, using: &g) * jitter * R * 0.18 * sin(t * .pi)
-                    path.addLine(to: CGPoint(x: px + n.x / len * off, y: py + n.y / len * off))
-                }
-                path.addLine(to: end)
-                ctx.blendMode = .plusLighter
-                ctx.stroke(path, with: .color(secondary.opacity(glow * fade)), style: StrokeStyle(lineWidth: width * 6, lineCap: .round, lineJoin: .round))
-                ctx.stroke(path, with: .color(primary.opacity(fade)), style: StrokeStyle(lineWidth: width * 2.2, lineCap: .round, lineJoin: .round))
-                ctx.stroke(path, with: .color(.white.opacity(fade)), style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-            }
-        }
-        .frame(width: frame.diameter, height: frame.diameter)
-    }
-}
-
 // MARK: - Warp (SwiftUI · Canvas)
 
 struct LabWarpView: View {
@@ -138,47 +83,6 @@ struct LabWarpView: View {
         }
         .frame(width: frame.diameter, height: frame.diameter)
         .clipShape(Circle())
-    }
-}
-
-// MARK: - Burst (SwiftUI · Canvas, on tap)
-
-struct LabBurstView: View {
-    let frame: LabFrame
-
-    var body: some View {
-        let count = Int(frame.p("count", .burst))
-        let speed = frame.p("speed", .burst)
-        let gravity = frame.p("gravity", .burst)
-        let life = frame.p("life", .burst)
-        let dot = frame.p("size", .burst)
-        let spread = frame.p("spread", .burst)
-        let auto = frame.p("auto", .burst) >= 0.5
-        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 24)
-        Canvas { ctx, size in
-            let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            // When did the last burst start? A tap, or the clock every
-            // `life + 1.5` s when auto-firing.
-            let period = life + 1.5
-            let clockAge = frame.time.truncatingRemainder(dividingBy: period)
-            let age = auto ? min(frame.sinceTap, clockAge) : frame.sinceTap
-            guard age < life else { return }
-            let seedBase = UInt64(((auto ? min(frame.sinceTap, clockAge) : frame.sinceTap) == frame.sinceTap ? frame.taps : Int(frame.time / period)) * 7919)
-            var g = SeededGenerator(seed: seedBase &+ 1)
-            ctx.blendMode = .plusLighter
-            for i in 0..<count {
-                let a = spread >= 1 ? Double.random(in: 0..<(2 * .pi), using: &g)
-                                    : -.pi / 2 + Double.random(in: -1...1, using: &g) * spread * .pi
-                let v = speed * Double.random(in: 0.35...1, using: &g)
-                let x = c.x + cos(a) * v * age
-                let y = c.y + sin(a) * v * age + 0.5 * gravity * age * age
-                let fade = 1 - age / life
-                let s = dot * (0.5 + 0.5 * fade) * Double.random(in: 0.6...1.4, using: &g)
-                let color = sweep[(i * 7) % sweep.count]
-                ctx.fill(Path(ellipseIn: CGRect(x: x - s / 2, y: y - s / 2, width: s, height: s)), with: .color(color.opacity(fade)))
-            }
-        }
-        .frame(width: frame.diameter * 1.6, height: frame.diameter * 1.6)
     }
 }
 
@@ -494,7 +398,7 @@ struct LabTilesView<Base: View>: View {
     }
 }
 
-// MARK: - Bubble / Slices / Vessel (Metal · colorEffect)
+// MARK: - Bubble / Slices (Metal · colorEffect)
 
 struct LabBubbleView: View {
     let frame: LabFrame
@@ -504,11 +408,6 @@ struct LabBubbleView: View {
 struct LabSlicesView: View {
     let frame: LabFrame
     var body: some View { LabKnobShaderView(frame: frame, experiment: .slices, name: "labSlices") }
-}
-
-struct LabVesselView: View {
-    let frame: LabFrame
-    var body: some View { LabKnobShaderView(frame: frame, experiment: .vessel, name: "labVessel") }
 }
 
 // MARK: - Stack (SwiftUI · Canvas) — planes receding in depth
@@ -868,4 +767,100 @@ struct LabLiquidRingView: View {
 struct LabTideView: View {
     let frame: LabFrame
     var body: some View { LabKnobShaderView(frame: frame, experiment: .tide, name: "labTide") }
+}
+
+// MARK: - Round five bases (Metal · colorEffect)
+
+struct LabDropletView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .droplet, name: "labDroplet") } }
+struct LabPourView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .pour, name: "labPour") } }
+struct LabPoolView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .pool, name: "labPool") } }
+struct LabCausticsView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .caustics, name: "labCaustics") } }
+struct LabLavaView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .lava, name: "labLava") } }
+struct LabJellyView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .jelly, name: "labJelly") } }
+struct LabSlickView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .slick, name: "labSlick") } }
+struct LabDeepView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .deep, name: "labDeep") } }
+struct LabNebulaView: View { let frame: LabFrame; var body: some View { LabKnobShaderView(frame: frame, experiment: .nebula, name: "labNebula") } }
+
+// MARK: - Round five post effects (Metal · layerEffect)
+
+struct LabWaterView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+    var body: some View {
+        let amount = frame.p("amount", .water) * (0.5 + frame.intensity) + frame.audio * 8
+        let time = Float(frame.time * frame.p("speed", .water))
+        ring()
+            .padding(amount)
+            .visualEffect { content, proxy in
+                content.layerEffect(
+                    ShaderLibrary.bundle(.module).labWater(.float2(proxy.size), .float(time), .float(Float(amount)),
+                                                            .float(Float(frame.p("scale", .water))), .float(Float(frame.p("caustic", .water)))),
+                    maxSampleOffset: CGSize(width: amount * 1.5, height: amount * 1.5))
+            }
+    }
+}
+
+struct LabHazeView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+    var body: some View {
+        let lab = PerceptualGradient.labTriples(frame.colors)
+        let time = Float(frame.time)
+        ring()
+            .visualEffect { content, proxy in
+                content.layerEffect(
+                    ShaderLibrary.bundle(.module).labHaze(.float2(proxy.size), .float(time),
+                                                           .float(Float(frame.p("amount", .haze) * (0.6 + frame.intensity * 0.6))),
+                                                           .float(Float(frame.p("scale", .haze))), .float(Float(frame.p("breathe", .haze))),
+                                                           .floatArray(lab)),
+                    maxSampleOffset: .zero)
+            }
+    }
+}
+
+struct LabFizzView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+    var body: some View {
+        let time = Float(frame.time)
+        ring()
+            .visualEffect { content, proxy in
+                content.layerEffect(
+                    ShaderLibrary.bundle(.module).labFizz(.float2(proxy.size), .float(time),
+                                                           .float(Float(frame.p("count", .fizz) * (0.6 + frame.intensity * 0.8) + frame.audio * 10)),
+                                                           .float(Float(frame.p("speed", .fizz))), .float(Float(frame.p("size", .fizz)))),
+                    maxSampleOffset: .zero)
+            }
+    }
+}
+
+struct LabGlintsView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+    var body: some View {
+        let len = frame.p("length", .glints) * (0.5 + frame.intensity) + frame.audio * 30
+        ring()
+            .padding(len)
+            .layerEffect(
+                ShaderLibrary.bundle(.module).labGlints(.float(Float(frame.p("threshold", .glints))), .float(Float(len)),
+                                                         .float(Float(frame.p("strength", .glints))), .float(Float(frame.time * frame.p("rotate", .glints)))),
+                maxSampleOffset: CGSize(width: len, height: len))
+    }
+}
+
+struct LabParallaxView<Base: View>: View {
+    let frame: LabFrame
+    @ViewBuilder let ring: () -> Base
+    var body: some View {
+        let off = frame.p("offset", .parallax)
+        let angle = frame.p("angle", .parallax)
+        let offset = CGPoint(x: cos(angle) * off, y: sin(angle) * off)
+        let soften = frame.p("soften", .parallax)
+        ring()
+            .padding(off + soften)
+            .layerEffect(
+                ShaderLibrary.bundle(.module).labParallax(.float2(offset), .float(Float(frame.p("shadow", .parallax))),
+                                                           .float(Float(frame.p("light", .parallax))), .float(Float(soften))),
+                maxSampleOffset: CGSize(width: off + soften, height: off + soften))
+    }
 }

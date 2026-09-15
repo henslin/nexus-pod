@@ -254,6 +254,7 @@ struct LabKnobsSheet: View {
                 Section("Stage") {
                     LabSlider(title: "Intensity", value: $lab.intensity, range: 0...1)
                     LabSlider(title: "Speed", value: $lab.speed, range: 0.1...3, format: "%.1f×")
+                    LabSlider(title: "Fill", value: $lab.fill, range: 0...1.3)
                     Picker("Palette", selection: $lab.palette) {
                         ForEach(LabPalette.allCases) { Text($0.label).tag($0) }
                     }

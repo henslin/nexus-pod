@@ -33,17 +33,14 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case constellation
     case harmonograph
     case ink
-    case lightning
     case cells
     case warp
-    case burst
     case symbols
     case shapeshift
     case lattice
     case stipple
     case bubble
     case slices
-    case vessel
     case stack
     case cascade
     case prism
@@ -57,6 +54,15 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case silk
     case liquidRing
     case tide
+    case droplet
+    case pour
+    case pool
+    case caustics
+    case lava
+    case jelly
+    case slick
+    case deep
+    case nebula
     // Post effects with no base of their own.
     case kaleido
     case dots
@@ -69,6 +75,11 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case spin
     case tiles
     case chrome
+    case water
+    case haze
+    case fizz
+    case glints
+    case parallax
     // Flows — the tap-on-Nexus question, on a phone canvas.
     case journey
     case agentStates
@@ -98,10 +109,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .constellation: return "Constellation"
         case .harmonograph: return "Harmonograph"
         case .ink:        return "Ink"
-        case .lightning:  return "Lightning"
         case .cells:      return "Cells"
         case .warp:       return "Warp"
-        case .burst:      return "Burst"
         case .symbols:    return "Symbols"
         case .shapeshift: return "Shapeshift"
         case .lattice:    return "Lattice"
@@ -109,7 +118,6 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .tiles:      return "Tiles"
         case .bubble:     return "Bubble"
         case .slices:     return "Slices"
-        case .vessel:     return "Vessel"
         case .stack:      return "Stack"
         case .cascade:    return "Cascade"
         case .prism:      return "Prism"
@@ -124,6 +132,20 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .silk:       return "Silk"
         case .liquidRing: return "Liquid Ring"
         case .tide:       return "Tide"
+        case .droplet:    return "Droplet"
+        case .pour:       return "Pour"
+        case .pool:       return "Pool"
+        case .caustics:   return "Caustics"
+        case .lava:       return "Lava"
+        case .jelly:      return "Jelly"
+        case .slick:      return "Slick"
+        case .deep:       return "Deep"
+        case .nebula:     return "Nebula"
+        case .water:      return "Water"
+        case .haze:       return "Haze"
+        case .fizz:       return "Fizz"
+        case .glints:     return "Glints"
+        case .parallax:   return "Parallax"
         case .kaleido:    return "Kaleido"
         case .dots:       return "Dots"
         case .grain:      return "Grain"
@@ -163,10 +185,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .constellation: return "SwiftUI · Canvas"
         case .harmonograph: return "SwiftUI · Canvas"
         case .ink:        return "Metal · compute + MTKView"
-        case .lightning:  return "SwiftUI · Canvas"
         case .cells:      return "Metal · colorEffect"
         case .warp:       return "SwiftUI · Canvas"
-        case .burst:      return "SwiftUI · Canvas, on tap"
         case .symbols:    return "SwiftUI · SF Symbol effects"
         case .shapeshift: return "Metal · colorEffect (SDF)"
         case .lattice:    return "SwiftUI · Canvas"
@@ -174,7 +194,6 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .tiles:      return "Metal · layerEffect"
         case .bubble:     return "Metal · colorEffect"
         case .slices:     return "Metal · colorEffect"
-        case .vessel:     return "Metal · colorEffect (SDF)"
         case .stack:      return "SwiftUI · Canvas"
         case .cascade:    return "SwiftUI · Canvas"
         case .prism:      return "SwiftUI · Canvas"
@@ -189,6 +208,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .silk:       return "Metal · colorEffect"
         case .liquidRing: return "Metal · colorEffect"
         case .tide:       return "Metal · colorEffect (ray-marched)"
+        case .droplet, .pour, .pool, .caustics, .lava, .jelly, .slick, .deep: return "Metal · colorEffect"
+        case .nebula:     return "Metal · colorEffect (ray-marched)"
+        case .water, .haze, .fizz, .glints, .parallax: return "Metal · layerEffect"
         case .kaleido:    return "Metal · layerEffect"
         case .dots:       return "Metal · layerEffect"
         case .grain:      return "Metal · layerEffect"
@@ -226,10 +248,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .constellation: return "point.3.connected.trianglepath.dotted"
         case .harmonograph: return "scribble.variable"
         case .ink:        return "drop.fill"
-        case .lightning:  return "bolt.fill"
         case .cells:      return "hexagon.fill"
         case .warp:       return "sparkle"
-        case .burst:      return "fireworks"
         case .symbols:    return "star.circle"
         case .shapeshift: return "square.on.circle"
         case .lattice:    return "globe"
@@ -237,7 +257,6 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .tiles:      return "square.grid.3x3.square"
         case .bubble:     return "circle.dashed"
         case .slices:     return "line.3.horizontal.decrease.circle"
-        case .vessel:     return "pill.fill"
         case .stack:      return "square.stack.3d.forward.dottedline"
         case .cascade:    return "rectangle.stack"
         case .prism:      return "cube"
@@ -252,6 +271,20 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .silk:       return "leaf"
         case .liquidRing: return "circle.dotted.and.circle"
         case .tide:       return "water.waves.and.arrow.trianglehead.down"
+        case .droplet:    return "drop"
+        case .pour:       return "arrow.down.to.line.compact"
+        case .pool:       return "circle.circle"
+        case .caustics:   return "light.beacon.max"
+        case .lava:       return "flame"
+        case .jelly:      return "circle.bottomhalf.filled"
+        case .slick:      return "rainbow"
+        case .deep:       return "sun.horizon"
+        case .nebula:     return "cloud.fill"
+        case .water:      return "water.waves"
+        case .haze:       return "cloud.fog"
+        case .fizz:       return "bubbles.and.sparkles"
+        case .glints:     return "sparkle"
+        case .parallax:   return "square.3.layers.3d"
         case .kaleido:    return "hexagon"
         case .dots:       return "circle.grid.3x3.fill"
         case .grain:      return "film"
@@ -313,14 +346,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "Post: an LED matrix. The image quantised to cells drawn as round dots that grow with brightness — what a matrix looks like through a diffuser. If the hardware ever gets a dot display, this is the preview."
         case .grain:
             return "Post: film grain, a vignette, optional desaturation. Everything looks shot rather than rendered. Subtle amounts are the ‘expensive’ look; the vignette alone is worth having."
-        case .lightning:
-            return "Arcs from the ring’s edge to its centre — jittered polylines redrawn every frame with a glow. Bolts strike on the beat (or on a synthetic rhythm). An alert state, a ‘thinking hard’ state, or a link to whatever sits in the middle."
         case .cells:
             return "Voronoi: the disc split into cells around drifting seeds, each in a palette colour, edges lit where they meet. Energy cells, honeycomb, scales — the knobs decide."
         case .warp:
             return "A starfield with depth: points fly outward from the centre, faster the closer they get, streaking on audio. Warp speed. The ‘working on it’ state that says something is happening fast."
-        case .burst:
-            return "A one-shot: tap the stage and particles explode from the pod and fall back — a celebration, a confirmation, an arrival. Event-driven, unlike everything else here. Tap it."
         case .symbols:
             return "Apple’s own SF Symbol effects on the glyph — bounce, pulse, variable colour, wiggle, breathe, rotate — and the replace transition between symbols. First-party motion the glyph state gets for free."
         case .shapeshift:
@@ -335,8 +364,6 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "A soap bubble: a thin film whose colour comes from interference — thickness varying with noise and draining downward sets which wavelength survives. Strongest at the rim (Fresnel), dark and see-through in the middle, a palette glow pooling at the bottom, two soft highlights. The bubble from day one, done as physics rather than geometry."
         case .slices:
             return "A gradient sphere cut into vertical slats, each a lens-shaped sliver with the colour running across and a fine moiré inside, with a squashed reflection below — the reference. Audio wobbles the gaps."
-        case .vessel:
-            return "A capsule with liquid in it: glass shell, liquid to a level that sloshes, bubbles rising, a bright meniscus. Level is a knob, or the audio — so it doubles as a meter (charging, listening, progress)."
         case .stack:
             return "Translucent planes receding into depth, each in the next palette colour, additive — the corridor from the reference. Sway rolls the whole stack; audio pushes it."
         case .cascade:
@@ -365,6 +392,34 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "The ring as a fluid: a band whose edges are pushed by flowing noise, white-hot where the flow bunches, with a faint dot field rippling inside — the temperature-dial reference. This is the ring’s own identity, reimagined."
         case .tide:
             return "Water in a sphere, tumbling in 3D — the three references at once. A ray per pixel through the sphere; the liquid is everything below a plane whose ‘down’ slowly turns, so you see the surface from above as a wavy disc, then edge-on as a line (the fish tank), then from underneath. Thickness sets the colour. Density 0 is the clear film; Frost is the blue one behind glass. Audio sloshes it."
+        case .droplet:
+            return "A water drop: a disc sagging under its own weight, wobbling in modes that swell on audio, refracting the palette behind it like a lens, with a Fresnel rim and a window highlight. Light-mode."
+        case .pour:
+            return "The sphere filling from a stream at the top — ripples where it lands, foam at the surface — then holding, then draining. The pod filling as it listens. Level follows the cycle, plus the audio."
+        case .pool:
+            return "Water from above: rings spreading from drops, refracting a palette floor, caustic brightening on the slopes, a slow swell. Audio makes the drops bigger."
+        case .caustics:
+            return "The bright web light makes on the bottom of a pool: folded noise, layers drifting against each other, tinted by the palette. Under water, on its own."
+        case .lava:
+            return "A lava lamp: warm blobs rising from the bottom, stretching as they move, merging and sinking — one metaball field with a vertical drift and a glow."
+        case .jelly:
+            return "A gelatin sphere: its outline rings in a few spring modes on a beat and settles, translucent with a lit core and a shell highlight. Higher modes ring faster, like the real thing."
+        case .slick:
+            return "Oil on water: thin-film colour from a swirling thickness field over a dark reflective surface. The water-surface rainbow, moving."
+        case .deep:
+            return "Looking up from under water: light shafts fanning down from the surface, a caustic web up top, motes drifting up, the palette darkening with depth."
+        case .nebula:
+            return "A cloud inside glass: volumetric noise ray-marched through the sphere, lit from a direction, drifting — the frosted-blue reference’s interior done as a real volume. Nebula in a Frost Orb is the ‘thinking’ state."
+        case .water:
+            return "Post: the layer seen through a rippling water surface — a noise height field refracts it, caustics brighten the slopes. A glyph under Water is a glyph under water."
+        case .haze:
+            return "Post: a soft palette veil breathing over the layer — depth fog. Makes anything recede."
+        case .fizz:
+            return "Post: small bubbles rising over the layer, bright rims and dark centres, each on its own lane. Carbonation for anything."
+        case .glints:
+            return "Post: a star filter — bright points throw four thin streaks. The sparkle on a wet surface, or on Stipple’s rim."
+        case .parallax:
+            return "Post: depth for a flat thing — a dark, softened copy offset one way (its shadow on the glass behind) and a light copy the other (the light on its edge). Under Liquid Glass this is what makes a layer read as an object with thickness."
         case .glitch:
             return "Post: digital damage in bursts — sliced rows, a channel split, inverted blocks — gated by the beat. An error state, or an interruption."
         case .crt:
@@ -395,8 +450,40 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// underneath for those, so the comparison is "the ring, plus this".
     public var decoratesRing: Bool {
         switch self {
-        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays, .kaleido, .dots, .grain, .glitch, .crt, .neon, .frost, .duotone, .spin, .tiles, .chrome: return true
+        case .bloom, .ripple, .sparks, .refraction, .chromatic, .rays, .kaleido, .dots, .grain, .glitch, .crt, .neon, .frost, .duotone, .spin, .tiles, .chrome, .water, .haze, .fizz, .glints, .parallax: return true
         default: return false
+        }
+    }
+
+    /// How much of the disc the experiment's content spans at its
+    /// defaults — the sphere-based ones sit inside a margin, the ring
+    /// ones inside the pod's proportion. `LabState.fill` scales by the
+    /// inverse so any of them can take up the whole circle (Chris,
+    /// 2026-09-15: "whatever option we go with, we'll want it to fill").
+    public var naturalFill: Double {
+        switch self {
+        case .tide: return 0.9
+        case .frostOrb: return 0.78
+        case .globe: return 0.9
+        case .silk: return 0.85
+        case .liquidRing: return 0.92
+        case .bubble: return 0.97
+        case .orb: return 0.96
+        case .refraction: return 0.75
+        case .lattice, .stipple: return 0.78
+        case .harmonograph: return 0.88
+        case .constellation: return 0.92
+        case .warp: return 0.9
+        case .stack, .cascade: return 0.7
+        case .prism: return 0.75
+        case .orrery: return 0.78
+        case .volumetric: return 0.95
+        case .droplet: return 0.92
+        case .pour, .nebula: return 0.92
+        case .jelly: return 0.93
+        case .bloom, .ripple, .sparks, .rays, .chromatic, .kaleido, .dots, .grain, .glitch, .crt, .neon, .frost, .duotone, .spin, .tiles, .chrome, .water, .haze, .fizz, .glints, .parallax:
+            return 0.72   // the ring underneath
+        default: return 0.97
         }
     }
 
@@ -404,7 +491,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// The bases that draw a disc on their own.
     public var canBeHero: Bool {
         switch self {
-        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .lightning, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .vessel, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing, .tide: return true
+        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing, .tide, .droplet, .pour, .pool, .caustics, .lava, .jelly, .slick, .deep, .nebula: return true
         default: return false
         }
     }
@@ -423,7 +510,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// Advances through stages on tap — see `LabState.advance()`.
-    public var isTappable: Bool { self == .journey || self == .agentStates || self == .burst || self == .symbols }
+    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols }
 
     /// The experiment's own knobs, beyond the shared ones. The panel
     /// builds a slider per entry; the experiment reads them back by id
@@ -553,14 +640,6 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("radius", "Ink Radius", 0.02...0.3, 0.08, "Size of each source."),
             .init("orbit", "Orbit", 0...0.9, 0.45, "How far out the sources circle."),
         ]
-        case .lightning: return [
-            .init("bolts", "Bolts", 1...8, 3, "Arcs at once.", "%.0f"),
-            .init("jitter", "Jitter", 0...1, 0.5, "How ragged the path is."),
-            .init("rate", "Strike Rate", 0.5...8, 3, "Strikes per second when there’s no beat.", "%.1f"),
-            .init("glow", "Glow", 0...1, 0.6, "Halo round each bolt."),
-            .init("width", "Width", 0.5...5, 1.5, "Core line, points.", "%.1f pt"),
-            .init("target", "Target", 0...1, 0, "0 strikes the centre, 1 arcs edge-to-edge."),
-        ]
         case .cells: return [
             .init("scale", "Scale", 1...8, 3, "Cells across the disc."),
             .init("drift", "Drift", 0...1, 0.6, "How far seeds wander."),
@@ -574,15 +653,6 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("streak", "Streak", 0...1, 0.5, "Length of the trails."),
             .init("size", "Size", 0.5...4, 1.5, "Point size at the edge, points."),
             .init("spread", "Spread", 0.2...1, 0.9, "Field size as a fraction of the disc."),
-        ]
-        case .burst: return [
-            .init("count", "Particles", 20...600, 220, "Per burst.", "%.0f"),
-            .init("speed", "Speed", 50...800, 320, "Initial velocity, points/s.", "%.0f"),
-            .init("gravity", "Gravity", -600...1200, 500, "Fall back down. Negative floats up.", "%.0f"),
-            .init("life", "Lifetime", 0.4...4, 1.6, "Seconds.", "%.1f s"),
-            .init("size", "Size", 1...10, 4, "Points.", "%.0f pt"),
-            .init("spread", "Spread", 0...1, 1, "1 is every direction, 0 is straight up."),
-            .init("auto", "Auto Fire", 0...1, 1, "1 fires every few seconds by itself.", "%.0f"),
         ]
         case .symbols: return [
             .init("effect", "Effect", 0...5, 0, "0 bounce, 1 pulse, 2 variable colour, 3 wiggle, 4 breathe, 5 rotate.", "%.0f"),
@@ -634,6 +704,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("wobble", "Wobble", 0...1, 0.5, "The bubble is never quite round."),
             .init("shell", "Shell", 0...1, 0, "Thickens the rim into a glass wall with its own inner edge, bands sliding round it — the thick purple bubble."),
             .init("floor", "Floor Glow", 0...1, 0, "A lit floor beneath."),
+            .init("bandSpeed", "Band Speed", 0...3, 1, "How fast the film's bands slide."),
+            .init("bands", "Bands", 1...8, 3, "Bands round the shell.", "%.0f"),
         ]
         case .slices: return [
             .init("slats", "Slats", 6...60, 22, "Slices across.", "%.0f"),
@@ -642,14 +714,6 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("moire", "Moiré", 0...1, 0.5, "The fine ring pattern inside each slat."),
             .init("tilt", "Tilt", -0.6...0.6, 0, "Slat angle, radians."),
             .init("reflect", "Reflection", 0...1, 0.8, "The squashed reflection below."),
-        ]
-        case .vessel: return [
-            .init("level", "Level", 0...1, 0.45, "How full. Audio adds to it."),
-            .init("slosh", "Slosh", 0...1, 0.5, "Surface movement."),
-            .init("bubbles", "Bubbles", 0...1, 0.8, "Rising bubbles."),
-            .init("rim", "Glass", 0...2, 1, "Shell visibility."),
-            .init("glow", "Glow", 0...1, 0.7, "Liquid luminance."),
-            .init("tilt", "Tilt", -1.6...1.6, 0, "Rotation, radians. ±1.57 is horizontal."),
         ]
         case .stack: return [
             .init("count", "Planes", 2...16, 9, "Planes.", "%.0f"),
@@ -725,6 +789,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("shadow", "Shadow", 0...1, 0.6, "The soft shadow beneath."),
             .init("drift", "Drift", 0...2, 0.6, "How fast the colour moves."),
             .init("saturation", "Saturation", 0...1.5, 1, "Colour strength."),
+            .init("core", "Core Glow", 0...1, 0, "Lit from inside, brighter with audio."),
         ]
         case .globe: return [
             .init("level", "Level", 0...1, 0.45, "How full. Audio adds to it."),
@@ -733,6 +798,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("tint", "Tint", 0...1, 0.85, "Liquid colour strength."),
             .init("glass", "Glass", 0...2, 1, "Rim and Fresnel."),
             .init("tilt", "Tilt", -0.8...0.8, 0, "Rotation, radians."),
+            .init("bubbles", "Bubbles", 0...1, 0.4, "Rising through the liquid."),
+            .init("caustic", "Caustic", 0...2, 1, "The light under the surface."),
         ]
         case .silk: return [
             .init("fold", "Fold", 0...1, 0.5, "How creased the membrane is, and how far its edge wanders."),
@@ -748,6 +815,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("heat", "Heat", 0...2, 0.6, "White-hot highlights."),
             .init("dots", "Dots", 0...1, 0.6, "The dot field inside."),
             .init("density", "Dot Density", 4...30, 14, "Rings of dots.", "%.0f"),
+            .init("glow", "Inner Glow", 0...3, 1, "The palette glow inside the band."),
         ]
         case .tide: return [
             .init("level", "Level", 0.05...0.95, 0.5, "How full. Audio adds to it."),
@@ -758,6 +826,110 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("film", "Surface Film", 0...2, 1, "Thin-film colour where the surface is seen edge-on."),
             .init("highlight", "Highlights", 0...2, 1, "Specular on the surface and the underwater mirror."),
             .init("tilt", "Tilt", -1...1, 0.2, "A standing lean of ‘down’, radians."),
+            .init("sheen", "Sheen", 0...2, 1, "The broad band of light the surface throws back — the gold sheet."),
+            .init("glass", "Glass", 0...1, 0.3, "The empty part of the sphere: 0 clear, 1 white glass."),
+            .init("shadow", "Shadow", 0...1, 0, "A soft shadow beneath, for a light ground."),
+            .init("sway", "Sway", 0...1, 0.3, "A quicker rocking on top of the tumble."),
+            .init("colorDepth", "Colour Depth", 0...1, 0.5, "How much the colour shifts along the palette with thickness."),
+        ]
+        case .droplet: return [
+            .init("sag", "Sag", 0...1, 0.6, "Heavier at the bottom."),
+            .init("wobble", "Wobble", 0...1, 0.5, "Surface-tension modes."),
+            .init("refraction", "Refraction", 0...1.5, 0.7, "How much it bends what’s behind."),
+            .init("tint", "Tint", 0...1, 0.7, "How much palette shows through."),
+            .init("highlight", "Highlights", 0...2, 1, "The window and the specular."),
+        ]
+        case .pour: return [
+            .init("rate", "Cycle Rate", 0...2, 0.6, "Fill → hold → drain cycles. 0 holds at half."),
+            .init("stream", "Stream", 0...1.5, 1, "The pouring column."),
+            .init("ripples", "Ripples", 0...2, 1, "Where the stream lands."),
+            .init("foam", "Foam", 0...1.5, 0.8, "The bright surface band."),
+            .init("tint", "Tint", 0...1, 0.9, "Liquid colour strength."),
+            .init("hold", "Hold", 0...1, 0.4, "How long it stays full."),
+        ]
+        case .pool: return [
+            .init("drops", "Drops", 1...8, 4, "Drops landing.", "%.0f"),
+            .init("speed", "Ring Speed", 0.2...3, 1, "How fast rings spread."),
+            .init("width", "Ring Width", 0...1, 0.4, "Ring thickness."),
+            .init("refraction", "Refraction", 0...2, 1, "How much the floor bends."),
+            .init("caustic", "Caustic", 0...2, 1, "Bright slopes."),
+            .init("calm", "Swell", 0...1, 0.5, "A slow background swell."),
+        ]
+        case .caustics: return [
+            .init("scale", "Scale", 1...8, 3, "Web fineness."),
+            .init("speed", "Speed", 0...3, 1, "Drift."),
+            .init("sharpness", "Sharpness", 0...1, 0.5, "Line thinness."),
+            .init("layers", "Layers", 1...3, 2, "Overlaid webs.", "%.0f"),
+            .init("tint", "Tint", 0...1, 0.4, "Palette on the light; 0 is white."),
+            .init("floor", "Floor", 0...1, 0.35, "The palette floor under the web."),
+        ]
+        case .lava: return [
+            .init("blobs", "Blobs", 1...8, 5, "Blobs.", "%.0f"),
+            .init("heat", "Heat", 0.1...3, 1, "Rise speed."),
+            .init("size", "Size", 0.1...0.5, 0.17, "Blob radius."),
+            .init("goo", "Goo", 0...1, 0.5, "How far apart they still merge."),
+            .init("glow", "Glow", 0...1.5, 0.6, "Halo round each blob."),
+            .init("stretch", "Stretch", 0...1, 0.7, "Elongation while moving."),
+        ]
+        case .jelly: return [
+            .init("wobble", "Wobble", 0...1, 0.5, "Idle motion."),
+            .init("springiness", "Springiness", 0.5...6, 2.5, "Mode frequency."),
+            .init("translucency", "Translucency", 0...1, 0.5, "See-through-ness."),
+            .init("core", "Core", 0...1.5, 0.8, "The lit centre."),
+            .init("highlight", "Highlights", 0...2, 1, "Shell sheen and specular."),
+            .init("modes", "Modes", 1...6, 3, "Spring modes.", "%.0f"),
+        ]
+        case .slick: return [
+            .init("swirl", "Swirl", 0...2, 1, "Domain warp."),
+            .init("scale", "Scale", 0.5...4, 1.5, "Pattern size."),
+            .init("iridescence", "Iridescence", 0.2...2, 1, "Colour cycles."),
+            .init("speed", "Speed", 0...3, 1, "Motion."),
+            .init("contrast", "Contrast", 0...1, 0.5, "Band sharpness."),
+            .init("water", "Water", 0...2, 1, "The dark surface beneath."),
+        ]
+        case .deep: return [
+            .init("rays", "Rays", 0...2, 1, "Light shafts."),
+            .init("motes", "Motes", 0...2, 1, "Drifting specks."),
+            .init("depth", "Depth", 0...1, 0.8, "How dark it gets below."),
+            .init("surface", "Surface", 0...2, 1, "The caustic web up top."),
+            .init("sway", "Sway", 0...1, 0.5, "The light source moving."),
+        ]
+        case .nebula: return [
+            .init("density", "Density", 0...3, 1.2, "Cloud thickness."),
+            .init("scale", "Scale", 0.5...4, 1.6, "Cloud feature size."),
+            .init("flow", "Flow", 0...3, 1, "Drift."),
+            .init("glow", "Glow", 0...1.5, 0.5, "Self-light."),
+            .init("shell", "Shell", 0...1.5, 0.8, "The glass round it."),
+            .init("light", "Lighting", 0...1, 0.7, "Directional shading of the cloud."),
+        ]
+        case .water: return [
+            .init("amount", "Amount", 0...30, 8, "Refraction, points.", "%.0f pt"),
+            .init("scale", "Scale", 20...300, 90, "Ripple size, points.", "%.0f pt"),
+            .init("speed", "Speed", 0...3, 1, "Ripple motion."),
+            .init("caustic", "Caustic", 0...2, 0.8, "Brightening on the slopes."),
+        ]
+        case .haze: return [
+            .init("amount", "Amount", 0...1, 0.4, "Veil strength."),
+            .init("scale", "Scale", 0.5...6, 2, "Fog patch size."),
+            .init("breathe", "Breathe", 0...1, 0.5, "Slow pulsing."),
+        ]
+        case .fizz: return [
+            .init("count", "Bubbles", 1...40, 16, "Bubbles.", "%.0f"),
+            .init("speed", "Speed", 0.2...3, 1, "Rise speed."),
+            .init("size", "Size", 2...16, 6, "Bubble radius, points.", "%.0f pt"),
+        ]
+        case .glints: return [
+            .init("threshold", "Threshold", 0...1, 0.75, "How bright a point must be to sparkle."),
+            .init("length", "Length", 4...80, 30, "Streak length, points.", "%.0f pt"),
+            .init("strength", "Strength", 0...3, 1, "Streak brightness."),
+            .init("rotate", "Rotate", -2...2, 0.2, "Streak spin, radians per second."),
+        ]
+        case .parallax: return [
+            .init("offset", "Offset", 0...30, 8, "Depth, points.", "%.0f pt"),
+            .init("angle", "Angle", 0...6.28, 0.8, "Light direction, radians."),
+            .init("shadow", "Shadow", 0...1, 0.5, "The dark copy."),
+            .init("light", "Light", 0...1, 0.5, "The light copy."),
+            .init("soften", "Soften", 0...12, 4, "Shadow blur, points.", "%.0f pt"),
         ]
         case .glitch: return [
             .init("amount", "Amount", 0...1, 0.5, "Slice offset and split."),
@@ -934,7 +1106,7 @@ public enum LabPalette: String, CaseIterable, Identifiable, Sendable {
 /// demos" into a design space — Aurora with Bloom and a little
 /// Chromatic is a different thing from any of the three alone.
 public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
-    case bloom, rays, ripple, refraction, chromatic, kaleido, dots, grain, glitch, crt, neon, frost, duotone, spin, tiles, chrome
+    case bloom, rays, ripple, refraction, chromatic, kaleido, dots, grain, glitch, crt, neon, frost, duotone, spin, tiles, chrome, water, haze, fizz, glints, parallax
     public var id: String { rawValue }
     /// The experiment whose knobs this effect uses.
     public var experiment: LabExperiment {
@@ -955,6 +1127,11 @@ public enum LabPostEffect: String, CaseIterable, Identifiable, Sendable {
         case .spin: return .spin
         case .tiles: return .tiles
         case .chrome: return .chrome
+        case .water: return .water
+        case .haze: return .haze
+        case .fizz: return .fizz
+        case .glints: return .glints
+        case .parallax: return .parallax
         }
     }
 }
@@ -1014,6 +1191,9 @@ public final class LabState: ObservableObject {
     @Published public var glyph: String = ""
     /// Continuous hue rotation of the palette, degrees per second.
     @Published public var hueDrift: Double = 0
+    /// 0 draws each experiment at its natural size; 1 scales it so its
+    /// content fills the disc. On by default — the pod is the circle.
+    @Published public var fill: Double = 1
     /// What the flows draw where the ring goes — the ring itself, or any
     /// of the animation labs (with the post stack). Chris, 2026-09-14:
     /// "the option to use these new animation labs within the agent
@@ -1090,11 +1270,13 @@ public struct LabFrame {
     public var hero: LabExperiment? = nil
     /// Post effects over the hero.
     public var heroPost: [LabPostEffect] = []
+    /// See `LabState.fill`.
+    public var fill: Double = 1
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
                 params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
                 taps: Int = 0, sinceTap: Double = .infinity,
-                hero: LabExperiment? = nil, heroPost: [LabPostEffect] = []) {
+                hero: LabExperiment? = nil, heroPost: [LabPostEffect] = [], fill: Double = 1) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -1108,6 +1290,7 @@ public struct LabFrame {
         self.sinceTap = sinceTap
         self.hero = hero
         self.heroPost = heroPost
+        self.fill = fill
     }
 
     /// A knob's value, or its declared default when the frame was built
@@ -1165,7 +1348,8 @@ extension LabState {
                         taps: taps,
                         sinceTap: date.timeIntervalSince(lastTap),
                         hero: hero,
-                        heroPost: post)
+                        heroPost: post,
+                        fill: fill)
     }
 
     private static func hueShifted(_ color: Color, by turns: Double) -> Color {

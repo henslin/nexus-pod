@@ -125,6 +125,8 @@ public struct LabStageView: View {
                 LabSlider(title: "Intensity", value: $lab.intensity, range: 0...1)
                 LabSlider(title: "Speed", value: $lab.speed, range: 0.1...3, format: "%.1f×")
                 LabSlider(title: "Size", value: $lab.diameter, range: 62...600, format: "%.0f pt")
+                LabSlider(title: "Fill", value: $lab.fill, range: 0...1.3,
+                          help: "Scales the experiment to fill the circle. 1 is edge to edge; past it crops.")
                 Toggle("Dark Stage", isOn: $lab.darkStage)
                 Toggle("Pod Preview", isOn: $lab.showPod)
                 if lab.experiment.drawsHero {
@@ -399,9 +401,13 @@ public struct LabExperimentView: View {
     }
 
     public var body: some View {
+        // Fill: scale the base so its content spans the disc. The post
+        // stack and the glyph sit outside the scale, so a bloom's reach
+        // and the glyph's size are unaffected.
+        let scale = 1 + frame.fill * (1 / experiment.naturalFill - 1)
         LabPostStack(effects: post, frame: frame) {
             ZStack {
-                base
+                base.scaleEffect(scale)
                 LabGlyphOverlay(frame: frame)
             }
         }
@@ -458,14 +464,10 @@ public struct LabExperimentView: View {
             LabDotsView(frame: frame) { ring }
         case .grain:
             LabGrainView(frame: frame) { ring }
-        case .lightning:
-            ZStack { ring; LabLightningView(frame: frame) }
         case .cells:
             LabCellsView(frame: frame)
         case .warp:
             LabWarpView(frame: frame)
-        case .burst:
-            ZStack { ring; LabBurstView(frame: frame) }
         case .symbols:
             LabSymbolsView(frame: frame)
         case .shapeshift:
@@ -492,8 +494,6 @@ public struct LabExperimentView: View {
             LabBubbleView(frame: frame)
         case .slices:
             LabSlicesView(frame: frame)
-        case .vessel:
-            LabVesselView(frame: frame)
         case .stack:
             LabStackView(frame: frame)
         case .cascade:
@@ -522,6 +522,20 @@ public struct LabExperimentView: View {
             LabLiquidRingView(frame: frame)
         case .tide:
             LabTideView(frame: frame)
+        case .droplet: LabDropletView(frame: frame)
+        case .pour: LabPourView(frame: frame)
+        case .pool: LabPoolView(frame: frame)
+        case .caustics: LabCausticsView(frame: frame)
+        case .lava: LabLavaView(frame: frame)
+        case .jelly: LabJellyView(frame: frame)
+        case .slick: LabSlickView(frame: frame)
+        case .deep: LabDeepView(frame: frame)
+        case .nebula: LabNebulaView(frame: frame)
+        case .water: LabWaterView(frame: frame) { ring }
+        case .haze: LabHazeView(frame: frame) { ring }
+        case .fizz: LabFizzView(frame: frame) { ring }
+        case .glints: LabGlintsView(frame: frame) { ring }
+        case .parallax: LabParallaxView(frame: frame) { ring }
         case .journey:
             LabJourneyView(frame: frame, config: config)
         case .agentStates:
