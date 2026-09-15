@@ -966,12 +966,21 @@ static float sd_blob(float2 p, float t) {
 {
     float2 uv = (position / size) * 2.0f - 1.0f;
     float kThick = knobs[0], kDrain = knobs[1], kIrid = knobs[2], kRim = knobs[3], kPool = knobs[4], kSpec = knobs[5], kWobble = knobs[6];
+    float kShell = knobCount > 7 ? knobs[7] : 0.0f;
+    float kFloor = knobCount > 8 ? knobs[8] : 0.0f;
     // Wobble: the bubble is never quite round.
     float ang = atan2(uv.y, uv.x);
     float wob = 1.0f + kWobble * 0.03f * sin(ang * 3.0f + time * 1.7f) + kWobble * 0.02f * sin(ang * 5.0f - time * 2.3f) + audio * 0.03f;
     float r = length(uv) / wob;
     float mask = 1.0f - smoothstep(0.985f, 1.0f, r);
-    if (mask <= 0.0f) return half4(0);
+    if (mask <= 0.0f) {
+        // Floor: a soft glow below the bubble, outside it — the
+        // reference's lit floor.
+        float2 fp = (uv - float2(0, 1.05f)) / float2(0.9f, 0.35f);
+        float floorGlow = exp(-dot(fp, fp) * 1.5f) * kFloor * 0.5f * step(0.6f, uv.y);
+        float3 fcol = lab_palette_linear(0.2f + time * 0.02f, lab, labCount) * floorGlow;
+        return half4(half3(lab_linear_to_srgb(fcol)) * half(min(floorGlow, 1.0f)), half(min(floorGlow, 1.0f)));
+    }
     float rr = min(r, 1.0f);
     float z = sqrt(max(0.0f, 1.0f - rr * rr));
     // Steep: the film only shows where it is seen edge-on, so the middle
@@ -986,9 +995,18 @@ static float sd_blob(float2 p, float t) {
     float phase = thickness * (2.0f + 2.0f * (1.0f - z)) + time * 0.05f;
     float3 film = lab_palette_linear(phase, lab, labCount);
 
-    // The rim: a thin bright band at the edge, plus the Fresnel-weighted film.
+    // The rim: a thin bright band at the edge, plus the Fresnel-weighted
+    // film. Shell widens the rim into a glass wall with its own inner
+    // edge — the bonus reference's thick bubble — with the film's bands
+    // sliding round inside it.
     float rimLine = smoothstep(0.93f, 0.985f, rr) * (1.0f - smoothstep(0.985f, 1.0f, rr));
-    float3 lin = film * (fresnel * kIrid * 1.3f + rimLine * kRim * 1.6f);
+    float innerEdge = 1.0f - kShell * 0.22f;
+    float wall = smoothstep(innerEdge - 0.02f, innerEdge + 0.03f, rr) * (1.0f - smoothstep(0.975f, 1.0f, rr)) * kShell;
+    float innerLine = smoothstep(innerEdge - 0.015f, innerEdge, rr) * (1.0f - smoothstep(innerEdge, innerEdge + 0.02f, rr)) * kShell;
+    float bands = 0.5f + 0.5f * sin(ang * 3.0f + time * 1.2f + thickness * 4.0f);
+    float3 lin = film * (fresnel * kIrid * 1.3f + rimLine * kRim * 1.6f)
+               + film * wall * (0.35f + 0.65f * bands) * kIrid
+               + film * innerLine * 0.8f * kRim;
 
     // The pool: palette glow gathering at the bottom *edge* — inside the
     // film, near the rim, not across the whole lower half (which filled
@@ -1495,4 +1513,154 @@ static float sd_capsule(float2 p, float halfLen, float rad) {
     float alpha = min(1.0f, max(band, glow + (r < inner ? kDots * 0.3f : 0.0f)));
     alpha = max(alpha, max(max(lin.r, lin.g), lin.b) * 0.8f);
     return half4(half3(lab_linear_to_srgb(lin)) * half(min(alpha, 1.0f)), half(min(alpha, 1.0f)));
+}
+
+// MARK: - Tide (colorEffect) — water in a sphere, tumbling in 3D
+//
+// Three of Chris's references (2026-09-15) are the same object: a glass
+// sphere with liquid in it, and the *direction of gravity* slowly
+// turning, so the surface is seen from above (a wavy disc), then
+// edge-on (a thin line — the fish-tank view), then from below. The
+// pink one has dense water; the pastel one has water so clear that only
+// the surface shows, as a film; the blue one is behind frosted glass.
+// Density and Frost are knobs, so one lab reaches all three.
+//
+// Rendered honestly: an orthographic ray per pixel through the unit
+// sphere; the liquid is the half-space below a plane whose normal is
+// "down"; waves are noise on that plane; the ray is marched through the
+// sphere summing how much liquid it crosses (Beer-Lambert absorption
+// gives the colour) and finding the first air↔liquid crossing (the
+// surface: highlights, thin-film colour where it is seen edge-on, a
+// cooler cast when seen from underneath).
+//
+// `knobs`: level, tumble, wave, density, frost, film, highlight, tilt.
+
+static float3 tide_palette(float t, device const float *lab, int labCount) {
+    return lab_palette_linear(t, lab, labCount);
+}
+
+[[ stitchable ]] half4 labTide(float2 position, half4 color,
+                               float2 size, float time, float intensity, float audio,
+                               device const float *knobs, int knobCount,
+                               device const float *lab, int labCount)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float kLevel = knobs[0], kTumble = knobs[1], kWave = knobs[2], kDensity = knobs[3];
+    float kFrost = knobs[4], kFilm = knobs[5], kSpec = knobs[6], kTilt = knobs[7];
+
+    // Sphere, radius 1 in a 0.9 disc so the rim breathes.
+    float2 p2 = uv / 0.9f;
+    float r2 = dot(p2, p2);
+    float mask = 1.0f - smoothstep(0.985f, 1.0f, sqrt(r2));
+    if (mask <= 0.0f) return half4(0);
+    float z0 = sqrt(max(0.0f, 1.0f - r2));   // front of the sphere (toward the viewer, +z)
+    float z1 = -z0;                           // back
+
+    // Down: a unit vector that swings and turns — the tumble. Audio
+    // gives it a kick, so a loud moment sloshes.
+    float t1 = 0.55f * sin(time * kTumble * 0.37f) + kTilt + audio * 0.4f;
+    float t2 = time * kTumble * 0.23f;
+    float3 g = normalize(float3(sin(t1) * cos(t2), cos(t1), sin(t1) * sin(t2)));
+    float3 u = normalize(cross(g, float3(0.31f, 0.12f, 0.94f)));
+    float3 v = cross(g, u);
+    float level = clamp(kLevel + audio * 0.15f, 0.02f, 0.98f);
+    float h0 = 1.0f - 2.0f * level;           // surface height along g; liquid where dot(p, g) > h0
+
+    // March front to back.
+    const int N = 16;
+    float thickness = 0.0f;
+    bool prevInside = false, haveSurface = false, fromAbove = false;
+    float3 surfaceP = float3(0);
+    float wAtSurface = 0.0f;
+    float2 wgrad = float2(0);
+    float step = (z0 - z1) / float(N);
+    for (int i = 0; i < N; i++) {
+        float z = z0 - (float(i) + 0.5f) * step;
+        float3 p = float3(p2, z);
+        float2 pl = float2(dot(p, u), dot(p, v));
+        float w = kWave * 0.12f * (lab_fbm_n(pl * 1.7f + float2(time * 0.45f, -time * 0.3f), 2) - 0.5f) * 2.0f;
+        bool inside = dot(p, g) > h0 + w;
+        if (inside) thickness += step;
+        if (i == 0) { prevInside = inside; }
+        else if (inside != prevInside && !haveSurface) {
+            haveSurface = true;
+            fromAbove = inside;                // air → liquid: we look down onto the surface
+            surfaceP = p;
+            wAtSurface = w;
+            const float e = 0.03f;
+            float wu = kWave * 0.12f * (lab_fbm_n((pl + float2(e, 0)) * 1.7f + float2(time * 0.45f, -time * 0.3f), 2) - 0.5f) * 2.0f;
+            float wv = kWave * 0.12f * (lab_fbm_n((pl + float2(0, e)) * 1.7f + float2(time * 0.45f, -time * 0.3f), 2) - 0.5f) * 2.0f;
+            wgrad = float2(wu - w, wv - w) / e;
+        }
+        prevInside = inside;
+    }
+    // If the ray starts inside, the front of the sphere is under water:
+    // there is no crossing but we are looking up through the liquid.
+    bool underwater = !haveSurface && prevInside && thickness > 0.0f;
+
+    // Body: absorption by thickness, in the palette; deeper is darker
+    // and shifts along the palette a little.
+    float3 liq = tide_palette(0.15f + thickness * 0.12f + time * 0.01f, lab, labCount);
+    float transmit = exp(-thickness * kDensity * 2.2f);
+    float3 glass = float3(0.97f);
+    float3 lin = mix(liq * (1.0f - 0.25f * min(thickness, 2.0f)), glass, transmit);
+
+    // The surface.
+    float3 view = float3(0, 0, 1);
+    float surfaceLight = 0.0f;
+    float3 surfaceCol = float3(0);
+    if (haveSurface) {
+        // Normal: up, tilted by the wave's slope.
+        float3 nUp = normalize(-g + (u * wgrad.x + v * wgrad.y) * 0.5f);
+        float facing = dot(nUp, view);                  // +1 seen from straight above, −1 from below
+        float edgeOn = 1.0f - abs(facing);
+        // Thin-film colour where the surface is seen at a grazing angle —
+        // the pastel edges of the clear reference.
+        float3 film = tide_palette(0.5f + edgeOn * 0.6f + dot(surfaceP, u) * 0.15f + time * 0.03f, lab, labCount);
+        surfaceCol += film * pow(edgeOn, 1.6f) * kFilm * 1.4f;
+        // Highlight from a key light, only on the side facing us.
+        float3 L = normalize(float3(-0.5f, 0.75f, 0.6f));
+        float3 H = normalize(L + view);
+        float spec = pow(max(dot(nUp, H), 0.0f), 70.0f) * max(facing, 0.0f);
+        // The sheen is the broad band of light the surface throws back —
+        // the gold sheet in the orange reference. It takes the palette's
+        // warm end rather than plain white, and it is wide.
+        float sheen = pow(max(dot(nUp, H), 0.0f), 3.0f) * max(facing, 0.0f) * 0.55f;
+        float3 sheenCol = mix(float3(1.0f), tide_palette(0.75f, lab, labCount) * 1.4f, 0.7f);
+        surfaceCol += float3(1.0f) * spec * 0.5f * kSpec + sheenCol * sheen * kSpec;
+        // From below the surface is a silvery mirror (total internal
+        // reflection) — a cool wash.
+        surfaceCol += float3(0.85f, 0.92f, 1.0f) * max(-facing, 0.0f) * 0.25f * kSpec;
+        surfaceLight = max(max(surfaceCol.r, surfaceCol.g), surfaceCol.b);
+    }
+    if (underwater) {
+        // Looking up through the water: the body colour, brightened
+        // toward the sphere's rim where the surface would be.
+        lin = mix(lin, liq * 1.3f, 0.2f);
+    }
+    // Energy-conserving: the surface's light replaces what is under it
+    // rather than piling on top, so a bright sheet stays coloured
+    // instead of clipping to white.
+    float sMix = min(1.0f, surfaceLight);
+    lin = mix(lin, surfaceCol / max(sMix, 0.001f), sMix * 0.85f);
+
+    // The glass: Fresnel whitening, frost, a rim line, a highlight, and
+    // the sphere's own shading so it reads as a ball.
+    float fres = pow(1.0f - z0, 2.5f);
+    float3 nS = float3(p2, z0);
+    float shade = 0.85f + 0.15f * max(dot(nS, normalize(float3(-0.4f, 0.6f, 0.7f))), 0.0f);
+    lin *= shade;
+    lin = mix(lin, float3(1.0f), kFrost * (0.25f + 0.75f * fres));
+    float rr = sqrt(r2);
+    float rimLine = smoothstep(0.93f, 0.985f, rr) * (1.0f - smoothstep(0.985f, 1.0f, rr));
+    lin += float3(1.0f) * rimLine * 0.45f;
+    float hl = pow(max(dot(nS, normalize(normalize(float3(-0.5f, 0.75f, 0.6f)) + view)), 0.0f), 90.0f);
+    lin += float3(1.0f) * hl * 0.6f;
+
+    // Alpha: the liquid and frost are opaque-ish; clear glass over
+    // nothing stays mostly see-through so it works on a dark stage too.
+    float bodyAlpha = 1.0f - transmit;
+    float alpha = max(max(bodyAlpha, kFrost * 0.7f + fres * 0.45f + 0.04f), min(surfaceLight, 1.0f) + rimLine * 0.5f + hl * 0.6f);
+    alpha = min(1.0f, alpha) * mask;
+    return half4(half3(lab_linear_to_srgb(lin)) * half(alpha), half(alpha));
 }

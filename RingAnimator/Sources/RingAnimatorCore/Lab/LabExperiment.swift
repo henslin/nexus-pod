@@ -56,6 +56,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case globe
     case silk
     case liquidRing
+    case tide
     // Post effects with no base of their own.
     case kaleido
     case dots
@@ -122,6 +123,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .globe:      return "Globe"
         case .silk:       return "Silk"
         case .liquidRing: return "Liquid Ring"
+        case .tide:       return "Tide"
         case .kaleido:    return "Kaleido"
         case .dots:       return "Dots"
         case .grain:      return "Grain"
@@ -186,6 +188,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .globe:      return "Metal · colorEffect"
         case .silk:       return "Metal · colorEffect"
         case .liquidRing: return "Metal · colorEffect"
+        case .tide:       return "Metal · colorEffect (ray-marched)"
         case .kaleido:    return "Metal · layerEffect"
         case .dots:       return "Metal · layerEffect"
         case .grain:      return "Metal · layerEffect"
@@ -248,6 +251,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .globe:      return "drop.circle.fill"
         case .silk:       return "leaf"
         case .liquidRing: return "circle.dotted.and.circle"
+        case .tide:       return "water.waves.and.arrow.trianglehead.down"
         case .kaleido:    return "hexagon"
         case .dots:       return "circle.grid.3x3.fill"
         case .grain:      return "film"
@@ -359,6 +363,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "A translucent pastel membrane that folds: nearly white where it faces you, colour only where it’s seen edge-on — the folds and the rim — with a silhouette that wanders. The softest thing here. Light-mode."
         case .liquidRing:
             return "The ring as a fluid: a band whose edges are pushed by flowing noise, white-hot where the flow bunches, with a faint dot field rippling inside — the temperature-dial reference. This is the ring’s own identity, reimagined."
+        case .tide:
+            return "Water in a sphere, tumbling in 3D — the three references at once. A ray per pixel through the sphere; the liquid is everything below a plane whose ‘down’ slowly turns, so you see the surface from above as a wavy disc, then edge-on as a line (the fish tank), then from underneath. Thickness sets the colour. Density 0 is the clear film; Frost is the blue one behind glass. Audio sloshes it."
         case .glitch:
             return "Post: digital damage in bursts — sliced rows, a channel split, inverted blocks — gated by the beat. An error state, or an interruption."
         case .crt:
@@ -398,7 +404,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// The bases that draw a disc on their own.
     public var canBeHero: Bool {
         switch self {
-        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .lightning, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .vessel, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing: return true
+        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .lightning, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .vessel, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing, .tide: return true
         default: return false
         }
     }
@@ -626,6 +632,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("pool", "Pool", 0...2, 0.8, "Glow gathering at the bottom."),
             .init("highlight", "Highlights", 0...2, 1, "The two specular hits."),
             .init("wobble", "Wobble", 0...1, 0.5, "The bubble is never quite round."),
+            .init("shell", "Shell", 0...1, 0, "Thickens the rim into a glass wall with its own inner edge, bands sliding round it — the thick purple bubble."),
+            .init("floor", "Floor Glow", 0...1, 0, "A lit floor beneath."),
         ]
         case .slices: return [
             .init("slats", "Slats", 6...60, 22, "Slices across.", "%.0f"),
@@ -740,6 +748,16 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("heat", "Heat", 0...2, 0.6, "White-hot highlights."),
             .init("dots", "Dots", 0...1, 0.6, "The dot field inside."),
             .init("density", "Dot Density", 4...30, 14, "Rings of dots.", "%.0f"),
+        ]
+        case .tide: return [
+            .init("level", "Level", 0.05...0.95, 0.5, "How full. Audio adds to it."),
+            .init("tumble", "Tumble", 0...3, 1, "How fast ‘down’ turns. This is what gives the top / side / under views."),
+            .init("wave", "Wave", 0...1.5, 0.6, "Surface height."),
+            .init("density", "Density", 0...3, 1.2, "0 clear film (colour only at the surface), 3 milk."),
+            .init("frost", "Frost", 0...1, 0.15, "Frosted glass in front of it."),
+            .init("film", "Surface Film", 0...2, 1, "Thin-film colour where the surface is seen edge-on."),
+            .init("highlight", "Highlights", 0...2, 1, "Specular on the surface and the underwater mirror."),
+            .init("tilt", "Tilt", -1...1, 0.2, "A standing lean of ‘down’, radians."),
         ]
         case .glitch: return [
             .init("amount", "Amount", 0...1, 0.5, "Slice offset and split."),

@@ -520,6 +520,8 @@ public struct LabExperimentView: View {
             LabSilkView(frame: frame)
         case .liquidRing:
             LabLiquidRingView(frame: frame)
+        case .tide:
+            LabTideView(frame: frame)
         case .journey:
             LabJourneyView(frame: frame, config: config)
         case .agentStates:

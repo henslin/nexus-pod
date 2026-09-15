@@ -862,3 +862,10 @@ struct LabLiquidRingView: View {
     let frame: LabFrame
     var body: some View { LabKnobShaderView(frame: frame, experiment: .liquidRing, name: "labLiquidRing") }
 }
+
+// MARK: - Tide (Metal · colorEffect) — water in a sphere
+
+struct LabTideView: View {
+    let frame: LabFrame
+    var body: some View { LabKnobShaderView(frame: frame, experiment: .tide, name: "labTide") }
+}
