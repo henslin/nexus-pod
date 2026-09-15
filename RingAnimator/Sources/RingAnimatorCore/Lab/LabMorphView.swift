@@ -37,6 +37,10 @@ struct LabMorphView: View {
         return step % states.count
     }
 
+    /// The phone the states live in. Real points: the panels are real
+    /// iOS sizes, so the canvas is a real phone.
+    static let phone = CGSize(width: 393, height: 780)
+
     var body: some View {
         let states = frame.morphStates
         let state = states.isEmpty ? LabMorphState(.pod) : states[min(index, states.count - 1)]
@@ -46,10 +50,44 @@ struct LabMorphView: View {
         // off it. Deterministic, like everything else on the clock.
         let hold = max(frame.p("hold", .morph), 0.2)
         let sinceChange = frame.time.truncatingRemainder(dividingBy: hold)
-        LabMorphPanel(state: state, frame: frame, config: config, diameter: frame.diameter,
-                      sinceChange: sinceChange, untilChange: hold - sinceChange)
-            .animation(spring, value: state.id)
-            .frame(width: frame.diameter, height: frame.diameter)
+        let phone = Self.phone
+        let size = LabMorphPanel.size(of: state.kind)
+        // Each state's home: the pod in the tab bar's trailing slot, the
+        // pill and card just above the bar, the sheet and full screen
+        // from the bottom. The panel animates between homes as it
+        // morphs, so it grows *out of* the pod rather than in place.
+        let center: CGPoint = {
+            let pod = CGFloat(RingConfig.tabBarPodDiameter)
+            switch state.kind {
+            case .pod:        return CGPoint(x: 16 + (phone.width - 32) - pod / 2, y: phone.height - 24 - pod / 2)
+            case .pill, .card: return CGPoint(x: phone.width / 2, y: phone.height - 24 - 62 - 12 - size.height / 2)
+            case .sheet:      return CGPoint(x: phone.width / 2, y: phone.height - size.height / 2)
+            case .fullScreen: return CGPoint(x: phone.width / 2, y: phone.height / 2)
+            }
+        }()
+        ZStack {
+            DemoTab.dashboard.screenshotImage(dark: frame.darkStage)
+                .resizable().scaledToFill()
+                .frame(width: phone.width, height: phone.height)
+                .clipped()
+            Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? 0.85 : 0)
+                .animation(spring, value: state.id)
+            VStack {
+                Spacer()
+                TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: phone.width - 32)
+                    .allowsHitTesting(false)
+                    .padding(.bottom, 24)
+                    .opacity(state.kind == .fullScreen ? 0 : 1)
+                    .animation(spring, value: state.id)
+            }
+            LabMorphPanel(state: state, frame: frame, config: config,
+                          sinceChange: sinceChange, untilChange: hold - sinceChange)
+                .position(center)
+                .animation(spring, value: state.id)
+        }
+        .frame(width: phone.width, height: phone.height)
+        .clipShape(RoundedRectangle(cornerRadius: 50, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 50, style: .continuous).strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
     }
 }
 
@@ -60,7 +98,6 @@ struct LabMorphPanel: View {
     let state: LabMorphState
     let frame: LabFrame
     @ObservedObject var config: RingConfig
-    let diameter: CGFloat
     /// Seconds since this state became current, and until it stops
     /// being — the transitions' clock. Infinity for a still card.
     var sinceChange: Double = .infinity
@@ -95,23 +132,26 @@ struct LabMorphPanel: View {
         return CGFloat((1 - envelope) * 28)
     }
 
-    private var size: CGSize {
-        let d = diameter
-        switch state.kind {
+    /// Real iOS sizes, in points, on a 393-wide phone: the pod is the tab
+    /// bar's; the pill is the tab bar accessory's width; the card is a
+    /// notification's; the sheet a medium detent; full screen the screen.
+    static func size(of kind: LabMorphKind) -> CGSize {
+        switch kind {
         case .pod:        return CGSize(width: 62, height: 62)
-        case .pill:       return CGSize(width: min(d * 0.9, 300), height: 62)
-        case .card:       return CGSize(width: min(d * 0.9, 320), height: 170)
-        case .sheet:      return CGSize(width: d, height: d * 0.95)
-        case .fullScreen: return CGSize(width: d, height: d)
+        case .pill:       return CGSize(width: 361, height: 62)
+        case .card:       return CGSize(width: 361, height: 176)
+        case .sheet:      return CGSize(width: 393, height: 560)
+        case .fullScreen: return LabMorphView.phone
         }
     }
+    private var size: CGSize { Self.size(of: state.kind) }
 
     private var cornerRadius: CGFloat {
         switch state.kind {
         case .pod, .pill: return 31
         case .card:       return 28
-        case .sheet:      return 36
-        case .fullScreen: return diameter * 0.12
+        case .sheet:      return 38
+        case .fullScreen: return 50
         }
     }
 
@@ -135,20 +175,8 @@ struct LabMorphPanel: View {
             // refracts it. It arrives and leaves with the content, and a
             // flare entrance overshoots then settles.
             if state.adornments.contains(.edgeGlow) {
-                let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 48)
-                let width = frame.p("glowWidth", .morph), blur = frame.p("glowBlur", .morph)
-                let inset = frame.p("glowInset", .morph)
-                ZStack {
-                    shape.strokeBorder(AngularGradient(colors: sweep, center: .center, angle: .degrees(frame.time * 40)), lineWidth: width)
-                        .padding(inset)
-                        .blur(radius: blur)
-                    shape.strokeBorder(AngularGradient(colors: sweep, center: .center, angle: .degrees(frame.time * 40)), lineWidth: 2)
-                        .padding(inset)
-                        .opacity(0.8)
-                }
-                .opacity(min(1.6, (0.8 + frame.audio * 0.4) * env + flare))
-                .blendMode(.plusLighter)
-                .clipShape(shape)
+                LabEdgeGlowAdornment(frame: frame, shape: shape, size: size, envelope: env, flare: flare)
+                    .clipShape(shape)
             }
         }
     }
@@ -167,7 +195,7 @@ struct LabMorphPanel: View {
                     LabWaveformBars(frame: frame, bars: 20, height: 22).frame(height: 44)
                 } else {
                     Text(hasCaption ? "Listening…" : "John arrived home.")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Spacer(minLength: 0)
@@ -179,15 +207,15 @@ struct LabMorphPanel: View {
                 HStack(spacing: 10) {
                     LabHeroView(frame: frame, config: config, diameter: 44)
                     Text("John arrived home.")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.headline)
                     Spacer(minLength: 0)
                 }
                 if hasCaption {
-                    LabCaptionWords(frame: frame, width: size.width - 32, size: 13, style: 1, rate: 5, glow: 0.3, hold: 4)
+                    LabCaptionWords(frame: frame, width: size.width - 32, size: 15, style: 1, rate: 5, glow: 0.3, hold: 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     Text("Front door unlocked at 5:42 PM. Living room lights are on.")
-                        .font(.system(size: 13))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -200,7 +228,7 @@ struct LabMorphPanel: View {
                 HStack(spacing: 12) {
                     LabHeroView(frame: frame, config: config, diameter: 56)
                     Text("Nexus")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.title2.bold())
                     Spacer(minLength: 0)
                 }
                 if hasCaption {
@@ -208,9 +236,9 @@ struct LabMorphPanel: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     Text("John arrived home.")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.headline)
                     Text("Front door unlocked at 5:42 PM. Living room lights are on. The thermostat is holding 70°.")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -220,10 +248,10 @@ struct LabMorphPanel: View {
                         if hasWave { LabWaveformBars(frame: frame, bars: 26, height: 20) }
                         else { Text("Message").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14) }
                     }
-                    .frame(height: 40)
+                    .frame(height: 44)
                     .frame(maxWidth: .infinity)
                     .background(Capsule().fill(.fill.tertiary))
-                    LabHeroView(frame: frame, config: config, diameter: 40)
+                    LabHeroView(frame: frame, config: config, diameter: 44)
                 }
             }
             .padding(20)
@@ -232,11 +260,11 @@ struct LabMorphPanel: View {
                 Spacer()
                 LabHeroView(frame: frame, config: config, diameter: size.width * 0.5)
                 Text("Listening…")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                 if hasCaption {
-                    LabCaptionWords(frame: frame, width: size.width - 48, size: 18, style: 1, rate: 4, glow: 0.4, hold: 4)
-                        .frame(height: 90)
+                    LabCaptionWords(frame: frame, width: size.width - 48, size: 20, style: 1, rate: 4, glow: 0.4, hold: 4)
+                        .frame(height: 120)
                 }
                 if hasWave { LabWaveformBars(frame: frame, bars: 32, height: 24).frame(height: 30).padding(.horizontal, 24) }
                 Spacer()
@@ -254,11 +282,15 @@ struct LabMorphStage: View {
     let frame: LabFrame
 
     var body: some View {
+        // The hero is a real phone, scaled so its height is ~1.9× the
+        // stage's diameter — the Size slider still means something.
+        let heroScale = frame.diameter * 1.9 / LabMorphView.phone.height
         VStack(spacing: 18) {
             LabMorphView(frame: frame, config: config)
-                .frame(width: frame.diameter, height: frame.diameter)
+                .scaleEffect(heroScale)
+                .frame(width: LabMorphView.phone.width * heroScale, height: LabMorphView.phone.height * heroScale)
 
-            Divider().frame(maxWidth: frame.diameter * 1.6)
+            Divider().frame(maxWidth: 600)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 18) {
@@ -300,11 +332,15 @@ struct LabMorphStage: View {
         }
     }
 
-    /// One state, still, at a fixed reduced size, with its controls.
+    /// One state, still, at its true size scaled as a whole to fit the
+    /// card — so type and spacing are the real thing, only smaller.
     private func stateCard(_ state: LabMorphState, index: Int) -> some View {
-        let cardDiameter: CGFloat = 200
+        let cardDiameter: CGFloat = 220
+        let real = LabMorphPanel.size(of: state.kind)
+        let scale = min(cardDiameter / real.width, cardDiameter / real.height, 1)
         return VStack(spacing: 8) {
-            LabMorphPanel(state: state, frame: frame.resized(cardDiameter), config: config, diameter: cardDiameter)
+            LabMorphPanel(state: state, frame: frame, config: config)
+                .scaleEffect(scale)
                 .frame(width: cardDiameter, height: cardDiameter)
             HStack(spacing: 6) {
                 Text("\(index + 1) · \(state.kind.label)")
@@ -381,5 +417,93 @@ struct LabMorphStage: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+}
+
+/// The edge glow a state carries: a palette band inside the container's
+/// edge, and/or a tracer — a bright head running round the perimeter
+/// with a fading trail — both under the glass, both breathing.
+struct LabEdgeGlowAdornment: View {
+    let frame: LabFrame
+    let shape: RoundedRectangle
+    let size: CGSize
+    let envelope: Double
+    let flare: Double
+
+    var body: some View {
+        let style = Int(frame.p("glowStyle", .morph))
+        let width = frame.p("glowWidth", .morph), blur = frame.p("glowBlur", .morph)
+        let inset = frame.p("glowInset", .morph)
+        let spin = frame.p("glowSpin", .morph)
+        let pulse = 1 - frame.p("glowPulse", .morph) * 0.5 * (0.5 + 0.5 * sin(frame.time * 1.5))
+        let single = frame.p("glowColor", .morph) >= 0.5
+        let primary = frame.colors.first ?? .white
+        let sweep = PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 48)
+        let paint: AnyShapeStyle = single
+            ? AnyShapeStyle(primary)
+            : AnyShapeStyle(AngularGradient(colors: sweep, center: .center, angle: .degrees(frame.time * spin * 60)))
+        let strength = min(1.6, (0.8 + frame.audio * 0.4) * envelope * pulse + flare)
+        ZStack {
+            if style == 0 || style == 2 {
+                shape.strokeBorder(paint, lineWidth: width)
+                    .padding(inset)
+                    .blur(radius: blur)
+                shape.strokeBorder(paint, lineWidth: 2)
+                    .padding(inset)
+                    .opacity(0.8)
+            }
+            if style >= 1 {
+                tracers(paint: paint, inset: inset)
+            }
+        }
+        .opacity(strength)
+        .blendMode(.plusLighter)
+    }
+
+    /// Tracers: `trim` on the container's own path, so the head follows
+    /// the corners exactly. The trail is the same trim drawn a few times
+    /// with shrinking length and opacity — a cheap gradient along a path.
+    private func tracers(paint: AnyShapeStyle, inset: Double) -> some View {
+        let count = Int(frame.p("tracers", .morph))
+        let speed = frame.p("tracerSpeed", .morph)
+        let trail = frame.p("tracerTrail", .morph)
+        let lineWidth = frame.p("tracerWidth", .morph)
+        let glow = frame.p("tracerGlow", .morph)
+        let head = (frame.time * speed * 0.25).truncatingRemainder(dividingBy: 1)
+        let insetShape = RoundedRectangle(cornerRadius: max(shape.cornerSize.width - inset, 4), style: .continuous)
+        return ZStack {
+            ForEach(0..<count, id: \.self) { k in
+                let h = (head + Double(k) / Double(count)).truncatingRemainder(dividingBy: 1)
+                ForEach(0..<5, id: \.self) { seg in
+                    let f = Double(seg) / 5
+                    let from = h - trail * (1 - f)
+                    let opacity = 0.18 + 0.82 * f
+                    let w = lineWidth * (0.4 + 0.6 * f)
+                    // The path is in the panel's own coordinates, inset by
+                    // hand — padding a Path view would shift its origin.
+                    let margin = inset + lineWidth
+                    trimmed(insetShape, from: from, to: h, margin: margin)
+                        .stroke(paint, style: StrokeStyle(lineWidth: w, lineCap: .round))
+                        .opacity(opacity)
+                    trimmed(insetShape, from: from, to: h, margin: margin)
+                        .stroke(paint, style: StrokeStyle(lineWidth: w * 4, lineCap: .round))
+                        .blur(radius: 6)
+                        .opacity(opacity * 0.6 * glow)
+                }
+            }
+        }
+    }
+
+    /// `trim` that wraps past 1 and below 0, so a trail crossing the
+    /// path's start draws as two pieces instead of vanishing.
+    private func trimmed(_ shape: RoundedRectangle, from: Double, to: Double, margin: Double) -> Path {
+        let rect = CGRect(origin: .zero, size: size).insetBy(dx: margin, dy: margin)
+        let base = shape.path(in: rect)
+        if from >= 0 {
+            return base.trimmedPath(from: from, to: to)
+        }
+        var p = base.trimmedPath(from: from + 1, to: 1)
+        p.addPath(base.trimmedPath(from: 0, to: to))
+        return p
     }
 }

@@ -636,15 +636,24 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("beat", "Beat", 0...40, 20, "Extra split on audio, points.", "%.0f pt"),
         ]
         case .morph: return [
-            .init("hold", "Hold", 0.5...6, 2, "Seconds in each state.", "%.1f s"),
-            .init("spring", "Spring", 0.2...1.2, 0.55, "Response — lower is snappier."),
-            .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom."),
-            .init("glowWidth", "Glow Width", 2...40, 14, "Edge glow band, points, where a state has it.", "%.0f pt"),
-            .init("glowBlur", "Glow Blur", 0...30, 10, "Edge glow softness, points.", "%.0f pt"),
-            .init("pingpong", "Ping-pong", 0...1, 1, "1 goes up the states and back down; 0 cycles round.", "%.0f"),
-            .init("transIn", "Enter Time", 0.1...2, 0.5, "How long a state's content and adornments take to arrive.", "%.1f s"),
-            .init("transOut", "Leave Time", 0.1...2, 0.35, "How long they take to leave before the next state.", "%.1f s"),
-            .init("glowInset", "Glow Inset", 0...30, 0, "Edge glow pulled in from the container's edge, points.", "%.0f pt"),
+            .init("hold", "Hold", 0.5...6, 2, "Seconds in each state.", "%.1f s", group: "Morphing"),
+            .init("spring", "Spring", 0.2...1.2, 0.55, "Response — lower is snappier.", group: "Morphing"),
+            .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Morphing"),
+            .init("pingpong", "Ping-pong", 0...1, 1, "1 goes up the states and back down; 0 cycles round.", "%.0f", group: "Morphing"),
+            .init("transIn", "Enter Time", 0.1...2, 0.5, "How long a state's content and adornments take to arrive.", "%.1f s", group: "Morphing"),
+            .init("transOut", "Leave Time", 0.1...2, 0.35, "How long they take to leave before the next state.", "%.1f s", group: "Morphing"),
+            .init("glowStyle", "Style", 0...2, 2, "0 glow, 1 tracer, 2 both.", "%.0f", group: "Edge Glow"),
+            .init("glowWidth", "Glow Width", 2...40, 14, "The glow band, points.", "%.0f pt", group: "Edge Glow"),
+            .init("glowBlur", "Glow Blur", 0...30, 10, "Glow softness, points.", "%.0f pt", group: "Edge Glow"),
+            .init("glowInset", "Inset", 0...30, 0, "Pulled in from the container's edge, points.", "%.0f pt", group: "Edge Glow"),
+            .init("glowSpin", "Palette Spin", -2...2, 0.6, "The palette running round the edge, turns per ~6 s.", group: "Edge Glow"),
+            .init("glowPulse", "Breathe", 0...1, 0.3, "Idle pulsing of the glow.", group: "Edge Glow"),
+            .init("tracerSpeed", "Tracer Speed", 0...3, 1, "Laps per ~4 s.", group: "Edge Glow"),
+            .init("tracerTrail", "Trail", 0.02...0.6, 0.22, "Trail length, as a fraction of the perimeter.", group: "Edge Glow"),
+            .init("tracers", "Tracers", 1...4, 1, "How many run round.", "%.0f", group: "Edge Glow"),
+            .init("tracerWidth", "Tracer Width", 1...12, 3, "Line width, points.", "%.0f pt", group: "Edge Glow"),
+            .init("tracerGlow", "Tracer Glow", 0...2, 1, "Halo on the tracer."),
+            .init("glowColor", "Colour", 0...1, 0, "0 the palette sweep, 1 the primary colour only.", "%.0f", group: "Edge Glow"),
         ]
         case .liquid: return [
             .init("blobs", "Blobs", 2...8, 5, "How many.", "%.0f"),
@@ -1333,14 +1342,18 @@ public struct LabParameter: Identifiable, Sendable {
     public let defaultValue: Double
     public let help: String
     public let format: String
+    /// A heading the panel groups consecutive knobs under. `nil` for
+    /// experiments with one list.
+    public let group: String?
 
-    public init(_ id: String, _ name: String, _ range: ClosedRange<Double>, _ defaultValue: Double, _ help: String, _ format: String = "%.2f") {
+    public init(_ id: String, _ name: String, _ range: ClosedRange<Double>, _ defaultValue: Double, _ help: String, _ format: String = "%.2f", group: String? = nil) {
         self.id = id
         self.name = name
         self.range = range
         self.defaultValue = defaultValue
         self.help = help
         self.format = format
+        self.group = group
     }
 }
 

@@ -254,7 +254,14 @@ public struct LabStageView: View {
     }
 
     private func knobs(for experiment: LabExperiment) -> some View {
-        ForEach(experiment.parameters) { parameter in
+        let params = experiment.parameters
+        return ForEach(Array(params.enumerated()), id: \.element.id) { i, parameter in
+            // A heading wherever the group changes.
+            if let g = parameter.group, i == 0 || params[i - 1].group != g {
+                Text(g)
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.top, i == 0 ? 0 : 8)
+            }
             LabSlider(title: parameter.name,
                       value: lab.binding(parameter, of: experiment),
                       range: parameter.range,
