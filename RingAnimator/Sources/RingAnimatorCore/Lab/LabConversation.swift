@@ -82,12 +82,14 @@ public struct LabConversation: Equatable {
             if mode == .voice, frame.transcribing, !frame.transcript.isEmpty {
                 return frame.transcript.suffix(14).map(\.text).joined(separator: " ")
             }
+            // A beat before the first character or word, so the empty
+            // surface (and its suggestions) is seen.
             if mode == .text {
-                let n = Int(since * 14)
+                let n = Int(max(0, since - 0.9) * 14)
                 return String(script.ask.prefix(n))
             }
             let words = script.ask.split(separator: " ")
-            return words.prefix(Int(since * 3) + 1).joined(separator: " ")
+            return since < 0.6 ? "" : words.prefix(Int((since - 0.6) * 3) + 1).joined(separator: " ")
         default:
             if mode == .voice, frame.transcribing, !frame.transcript.isEmpty {
                 return frame.transcript.suffix(14).map(\.text).joined(separator: " ")
@@ -102,7 +104,7 @@ public struct LabConversation: Equatable {
         switch verb {
         case .thinking: return "Thinking…"
         case .searching: return script.checking
-        case .error: return "I couldn’t reach the doorbell. Trying again…"
+        case .error: return "I couldn’t reach the doorbell — trying again."
         default: return nil
         }
     }
@@ -206,8 +208,25 @@ struct LabConversationView: View {
                     Spacer(minLength: 0)
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).font(.title3)
                 }
-                // The ask, as a bubble on the right — yours.
+                // Before you've said anything: what you might ask, as
+                // taps — the other scripts' asks stand in for context.
                 let ask = c.askShown(frame: frame)
+                if c.composing, ask.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Try asking").font(.caption).foregroundStyle(.secondary)
+                        LabWrap(spacing: 6) {
+                            ForEach(LabScript.all.filter { $0.id != c.script.id }, id: \.id) { other in
+                                Text(other.ask)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .padding(.horizontal, 11).padding(.vertical, 7)
+                                    .background(Capsule().fill(.fill.tertiary))
+                            }
+                        }
+                    }
+                    .padding(.leading, 4)
+                    .transition(.opacity)
+                }
+                // The ask, as a bubble on the right — yours.
                 if !ask.isEmpty {
                     HStack {
                         Spacer(minLength: 40)

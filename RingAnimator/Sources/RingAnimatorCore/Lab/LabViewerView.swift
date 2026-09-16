@@ -160,10 +160,15 @@ public struct LabViewerView: View {
                 // The System plays what the Mac assembled: its spec
                 // arrives as JSON on the pasteboard.
                 if lab.experiment == .system {
-                    Button {
-                        if let s = LabSpecStore.paste() { lab.spec = s; pasteMessage = "Loaded “\(s.name)”" } else { pasteMessage = "No spec on the pasteboard" }
+                    Menu {
+                        Section("Starters") {
+                            ForEach(LabSpec.starters) { s in Button(s.name) { lab.spec = s; pasteMessage = nil } }
+                        }
+                        Button {
+                            if let s = LabSpecStore.paste() { lab.spec = s; pasteMessage = "Loaded “\(s.name)”" } else { pasteMessage = "No spec on the pasteboard" }
+                        } label: { Label("Paste Spec from the Mac", systemImage: "doc.on.clipboard") }
                     } label: {
-                        Label(lab.spec.filled == 0 ? "Paste Spec" : lab.spec.name, systemImage: "doc.on.clipboard")
+                        Label(lab.spec.name, systemImage: "wrench.and.screwdriver")
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
                     }

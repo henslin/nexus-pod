@@ -1301,6 +1301,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Play"),
             .init("talk", "Talk Time", 1...8, 3, "Seconds it speaks after a hold is released.", "%.1f s", group: "Play"),
             .init("chrome", "Labels", 0...1, 1, "The step name and hint over the phone.", "%.0f", group: "Play", choices: ["Off", "On"]),
+            .init("error", "Include Error", 0...1, 0, "Play the Error state after Searching — what it looks like when the doorbell can't be reached.", "%.0f", group: "Play", choices: ["Off", "On"]),
         ]
         case .caption: return [
             .init("style", "Style", 0...2, 1, "How words arrive.", "%.0f", choices: ["Fade", "Blur in", "Typed"]),

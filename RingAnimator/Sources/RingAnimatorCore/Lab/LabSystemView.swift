@@ -31,12 +31,14 @@ public struct LabPlayView: View {
     }
 
     /// The tap-driven sequence this spec plays.
-    static func steps(of spec: LabSpec) -> [Step] {
+    static func steps(of spec: LabSpec, withError: Bool = false) -> [Step] {
         var steps: [Step] = [.idle]
         let item: LabActionItem? = spec.tap.item ?? (spec.tap == .menu ? (spec.items.contains(.talk) ? .talk : spec.items.first) : nil)
         if spec.tap == .menu { steps.append(.menu) }
         if let item {
-            for verb in [LabAgentVerb.listening, .thinking, .searching, .speaking, .done] { steps.append(.surface(item, verb)) }
+            var verbs: [LabAgentVerb] = [.listening, .thinking, .searching, .speaking, .done]
+            if withError { verbs.insert(.error, at: 3) }
+            for verb in verbs { steps.append(.surface(item, verb)) }
         }
         steps.append(.askAnywhere)
         steps.append(.askMenu)
@@ -77,7 +79,7 @@ public struct LabPlayView: View {
 
     public var body: some View {
         let spec = frame.spec
-        let steps = Self.steps(of: spec)
+        let steps = Self.steps(of: spec, withError: frame.p("error", .system) >= 0.5)
         let hold = max(frame.p("hold", .system), 0.2)
         let auto = frame.p("auto", .system) >= 0.5
         let talk = frame.p("talk", .system)
@@ -213,7 +215,7 @@ struct LabPlayStrip: View {
     let frame: LabFrame
 
     var body: some View {
-        let steps = LabPlayView.steps(of: frame.spec)
+        let steps = LabPlayView.steps(of: frame.spec, withError: frame.p("error", .system) >= 0.5)
         let current = frame.stage(of: .system, count: steps.count)
         let auto = frame.p("auto", .system) >= 0.5
         VStack(spacing: 10) {
