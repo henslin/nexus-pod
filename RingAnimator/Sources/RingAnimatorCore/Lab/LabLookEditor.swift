@@ -31,15 +31,16 @@ public struct LabOrbGallery: View {
     }
 
     private let columns = [GridItem(.adaptive(minimum: 92), spacing: 10)]
-    /// Stills, live on hover — Figma's gallery. Forty-five live orbs at
-    /// once would be the fan; one is nothing.
-    @State private var hovered: String?
-    @State private var opened = Date()
+    /// One clock for the gallery; only the cells on screen draw from it
+    /// (Chris, 2026-09-16: "show the thumbnail animations, but only the
+    /// ones in view"). The lazy grid builds cells as they scroll into
+    /// view, and each one stops listening when it scrolls out.
+    @StateObject private var clock = LabThumbClock()
 
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Every orb at its defaults — hover to see it move. Pick one for this slot; the sliders beside the slot tune it.")
+                Text("Every orb at its defaults. Pick one for this slot; the sliders beside the slot tune it.")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 let saved = presets.presets.filter { LabExperiment(rawValue: $0.experiment)?.canBeHero ?? false }
@@ -62,6 +63,8 @@ public struct LabOrbGallery: View {
             .padding(16)
         }
         .frame(width: 540, height: 600)
+        .onAppear { clock.frameAt = frameAt; clock.run(true) }
+        .onDisappear { clock.run(false) }
     }
 
     private func group<Content: View>(_ title: String, _ caption: String?, @ViewBuilder content: () -> Content) -> some View {
@@ -74,22 +77,13 @@ public struct LabOrbGallery: View {
 
     private func cell(_ look: LabLook, name: String) -> some View {
         let isCurrent = current?.experiment == look.experiment && current?.values == look.values
-        let id = look.experiment + (look.values.isEmpty ? "" : name)
         return Button {
             onPick(look)
             dismiss()
         } label: {
             VStack(spacing: 6) {
-                Group {
-                    if hovered == id {
-                        TimelineView(.periodic(from: .now, by: 1 / 30)) { timeline in
-                            pod(look, frameAt(timeline.date))
-                        }
-                    } else {
-                        pod(look, frameAt(opened).withTime(1.7))
-                    }
-                }
-                .frame(width: 56, height: 56)
+                LabGalleryPod(clock: clock, look: look, config: config, still: frameAt(Date()).withTime(1.7))
+                    .frame(width: 56, height: 56)
                 Text(name)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(2)
@@ -105,15 +99,27 @@ public struct LabOrbGallery: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .onHover { hovered = $0 ? id : (hovered == id ? nil : hovered) }
         .accessibilityLabel(name)
     }
+}
 
-    private func pod(_ look: LabLook, _ f: LabFrame) -> some View {
+/// One gallery cell's pod: on the clock while it's on screen, a still
+/// once it has scrolled out of view.
+private struct LabGalleryPod: View {
+    @ObservedObject var clock: LabThumbClock
+    let look: LabLook
+    @ObservedObject var config: RingConfig
+    let still: LabFrame
+    @State private var visible = false
+
+    var body: some View {
+        let f = visible ? (clock.frame ?? still) : still
         LabPodGlass(config: config, dark: f.darkStage, flat: true) {
             LabHeroView(frame: f.applying(look, config: config), config: config, diameter: 62)
         }
         .scaleEffect(56 / 62)
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 }
 

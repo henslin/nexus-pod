@@ -108,13 +108,6 @@ public struct LabPlayView: View {
         let home = LabMorphView.home(of: state.kind)
         let podHome = LabMorphView.home(of: .pod)
         let placement = spec.askPlacement ?? .floating
-        let askHome: CGPoint = {
-            switch placement {
-            case .floating: return CGPoint(x: phone.width - 16 - 26, y: phone.height - LabPhone.bottom - 62 - 14 - 26)
-            case .navBar: return CGPoint(x: phone.width - 16 - 22, y: 62)
-            case .tabBar: return podHome
-            }
-        }()
         let showChrome = frame.p("chrome", .system) >= 0.5
 
         return ZStack {
@@ -285,7 +278,7 @@ public struct LabSpecBoard: View {
     @Environment(\.controlActiveState) private var activeState
     #endif
 
-    /// One clock for every thumbnail on the board, at 20 fps — and none
+    /// One clock for every thumbnail on the board, at 30 fps — and none
     /// while the window isn't key. Only the thumbnails observe it; the
     /// pickers and fields don't rebuild on its tick. Nobody judges an
     /// orb's motion at 36 pt; they judge it on the phone.
@@ -685,12 +678,13 @@ struct LabSlotRow: View {
     }
 }
 
-/// The board's thumbnail clock: one frame, 20 times a second, while it
+/// The board's thumbnail clock: one frame, 30 times a second, while it
 /// runs. Thumbnails observe it; nothing else does.
 @MainActor
 final class LabThumbClock: ObservableObject {
     @Published private(set) var frame: LabFrame?
     var frameAt: ((Date) -> LabFrame)?
+    var fps: Double = 30
     private var timer: Timer?
 
     func run(_ on: Bool) {
@@ -698,7 +692,7 @@ final class LabThumbClock: ObservableObject {
         timer = nil
         guard on else { return }
         tick()
-        timer = Timer.scheduledTimer(withTimeInterval: 1 / 20, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 1 / fps, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
     }
