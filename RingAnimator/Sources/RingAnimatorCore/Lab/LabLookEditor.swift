@@ -31,11 +31,15 @@ public struct LabOrbGallery: View {
     }
 
     private let columns = [GridItem(.adaptive(minimum: 92), spacing: 10)]
+    /// Stills, live on hover — Figma's gallery. Forty-five live orbs at
+    /// once would be the fan; one is nothing.
+    @State private var hovered: String?
+    @State private var opened = Date()
 
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Every orb at its defaults. Pick one for this slot; the sliders beside the slot tune it.")
+                Text("Every orb at its defaults — hover to see it move. Pick one for this slot; the sliders beside the slot tune it.")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 let saved = presets.presets.filter { LabExperiment(rawValue: $0.experiment)?.canBeHero ?? false }
@@ -70,19 +74,22 @@ public struct LabOrbGallery: View {
 
     private func cell(_ look: LabLook, name: String) -> some View {
         let isCurrent = current?.experiment == look.experiment && current?.values == look.values
+        let id = look.experiment + (look.values.isEmpty ? "" : name)
         return Button {
             onPick(look)
             dismiss()
         } label: {
             VStack(spacing: 6) {
-                TimelineView(.animation) { timeline in
-                    let f = frameAt(timeline.date)
-                    LabPodGlass(config: config, dark: f.darkStage) {
-                        LabHeroView(frame: f.applying(look, config: config), config: config, diameter: 62)
+                Group {
+                    if hovered == id {
+                        TimelineView(.periodic(from: .now, by: 1 / 30)) { timeline in
+                            pod(look, frameAt(timeline.date))
+                        }
+                    } else {
+                        pod(look, frameAt(opened).withTime(1.7))
                     }
-                    .scaleEffect(56 / 62)
-                    .frame(width: 56, height: 56)
                 }
+                .frame(width: 56, height: 56)
                 Text(name)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(2)
@@ -98,7 +105,15 @@ public struct LabOrbGallery: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .onHover { hovered = $0 ? id : (hovered == id ? nil : hovered) }
         .accessibilityLabel(name)
+    }
+
+    private func pod(_ look: LabLook, _ f: LabFrame) -> some View {
+        LabPodGlass(config: config, dark: f.darkStage, flat: true) {
+            LabHeroView(frame: f.applying(look, config: config), config: config, diameter: 62)
+        }
+        .scaleEffect(56 / 62)
     }
 }
 
@@ -170,9 +185,9 @@ struct LabLookEditor: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            TimelineView(.animation) { timeline in
+            TimelineView(.periodic(from: .now, by: 1 / 30)) { timeline in
                 let f = frameAt(timeline.date)
-                LabPodGlass(config: config, dark: f.darkStage) {
+                LabPodGlass(config: config, dark: f.darkStage, flat: true) {
                     LabHeroView(frame: f.applying(look, config: config), config: config, diameter: 62)
                 }
                 .scaleEffect(44 / 62)

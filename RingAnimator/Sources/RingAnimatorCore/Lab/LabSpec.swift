@@ -586,6 +586,12 @@ extension LabFrame {
 }
 
 extension LabFrame {
+    /// The same frame at a fixed moment — a still.
+    public func withTime(_ t: Double) -> LabFrame {
+        var f = self
+        f.time = t
+        return f
+    }
     /// For harnesses: knob values over the frame's.
     public func withParams(_ values: [String: Double]) -> LabFrame {
         var f = self

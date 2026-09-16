@@ -281,17 +281,38 @@ public struct LabSpecBoard: View {
 
     private var spec: LabSpec { lab.spec }
     private static let thumb: CGFloat = 36
+    #if os(macOS)
+    @Environment(\.controlActiveState) private var activeState
+    #endif
+
+    /// One clock for every thumbnail on the board, at 20 fps — and none
+    /// while the window isn't key. Only the thumbnails observe it; the
+    /// pickers and fields don't rebuild on its tick. Nobody judges an
+    /// orb's motion at 36 pt; they judge it on the phone.
+    @StateObject private var clock = LabThumbClock()
 
     public var body: some View {
+        #if os(macOS)
+        let live = activeState != .inactive
+        #else
+        let live = true
+        #endif
+        board(frame)
+            .onAppear { clock.frameAt = frameAt; clock.run(live) }
+            .onChange(of: live) { _, l in clock.run(l) }
+            .onDisappear { clock.run(false) }
+    }
+
+    private func board(_ frame: LabFrame) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
             LabRailSection("q.pod", "Pod", summary: spec.pod?.title ?? "Empty") {
-                slotRow(title: "At rest", look: spec.pod, target: .pod, set: { lab.spec.pod = $0 })
+                slotRow(frame, title: "At rest", look: spec.pod, target: .pod, set: { lab.spec.pod = $0 })
             }
             LabRailSection("q.states", "Agent States", summary: "\(spec.states.count) of \(LabAgentVerb.allCases.count)") {
                 ForEach(LabAgentVerb.allCases) { verb in
-                    slotRow(title: verb.label, symbol: verb.symbol, look: spec.look(for: verb), target: .state(verb), set: { lab.spec.states[verb.rawValue] = $0 })
+                    slotRow(frame, title: verb.label, symbol: verb.symbol, look: spec.look(for: verb), target: .state(verb), set: { lab.spec.states[verb.rawValue] = $0 })
                 }
             } trailing: {
                 Menu {
@@ -307,8 +328,8 @@ public struct LabSpecBoard: View {
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             }
             LabRailSection("q.ask", "Ask", summary: "\((spec.askStyle ?? .goo).label) · \((spec.askPlacement ?? .floating).label) · \(spec.items.count) items") {
-                slotRow(title: "Button", symbol: "sparkles", look: spec.ask, target: .ask, set: { lab.spec.ask = $0 }, menu: true)
-                slotRow(title: "Menu", symbol: "plus.circle", look: spec.action, target: .action, set: { lab.spec.action = $0 }, menu: true)
+                slotRow(frame, title: "Button", symbol: "sparkles", look: spec.ask, target: .ask, set: { lab.spec.ask = $0 }, menu: true)
+                slotRow(frame, title: "Menu", symbol: "plus.circle", look: spec.action, target: .action, set: { lab.spec.action = $0 }, menu: true)
                 labelled("Placement") {
                     Picker("", selection: Binding(get: { lab.spec.askPlacement ?? .floating }, set: { lab.spec.askPlacement = $0 })) {
                         ForEach(LabAskPlacement.allCases) { Text($0.label).tag($0) }
@@ -447,8 +468,8 @@ public struct LabSpecBoard: View {
     // MARK: Slots
 
     /// One slot as a row — see `LabSlotRow`.
-    private func slotRow(title: String, symbol: String? = nil, look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void, menu: Bool = false) -> some View {
-        LabSlotRow(lab: lab, config: config, frameAt: frameAt, title: title, symbol: symbol, look: look, target: target, set: set, isMenu: menu, presets: presets)
+    private func slotRow(_ frame: LabFrame, title: String, symbol: String? = nil, look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void, menu: Bool = false) -> some View {
+        LabSlotRow(lab: lab, config: config, clock: clock, frameAt: frameAt, title: title, symbol: symbol, look: look, target: target, set: set, isMenu: menu, presets: presets)
     }
 
     // MARK: Containers
@@ -542,6 +563,8 @@ public struct LabSpecBoard: View {
 struct LabSlotRow: View {
     @ObservedObject var lab: LabState
     @ObservedObject var config: RingConfig
+    /// The board's shared clock; only the thumbnail listens.
+    let clock: LabThumbClock
     let frameAt: (Date) -> LabFrame
     let title: String
     var symbol: String? = nil
@@ -647,13 +670,7 @@ struct LabSlotRow: View {
                 Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(fillChoice == 0 ? .white : Color(white: 0.1))
             }
         } else if let look {
-            TimelineView(.animation) { timeline in
-                let f = frameAt(timeline.date)
-                LabPodGlass(config: config, dark: f.darkStage) {
-                    LabHeroView(frame: f.applying(look, config: config), config: config, diameter: 62)
-                }
-                .scaleEffect(Self.thumb / 62)
-            }
+            LabLiveThumb(clock: clock, look: look, config: config, size: Self.thumb)
         } else {
             Circle()
                 .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
@@ -668,10 +685,53 @@ struct LabSlotRow: View {
     }
 }
 
+/// The board's thumbnail clock: one frame, 20 times a second, while it
+/// runs. Thumbnails observe it; nothing else does.
+@MainActor
+final class LabThumbClock: ObservableObject {
+    @Published private(set) var frame: LabFrame?
+    var frameAt: ((Date) -> LabFrame)?
+    private var timer: Timer?
+
+    func run(_ on: Bool) {
+        timer?.invalidate()
+        timer = nil
+        guard on else { return }
+        tick()
+        timer = Timer.scheduledTimer(withTimeInterval: 1 / 20, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+    }
+    private func tick() { frame = frameAt?(Date()) }
+}
+
+/// A look as a flat pod on the board's clock.
+struct LabLiveThumb: View {
+    @ObservedObject var clock: LabThumbClock
+    let look: LabLook
+    @ObservedObject var config: RingConfig
+    let size: CGFloat
+
+    var body: some View {
+        if let f = clock.frame {
+            LabPodGlass(config: config, dark: f.darkStage, flat: true) {
+                LabHeroView(frame: f.applying(look, config: config), config: config, diameter: 62)
+            }
+            .scaleEffect(size / 62)
+        } else {
+            Circle().fill(.quaternary)
+        }
+    }
+}
+
 /// A 62pt pod in Liquid Glass — the tab bar's, for thumbnails.
 struct LabPodGlass<Content: View>: View {
     @ObservedObject var config: RingConfig
     let dark: Bool
+    /// A tinted circle with a highlight instead of Liquid Glass — for
+    /// thumbnails, where a live glass pass per row is the expensive part
+    /// and nobody can tell at 36 pt.
+    var flat = false
     @ViewBuilder let content: () -> Content
     @Environment(\.labNoGlass) private var noGlass
 
@@ -680,8 +740,14 @@ struct LabPodGlass<Content: View>: View {
             .frame(width: 62, height: 62)
             .clipShape(Circle())
         Group {
-            if noGlass {
-                inner.background(Color.black.opacity(0.5), in: Circle())
+            if noGlass || flat {
+                inner
+                    .background(Circle().fill(dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)))
+                    .overlay(Circle().strokeBorder(dark ? Color.white.opacity(0.18) : Color.black.opacity(0.12), lineWidth: 1))
+                    .overlay(alignment: .top) {
+                        // The glass's rim light, painted.
+                        Ellipse().fill(Color.white.opacity(dark ? 0.12 : 0.35)).frame(width: 34, height: 10).blur(radius: 3).offset(y: 3)
+                    }
             } else if #available(iOS 26.0, macOS 26.0, *) {
                 inner.glassEffect(config.glass, in: Circle())
             } else {
