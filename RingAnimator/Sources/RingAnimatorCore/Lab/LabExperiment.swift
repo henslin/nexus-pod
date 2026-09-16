@@ -153,9 +153,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .slick:      return "Slick"
         case .deep:       return "Deep"
         case .nebula:     return "Nebula"
-        case .thinkingOrbs: return "Thinking Orbs"
-        case .orbKit:     return "Thinking Orbs · Kit"
-        case .beamKit:    return "Border Beam · Kit"
+        case .thinkingOrbs: return "Thinking Orbs · Native"
+        case .orbKit:     return "Thinking Orbs"
+        case .beamKit:    return "Border Beam"
         case .gooey:      return "Gooey"
         case .metal:      return "Metal"
         case .water:      return "Water"
@@ -580,6 +580,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     public var isHidden: Bool {
         switch self {
         case .buttonGlow, .sheet, .waveform, .edgeGlow, .caption: return true
+        // Chris, 2026-09-15: "Let's go with theirs." Libraries.dev's
+        // Thinking Orbs is the one; the native sketch stays in code.
+        case .thinkingOrbs: return true
         default: return false
         }
     }
