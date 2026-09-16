@@ -455,7 +455,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .beamKit:
             return "Libraries.dev’s Border beam, the real SwiftUI port (MIT, vendored): rotate (large / small / line) and pulse (outside / inner) families, four colour variants, and their tuning — stroke, inner glow, bloom, brightness, saturation, hue range. Also available as a Morph adornment beside our edge glow."
         case .gooey:
-            return "A round + button that opens into items with a gooey stretch — SwiftUI’s own Canvas blur + alpha-threshold is the goo. Morph, Move, Bend or Melt, with their physics: durations, staggers, spread, anticipation, icon timing. Tap to open and close. The libraries.dev Gooey, natively, with its rail."
+            return "The Nexus tab as a gooey +: it sits in the pod’s slot and opens into items to the left along the bar (Move, Melt) or up and to the left (Morph, Bend) with a gooey stretch — SwiftUI’s own Canvas blur + alpha-threshold is the goo — so nothing leaves the screen. Their physics: durations, staggers, spread, anticipation, icon timing. Tap to open and close."
         case .metal:
             return "A polished metal ring round a control — circle button, button, text or badge — chromatic, silver or gold, with an inner shadow, a glow that appears on hover, a cursor-driven dent, and a reflection that follows the pointer (touch on the phone). The libraries.dev Metal v2, natively, with its rail."
         case .water:

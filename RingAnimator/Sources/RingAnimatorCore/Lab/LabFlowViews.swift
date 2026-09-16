@@ -810,29 +810,42 @@ struct LabGooeyView: View {
             let u = t / anticD
             return -antic * sin(u * .pi)
         }
+        // The + lives in the Nexus tab's slot, so everything comes out to
+        // the left along the bar, or up and to the left — never off the
+        // screen (Chris, 2026-09-15).
         func position(_ i: Int, _ p: Double, center: CGPoint) -> (CGPoint, CGSize) {
             let dist = travel * p + anticipationOffset(i)
+            let n = Double(i + 1)
             switch effect {
-            case 1: // Move: straight up in a column.
-                return (CGPoint(x: center.x, y: center.y - dist * Double(i + 1) * 0.9), CGSize(width: R * 2, height: R * 2))
-            case 2: // Bend: along an arc up and to the left.
-                let a = .pi / 2 + Double(i) * 0.55 * p
-                return (CGPoint(x: center.x - cos(a) * dist * 1.4 * Double(i + 1) * 0.5, y: center.y - sin(a) * dist * Double(i + 1) * 0.6),
-                        CGSize(width: R * 2, height: R * 2))
-            case 3: // Melt: drips downward, stretching as they go.
-                return (CGPoint(x: center.x, y: center.y + dist * Double(i + 1) * 0.8),
-                        CGSize(width: R * 2 * (1 - 0.2 * p), height: R * 2 * (1 + 0.5 * p * (1 - p) * 4)))
-            default: // Morph: fan out up-left, growing from nothing.
-                let a = .pi / 2 + Double(i) * 0.5 + 0.1
-                return (CGPoint(x: center.x - cos(a) * dist * Double(i + 1) * 0.5 * 1.3, y: center.y - sin(a) * dist * Double(i + 1) * 0.55),
+            case 1: // Move: a row to the left along the bar.
+                return (CGPoint(x: center.x - dist * n * 0.95, y: center.y), CGSize(width: R * 2, height: R * 2))
+            case 2: // Bend: an arc from straight up, curving left as it goes.
+                let a = .pi / 2 + Double(i) * 0.5 * p + 0.15
+                let reach = dist * (0.8 + 0.5 * n)
+                return (CGPoint(x: center.x - cos(a) * reach, y: center.y - sin(a) * reach), CGSize(width: R * 2, height: R * 2))
+            case 3: // Melt: oozes left along the bar, stretching as it goes.
+                return (CGPoint(x: center.x - dist * n * 0.85, y: center.y),
+                        CGSize(width: R * 2 * (1 + 0.5 * p * (1 - p) * 4), height: R * 2 * (1 - 0.2 * p)))
+            default: // Morph: a fan up-left, growing from nothing.
+                let a = .pi / 2 + (Double(i) + 0.5) / Double(max(items, 1)) * (.pi / 2)
+                let reach = dist * 1.1
+                return (CGPoint(x: center.x - cos(a) * reach, y: center.y - sin(a) * reach),
                         CGSize(width: R * 2 * (0.3 + 0.7 * p), height: R * 2 * (0.3 + 0.7 * p)))
             }
         }
 
         return LabPhoneCanvas(frame: frame) { size in
-            let center = CGPoint(x: size.width * 0.75, y: size.height * 0.7)
+            // The pod's centre, exactly where TabBarPreview puts it.
+            let pod = CGFloat(RingConfig.tabBarPodDiameter)
+            let center = CGPoint(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
             ZStack {
                 Color.black.opacity(frame.darkStage ? 0.5 : 0.1)
+                VStack {
+                    Spacer()
+                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32, hidesPodContent: true)
+                        .allowsHitTesting(false)
+                        .padding(.bottom, 24)
+                }
                 Canvas { ctx, _ in
                     // The goo: everything drawn in this layer is blurred, then
                     // thresholded, so nearby shapes bridge.
@@ -872,7 +885,7 @@ struct LabGooeyView: View {
                     Text("Tap to open")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.5))
-                        .padding(.bottom, 20)
+                        .padding(.bottom, 100)
                 }
             }
         }
