@@ -82,7 +82,7 @@ struct LabJourneyView: View {
                 // The tab bar, present until voice takes over.
                 VStack {
                     Spacer()
-                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32)
+                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32, hidesPodContent: true)
                         .allowsHitTesting(false)
                         .padding(.bottom, 24)
                         .opacity(stage == .voice ? 0 : 1)
@@ -713,7 +713,7 @@ struct LabHoldView: View {
                                   rotate: 0.3, inset: 0)
                 VStack {
                     Spacer()
-                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32)
+                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32, hidesPodContent: true)
                         .allowsHitTesting(false)
                         .padding(.bottom, 24)
                         .opacity(1 - eased)

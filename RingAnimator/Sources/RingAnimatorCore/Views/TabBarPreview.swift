@@ -63,13 +63,20 @@ public struct TabBarPreview: View {
     /// where the real content arrives — widen it then, not now.
     var podImage: Image?
 
+    /// Draw the pod as empty glass — no ring, no content. For the Lab's
+    /// flows, which draw the pod's content themselves (a hero that moves
+    /// between the pod and the sheet) and were getting the ring
+    /// underneath it whatever hero was chosen (Chris, 2026-09-15).
+    var hidesPodContent: Bool
+
     public init(
         config: RingConfig,
         selectedTab: Binding<DemoTab>,
         width: CGFloat = 340,
         onRingTap: (() -> Void)? = nil,
         playback: TimelinePlayback? = nil,
-        podImage: Image? = nil
+        podImage: Image? = nil,
+        hidesPodContent: Bool = false
     ) {
         self.config = config
         self._selectedTab = selectedTab
@@ -77,6 +84,7 @@ public struct TabBarPreview: View {
         self.onRingTap = onRingTap
         self.playback = playback
         self.podImage = podImage
+        self.hidesPodContent = hidesPodContent
     }
 
     /// Drives the selected-tab pill's slide between items.
@@ -220,6 +228,15 @@ public struct TabBarPreview: View {
     /// large preview.
     @ViewBuilder
     private func podContent(drawsDiffuser: Bool) -> some View {
+        if hidesPodContent {
+            Color.clear.frame(width: contentDiameter, height: contentDiameter)
+        } else {
+            podContentByState(drawsDiffuser: drawsDiffuser)
+        }
+    }
+
+    @ViewBuilder
+    private func podContentByState(drawsDiffuser: Bool) -> some View {
         switch config.podContent {
         case .ring:
             RingView(config: config,

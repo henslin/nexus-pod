@@ -75,7 +75,7 @@ struct LabMorphView: View {
                 .animation(spring, value: state.id)
             VStack {
                 Spacer()
-                TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: phone.width - 32)
+                TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: phone.width - 32, hidesPodContent: true)
                     .allowsHitTesting(false)
                     .padding(.bottom, 24)
                     .opacity(state.kind == .fullScreen ? 0 : 1)
