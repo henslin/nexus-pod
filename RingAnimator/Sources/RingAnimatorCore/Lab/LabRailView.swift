@@ -148,6 +148,21 @@ public struct LabRailView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            // The hero is the first decision on a flow or a control, so
+            // it sits up here rather than in the Stage disclosure.
+            if lab.experiment.drawsHero {
+                Picker("Hero", selection: $lab.hero) {
+                    Text("Ring").tag(LabExperiment?.none)
+                    ForEach(LabExperiment.allCases.filter(\.canBeHero)) { e in
+                        Text(e.name).tag(LabExperiment?.some(e))
+                    }
+                }
+                .pickerStyle(.menu)
+                .padding(.top, 4)
+                Text("What this draws where the ring goes — any orb, with the post stack.")
+                    .font(.caption2).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(16)
     }
@@ -266,18 +281,6 @@ public struct LabRailView: View {
                     Toggle("Fill Pod", isOn: $lab.podFill)
                         .padding(.leading, 12)
                 }
-            }
-            if lab.experiment.drawsHero {
-                Picker("Hero", selection: $lab.hero) {
-                    Text("Ring").tag(LabExperiment?.none)
-                    ForEach(LabExperiment.allCases.filter(\.canBeHero)) { e in
-                        Text(e.name).tag(LabExperiment?.some(e))
-                    }
-                }
-                .pickerStyle(.menu)
-                Text("What this draws where the ring goes. Any orb, with the post stack.")
-                    .font(.caption2).foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

@@ -626,7 +626,7 @@ struct LabUseAsMenu: View {
                 Text("Use a state's own menu, on its card below.")
             }
         } label: {
-            Label("Use as…", systemImage: "arrow.down.right.square")
+            Label("Use in Q Branch…", systemImage: "wrench.and.screwdriver")
                 .font(.caption)
         }
         .menuStyle(.borderlessButton)
