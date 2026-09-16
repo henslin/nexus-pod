@@ -1,4 +1,5 @@
 import SwiftUI
+import BorderBeamKit
 
 /// Liquid Glass morphing: one glass shape stepping through a list of
 /// states — pod, pill, card, sheet, full screen — with content riding
@@ -169,6 +170,9 @@ struct LabMorphPanel: View {
         // shape — captions, waveforms, the glow. Nothing spills.
         .clipShape(shape)
         .modifier(LabGlassShape(cornerRadius: cornerRadius, glass: config.glass))
+        // Their beam wraps the glass: it draws outside the shape by
+        // design (the bloom), reading the Border Beam · Kit knobs.
+        .modifier(LabBeamWrap(enabled: state.adornments.contains(.borderBeam), frame: frame, cornerRadius: cornerRadius, envelope: env))
         .background {
             // Edge glow *inside* the container's edge, clipped by it — the
             // iOS 18 Siri construction — and under the glass so the glass
@@ -505,5 +509,26 @@ struct LabEdgeGlowAdornment: View {
         var p = base.trimmedPath(from: from + 1, to: 1)
         p.addPath(base.trimmedPath(from: 0, to: to))
         return p
+    }
+}
+
+/// Libraries.dev's Border beam round a Morph state, when it carries one.
+private struct LabBeamWrap: ViewModifier {
+    let enabled: Bool
+    let frame: LabFrame
+    let cornerRadius: CGFloat
+    let envelope: Double
+
+    func body(content: Content) -> some View {
+        if enabled {
+            let s = LabBeamSettings(frame: frame)
+            BorderBeam(size: s.size, colorVariant: s.variant, theme: s.theme, duration: s.duration,
+                       borderRadius: cornerRadius, brightness: s.brightness, saturation: s.saturation,
+                       hueRange: s.hueRange, strength: s.strength * envelope, tuning: s.tuning) {
+                content
+            }
+        } else {
+            content
+        }
     }
 }

@@ -52,12 +52,23 @@ let package = Package(
             targets: ["RingAnimatorCore"]
         )
     ],
+    // Libraries.dev's SwiftUI ports, vendored under ../Vendor (MIT — see
+    // Vendor/README.md). The Lab wraps them as experiments beside the
+    // native versions so the two can be compared on one stage.
+    dependencies: [
+        .package(path: "../Vendor/BorderBeamKit"),
+        .package(path: "../Vendor/ThinkingOrbsKit"),
+    ],
     targets: [
         // Shared, platform-agnostic core: models, the ring renderer, the
         // controls form, and the SwiftUI/Compose code exporters. Both the
         // macOS design tool and the iOS app build on top of this.
         .target(
             name: "RingAnimatorCore",
+            dependencies: [
+                .product(name: "BorderBeamKit", package: "BorderBeamKit"),
+                .product(name: "ThinkingOrbsKit", package: "ThinkingOrbsKit"),
+            ],
             path: "Sources/RingAnimatorCore",
             resources: [
                 .process("Resources")

@@ -64,6 +64,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case deep
     case nebula
     case thinkingOrbs
+    case orbKit
     // Post effects with no base of their own.
     case kaleido
     case dots
@@ -87,6 +88,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case sheet
     // Flows — what a touch does.
     case hold
+    // Libraries.dev kits (Vendor/).
+    case beamKit
     // Flows — the tap-on-Nexus question, on a phone canvas.
     case journey
     case agentStates
@@ -149,6 +152,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .deep:       return "Deep"
         case .nebula:     return "Nebula"
         case .thinkingOrbs: return "Thinking Orbs"
+        case .orbKit:     return "Thinking Orbs · Kit"
+        case .beamKit:    return "Border Beam · Kit"
         case .water:      return "Water"
         case .haze:       return "Haze"
         case .fizz:       return "Fizz"
@@ -223,6 +228,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .droplet, .pour, .pool, .caustics, .lava, .jelly, .slick, .deep: return "Metal · colorEffect"
         case .nebula:     return "Metal · colorEffect (ray-marched)"
         case .thinkingOrbs: return "SwiftUI · Canvas"
+        case .orbKit:     return "Libraries.dev · ThinkingOrbsKit"
+        case .beamKit:    return "Libraries.dev · BorderBeamKit"
         case .water, .haze, .fizz, .glints, .parallax, .focus: return "Metal · layerEffect"
         case .buttonGlow: return "SwiftUI · Liquid Glass + glow"
         case .sheet:      return "SwiftUI · Liquid Glass"
@@ -297,6 +304,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .deep:       return "sun.horizon"
         case .nebula:     return "cloud.fill"
         case .thinkingOrbs: return "circle.hexagongrid.circle"
+        case .orbKit:     return "shippingbox"
+        case .beamKit:    return "shippingbox"
         case .water:      return "water.waves"
         case .haze:       return "cloud.fog"
         case .fizz:       return "bubbles.and.sparkles"
@@ -433,6 +442,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "A cloud inside glass: volumetric noise ray-marched through the sphere, lit from a direction, drifting — the frosted-blue reference’s interior done as a real volume. Nebula in a Frost Orb is the ‘thinking’ state."
         case .thinkingOrbs:
             return "A cloud of dots with nine states of motion — Working, Searching, Solving, Listening, Connecting, Weaving, Composing, Breathing, Shaping — the agent’s verbs as motion, each a different way for the same dots to move. Every position is a function of time, so the state switches are clean."
+        case .orbKit:
+            return "Libraries.dev’s Thinking orbs, the real SwiftUI port (MIT, vendored): nine states, two tuned size presets drawn at any display size, a theme, a speed. Beside our own Thinking Orbs so the two can be compared on one stage."
+        case .beamKit:
+            return "Libraries.dev’s Border beam, the real SwiftUI port (MIT, vendored): rotate (large / small / line) and pulse (outside / inner) families, four colour variants, and their tuning — stroke, inner glow, bloom, brightness, saturation, hue range. Also available as a Morph adornment beside our edge glow."
         case .water:
             return "Post: the layer seen through a rippling water surface — a noise height field refracts it, caustics brighten the slopes. A glyph under Water is a glyph under water."
         case .haze:
@@ -522,7 +535,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// The bases that draw a disc on their own.
     public var canBeHero: Bool {
         switch self {
-        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing, .tide, .droplet, .pour, .pool, .caustics, .lava, .jelly, .slick, .deep, .nebula, .thinkingOrbs: return true
+        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing, .tide, .droplet, .pour, .pool, .caustics, .lava, .jelly, .slick, .deep, .nebula, .thinkingOrbs, .orbKit: return true
         default: return false
         }
     }
@@ -560,7 +573,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     public var section: LabSection {
         switch self {
         case .journey, .agentStates, .hold: return .flows
-        case .waveform, .edgeGlow, .caption, .morph, .buttonGlow, .sheet: return .ui
+        case .waveform, .edgeGlow, .caption, .morph, .buttonGlow, .sheet, .beamKit: return .ui
         default: return .orb
         }
     }
@@ -978,6 +991,29 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("orbits", "Orbit Paths", 0...1, 0.5, "Faint rings under Working and Weaving.", group: "Effect"),
             .init("particles", "Particles", 0...8, 3, "Brighter sparkles drifting through.", "%.0f", group: "Effect"),
         ]
+        case .orbKit: return [
+            .init("state", "State", 0...8, 0, "What the agent is doing.", "%.0f", group: "State",
+                  choices: ["Working", "Searching", "Solving", "Listening", "Connecting", "Weaving", "Composing", "Breathing", "Shaping"]),
+            .init("size", "Size", 0...1, 0, "Their two tuned presets, drawn at the stage's size.", "%.0f", group: "Size", choices: ["64px", "20px"]),
+            .init("speed", "Speed", 0.1...3, 1, "Multiplier on the preset's speed.", "%.1f×", group: "Motion"),
+            .init("theme", "Theme", 0...2, 0, "Follows the stage, or fixed.", "%.0f", group: "Theme", choices: ["Auto", "Dark", "Light"]),
+        ]
+        case .beamKit: return [
+            .init("family", "Family", 0...1, 0, "A travelling beam, or a breathing glow.", "%.0f", group: "Family", choices: ["Rotate", "Pulse"]),
+            .init("type", "Type", 0...2, 0, "Rotate: large / small / line. Pulse: outside / inner (the third is inner).", "%.0f", group: "Type", choices: ["Large", "Small", "Line"]),
+            .init("variant", "Color theme", 0...3, 0, "Their four variants.", "%.0f", group: "Color theme", choices: ["Colorful", "Mono", "Ocean", "Sunset"]),
+            .init("theme", "Theme", 0...2, 0, "Follows the stage, or fixed.", "%.0f", group: "Color theme", choices: ["Auto", "Dark", "Light"]),
+            .init("duration", "Duration", 0...8, 0, "Seconds per lap. 0 keeps the preset.", "%.2f s", group: "Motion"),
+            .init("strength", "Strength", 0...2, 1, "Overall intensity.", "%.0f%%", group: "Glow styling"),
+            .init("radius", "Corner radius", 0...40, 16, "Points.", "%.0f pt", group: "Glow styling"),
+            .init("size", "Size", 0.5...2, 1, "Glow boost — the pulse family's blob size.", "%.2f×", group: "Glow styling"),
+            .init("brightness", "Brightness", 0.5...2.5, 1.3, "The outward glow.", "%.1f×", group: "Glow styling"),
+            .init("saturation", "Saturation", 0.5...2.5, 1.2, "The outward glow.", "%.1f×", group: "Glow styling"),
+            .init("stroke", "Stroke", 0...2, 1, "The tight ring.", "%.1f×", group: "Glow styling"),
+            .init("inner", "Inner glow", 0...2, 1, "The inward wash.", "%.1f×", group: "Glow styling"),
+            .init("bloom", "Bloom", 0...2, 1, "The wide halo.", "%.1f×", group: "Glow styling"),
+            .init("hueRange", "Hue range", 0...180, 30, "Degrees of hue the beam spans.", "%.0f°", group: "Glow styling"),
+        ]
         case .water: return [
             .init("amount", "Amount", 0...30, 8, "Refraction, points.", "%.0f pt"),
             .init("scale", "Scale", 20...300, 90, "Ripple size, points.", "%.0f pt"),
@@ -1161,11 +1197,12 @@ public enum LabMorphKind: String, CaseIterable, Identifiable, Codable, Sendable 
 
 /// A UI animation a state can carry — the pieces of the hidden UI labs.
 public enum LabMorphAdornment: String, CaseIterable, Identifiable, Codable, Sendable {
-    case edgeGlow, waveform, caption
+    case edgeGlow, borderBeam, waveform, caption
     public var id: String { rawValue }
     public var label: String {
         switch self {
         case .edgeGlow: return "Edge Glow"
+        case .borderBeam: return "Border Beam"
         case .waveform: return "Waveform"
         case .caption: return "Caption"
         }
@@ -1173,6 +1210,7 @@ public enum LabMorphAdornment: String, CaseIterable, Identifiable, Codable, Send
     public var symbol: String {
         switch self {
         case .edgeGlow: return "iphone.gen3.radiowaves.left.and.right"
+        case .borderBeam: return "shippingbox"
         case .waveform: return "waveform"
         case .caption: return "text.bubble"
         }

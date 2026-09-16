@@ -583,6 +583,8 @@ public struct LabExperimentView: View {
         case .deep: LabDeepView(frame: frame)
         case .nebula: LabNebulaView(frame: frame)
         case .thinkingOrbs: LabThinkingOrbsView(frame: frame)
+        case .orbKit: LabOrbKitView(frame: frame)
+        case .beamKit: LabBeamKitView(frame: frame)
         case .water: LabWaterView(frame: frame) { ring }
         case .haze: LabHazeView(frame: frame) { ring }
         case .fizz: LabFizzView(frame: frame) { ring }
@@ -620,11 +622,16 @@ public struct LabExperimentView: View {
 /// for a two-way one. The structure the libraries.dev rail has (Chris,
 /// 2026-09-15) — a segmented control switches what is shown, a slider
 /// sets a value — applied to every experiment at once.
-struct LabKnob: View {
+public struct LabKnob: View {
     let parameter: LabParameter
     @Binding var value: Double
 
-    var body: some View {
+    public init(parameter: LabParameter, value: Binding<Double>) {
+        self.parameter = parameter
+        self._value = value
+    }
+
+    public var body: some View {
         if let choices = parameter.choices {
             if parameter.isToggle {
                 Toggle(isOn: Binding(get: { value >= 0.5 }, set: { value = $0 ? 1 : 0 })) {
@@ -651,11 +658,16 @@ struct LabKnob: View {
 
 /// A row of chips — capsules, one selected — wrapping onto more rows
 /// when there are many. Glass-styled selection like the aspect switcher.
-struct LabChips: View {
+public struct LabChips: View {
     let choices: [String]
     @Binding var selection: Int
 
-    var body: some View {
+    public init(choices: [String], selection: Binding<Int>) {
+        self.choices = choices
+        self._selection = selection
+    }
+
+    public var body: some View {
         LabWrap(spacing: 6) {
             ForEach(Array(choices.enumerated()), id: \.offset) { i, label in
                 Button {
