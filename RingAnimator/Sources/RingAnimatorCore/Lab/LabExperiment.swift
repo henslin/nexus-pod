@@ -1266,7 +1266,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("ringSize", "Hero Ring", 0...0.9, 0.5, "A ring in the middle, as a fraction of width. 0 hides it."),
         ]
         case .quidgets: return [
-            .init("scene", "Exchange", 0...3, 3, "Which reply the chat shows — or all three.", "%.0f", group: "Chat", choices: ["Patio light", "Arm the house", "Packages", "All three"], kind: .popup),
+            .init("scene", "Exchange", 0...4, 4, "Which reply the chat shows — or all of them.", "%.0f", group: "Chat", choices: ["Patio light", "Arm the house", "Packages", "Three commands", "All"], kind: .popup),
             .init("size", "Size", 0...1, 0, "How the quidget sits in the reply. Clips are always medium.", "%.0f", group: "Chat", choices: ["Small", "Medium"], kind: .segmented),
         ]
         case .askButton: return [

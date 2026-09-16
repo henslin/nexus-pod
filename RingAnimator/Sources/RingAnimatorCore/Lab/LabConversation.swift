@@ -330,7 +330,7 @@ struct LabConversationView: View {
     /// expanded over the container, and the quidget comes back to it.
     private func quidgetInline(_ kind: QuidgetKind, medium: Bool) -> some View {
         let s: QuidgetSize = medium ? .medium : .small
-        let h: CGFloat = s == .small ? QuidgetView.smallSize.height : (kind == .clip ? 362 : 162)
+        let h: CGFloat = s == .small ? QuidgetView.smallSize.height : (kind == .clip ? 370 : 168)
         return ZStack(alignment: .leading) {
             Color.clear.frame(height: h)
             if quidgets.expanded != kind {

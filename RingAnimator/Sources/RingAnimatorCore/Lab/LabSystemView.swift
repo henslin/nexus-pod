@@ -389,7 +389,7 @@ public struct LabSpecBoard: View {
                             lab.spec.quidgets = kinds
                         }))
                         .labelsHidden()
-                        Image(systemName: kind == .light ? "lightbulb.fill" : kind == .security ? "house.fill" : "video.fill")
+                        Image(systemName: kind.symbol)
                             .font(.callout).frame(width: 20).foregroundStyle(.secondary)
                         Text(kind.label).font(.callout)
                         Spacer(minLength: 0)

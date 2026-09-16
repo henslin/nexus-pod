@@ -10,23 +10,37 @@ import SwiftUI
 // changes, tap off of it and have it go back into place. This solves for
 // not having to ask over and over again to get settings right."
 //
-// Built to his designs, in points on a 402-wide screen: the chat ground,
-// the bubble, the reply, the quidget at 130 × 140 (small) or 370 wide
-// (medium), and its expanded form over a dim. Liquid Glass for the
-// containers; the controls are usable (they move a demo state, not a
-// device).
+// Built from the Figma file (Nexus Neue → Quidgets: "System Modes",
+// "Package Delivery", "Multi-Commands", the "Quidget - Light" family),
+// in points on a 402-wide screen. Every number below is the design's:
+// the small quidget is 129 × 146 with a 34 radius over a 109 × 126 well
+// (24) and a 101 × 118 tile (20); the mode buttons are 64 with a 44
+// glyph box; the chips are 28 tall, SF Pro Display Semibold 11 in
+// #2487ff. The containers are Liquid Glass; the controls move a demo
+// state, not a device.
 
 // MARK: - Model
 
 /// A quidget's kind, with the demo state it controls.
 public enum QuidgetKind: String, CaseIterable, Identifiable, Codable, Sendable {
-    case light, security, clip
+    case light, security, clip, lock, thermostat
     public var id: String { rawValue }
     public var label: String {
         switch self {
         case .light: return "Light"
         case .security: return "Security"
         case .clip: return "Clip"
+        case .lock: return "Lock"
+        case .thermostat: return "Thermostat"
+        }
+    }
+    public var symbol: String {
+        switch self {
+        case .light: return "lightbulb.fill"
+        case .security: return "house.fill"
+        case .clip: return "video.fill"
+        case .lock: return "lock.fill"
+        case .thermostat: return "thermometer.medium"
         }
     }
 }
@@ -48,66 +62,166 @@ public enum SecurityMode: String, CaseIterable, Identifiable, Sendable {
         case .standby: return "Standby"
         }
     }
-    public var symbol: String {
-        switch self {
-        case .armAway: return "house.fill"
-        case .armHome: return "figure.stand"
-        case .standby: return "house.slash"
-        }
-    }
 }
 
-/// What the quidgets control, for the demo: one light, one house mode.
-/// `expanded` is which quidget is open over the dim, if any.
+/// What the quidgets control, for the demo. `expanded` is which quidget
+/// is open over the dim, if any.
 @MainActor
 public final class QuidgetDemo: ObservableObject {
     @Published public var lightLevel: Double = 0.4
     @Published public var mode: SecurityMode = .armAway
+    @Published public var locked: Bool = true
+    @Published public var thermostat: Int = 70
     @Published public var expanded: QuidgetKind? = nil
     public init() {}
 }
 
-// MARK: - Palette, from the designs
+// MARK: - Palette, from the file
 
 enum QuidgetInk {
-    static let ground = Color(red: 0.949, green: 0.949, blue: 0.969)        // the chat
-    static let panel = Color(red: 0.937, green: 0.937, blue: 0.949)         // expanded card
-    static let well = Color(red: 0.871, green: 0.871, blue: 0.890)          // the security tray
-    static let track = Color(red: 0.804, green: 0.804, blue: 0.824)         // the dimmer's track
-    static let amber = Color(red: 0.965, green: 0.722, blue: 0.290)         // the dimmer's fill
-    static let amberKnob = Color(red: 0.973, green: 0.800, blue: 0.470)
-    static let amberEdge = Color(red: 0.878, green: 0.639, blue: 0.227)
-    static let amberInk = Color(red: 0.788, green: 0.510, blue: 0.165)
-    static let red = Color(red: 0.878, green: 0.157, blue: 0.165)
-    static let redDeep = Color(red: 0.760, green: 0.090, blue: 0.110)
-    static let grey = Color(red: 0.557, green: 0.557, blue: 0.576)
-    static let label = Color(red: 0.431, green: 0.431, blue: 0.451)
-    static let green = Color(red: 0.118, green: 0.725, blue: 0.333)
-    static let blue = Color(red: 0.102, green: 0.451, blue: 0.910)
+    static let ground = Color(hex: "#F2F2F6")          // the chat
+    static let well = Color(hex: "#C8C8C8")            // a device quidget's well
+    static let modeWell = Color(hex: "#DCDCE0")        // the modes' well
+    static let tileOff = Color(hex: "#636466")         // a dark tile (locked door, light off)
+    static let tileLight = Color(hex: "#F0EAE0")       // the light's tile, lit
+    static let amber = Color(hex: "#D29D48")           // unlocked / the dimmer's fill
+    static let amberInk = Color(hex: "#634514")
+    static let green = Color(hex: "#6CB189")           // locked
+    static let greenInk = Color(hex: "#174A2C")
+    static let blue = Color(hex: "#69A2E8")            // the thermostat, cooling
+    static let blueInk = Color(hex: "#17539C")
+    static let redTop = Color(red: 234 / 255, green: 51 / 255, blue: 58 / 255)
+    static let redBottom = Color(red: 187 / 255, green: 39 / 255, blue: 34 / 255)
+    static let glyphGrey = Color(hex: "#8E919E")
+    static let label = Color(hex: "#636466")
+    static let chip = Color(hex: "#2487FF")
+    static let statusGreen = Color(hex: "#1EB955")
 }
 
-/// The glass a quidget's container wears: a light glass with a soft
-/// white rim, as drawn. Flat in harnesses.
+/// A container's Liquid Glass. Flat in harnesses.
 struct QuidgetGlass: ViewModifier {
     let radius: CGFloat
-    var tint: Color? = nil
-    var rim: Double = 0.9
-    var shadow = true
+    /// The file's white-at-80% panel, or clear glass over the chat.
+    var white: Double = 0
     @Environment(\.labNoGlass) private var noGlass
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Group {
             if noGlass {
-                content.background(shape.fill(tint ?? Color.white.opacity(0.7)))
+                content.background(shape.fill(Color.white.opacity(max(0.7, white))))
             } else if #available(iOS 26.0, macOS 26.0, *) {
-                content.glassEffect(tint.map { Glass.regular.tint($0) } ?? .regular, in: shape)
+                content.glassEffect(white > 0 ? .regular.tint(Color.white.opacity(white)) : .regular, in: shape)
             } else {
                 content.background(.regularMaterial, in: shape)
             }
         }
-        .overlay(shape.strokeBorder(Color.white.opacity(rim), lineWidth: rim > 0.5 ? 2 : 1))
-        .shadow(color: .black.opacity(shadow ? 0.10 : 0), radius: 14, y: 6)
+        // The file's "Shadow": a soft dark blur under the container.
+        .shadow(color: .black.opacity(0.08), radius: 20, y: 8)
+    }
+}
+
+/// The file's well and tile: a fill with its two inner shadows.
+struct QuidgetInset: ViewModifier {
+    let radius: CGFloat
+    let fill: Color
+    /// The tile's shadows are stronger than the well's.
+    var strong = false
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        content
+            .background(
+                shape.fill(fill)
+                    .overlay(
+                        shape.stroke(Color.black.opacity(strong ? 0.16 : 0.08), lineWidth: 3)
+                            .blur(radius: 4)
+                            .offset(y: 1.5)
+                            .mask(shape)
+                    )
+                    .overlay(
+                        shape.stroke(Color.white.opacity(strong ? 0.6 : 0.3), lineWidth: 1)
+                            .blur(radius: 1)
+                            .offset(y: -0.5)
+                            .mask(shape)
+                    )
+            )
+    }
+}
+
+// MARK: - The mode glyphs (the file's own vectors)
+
+/// A path from an SVG `d` string — M L H V C S Z, absolute and relative.
+/// The mode glyphs are the design's own drawings, not SF Symbols.
+struct SVGPathShape: Shape {
+    let d: String
+    let box: CGSize
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        var cur = CGPoint.zero, start = CGPoint.zero, lastC: CGPoint? = nil
+        let scale = min(rect.width / box.width, rect.height / box.height)
+        let ox = rect.midX - box.width * scale / 2, oy = rect.midY - box.height * scale / 2
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + x * scale, y: oy + y * scale) }
+        let scanner = Scanner(string: d)
+        scanner.charactersToBeSkipped = CharacterSet(charactersIn: " ,\n")
+        var cmd: Character = "M"
+        func num() -> CGFloat? { scanner.scanDouble().map { CGFloat($0) } }
+        while !scanner.isAtEnd {
+            if let c = scanner.scanCharacter(), c.isLetter { cmd = c }
+            let rel = cmd.isLowercase
+            switch cmd.uppercased() {
+            case "M":
+                guard let x = num(), let y = num() else { return p }
+                cur = rel ? CGPoint(x: cur.x + x, y: cur.y + y) : CGPoint(x: x, y: y)
+                start = cur; p.move(to: pt(cur.x, cur.y)); lastC = nil
+                cmd = rel ? "l" : "L"
+            case "L":
+                guard let x = num(), let y = num() else { return p }
+                cur = rel ? CGPoint(x: cur.x + x, y: cur.y + y) : CGPoint(x: x, y: y)
+                p.addLine(to: pt(cur.x, cur.y)); lastC = nil
+            case "H":
+                guard let x = num() else { return p }
+                cur.x = rel ? cur.x + x : x
+                p.addLine(to: pt(cur.x, cur.y)); lastC = nil
+            case "V":
+                guard let y = num() else { return p }
+                cur.y = rel ? cur.y + y : y
+                p.addLine(to: pt(cur.x, cur.y)); lastC = nil
+            case "C":
+                guard let x1 = num(), let y1 = num(), let x2 = num(), let y2 = num(), let x = num(), let y = num() else { return p }
+                let o = rel ? cur : .zero
+                let c1 = CGPoint(x: o.x + x1, y: o.y + y1), c2 = CGPoint(x: o.x + x2, y: o.y + y2)
+                cur = CGPoint(x: o.x + x, y: o.y + y)
+                p.addCurve(to: pt(cur.x, cur.y), control1: pt(c1.x, c1.y), control2: pt(c2.x, c2.y)); lastC = c2
+            case "S":
+                guard let x2 = num(), let y2 = num(), let x = num(), let y = num() else { return p }
+                let o = rel ? cur : .zero
+                let c1 = lastC.map { CGPoint(x: 2 * cur.x - $0.x, y: 2 * cur.y - $0.y) } ?? cur
+                let c2 = CGPoint(x: o.x + x2, y: o.y + y2)
+                cur = CGPoint(x: o.x + x, y: o.y + y)
+                p.addCurve(to: pt(cur.x, cur.y), control1: pt(c1.x, c1.y), control2: pt(c2.x, c2.y)); lastC = c2
+            case "Z":
+                p.closeSubpath(); cur = start; lastC = nil
+            default:
+                return p
+            }
+        }
+        return p
+    }
+}
+
+enum QuidgetGlyph {
+    static let armAway = SVGPathShape(d: "M26.5027 19.583C26.5027 27.3831 17.8671 30.2051 17.8671 30.2051C17.8671 30.2051 9.23147 27.3831 9.23147 19.583V13.1312C9.23147 13.1312 15.1342 13.9498 17.8671 9.36983C20.6 13.9498 26.5027 13.1312 26.5027 13.1312V19.583ZM35.75 14.6871L17.8279 0L0 14.6902L2.12049 17.4092L4.61912 15.3507V33H31.1151V15.3453L33.6378 17.4123L35.75 14.6871Z", box: CGSize(width: 35.75, height: 33))
+    static let armHome = SVGPathShape(d: "M34.8781 25.117C37.0168 25.9429 38.5 27.0962 38.5 28.7246C38.5 33.9347 23.4507 34.353 19.5877 34.3741H18.9116C15.0486 34.353 0 33.9347 0 28.7246C0 27.0962 1.48173 25.9422 3.62186 25.1163V28.7819C5.10001 29.7209 10.4496 31.1365 19.2504 31.1365C28.0497 31.1365 33.3993 29.7209 34.8781 28.7819V25.117ZM21.341 13.1805C21.4349 13.1805 21.5189 13.211 21.6056 13.2329C21.6573 13.2407 21.7068 13.2513 21.7577 13.2633C21.9391 13.3078 22.1149 13.3672 22.2755 13.4733L26.5644 16.3009C27.3045 16.7888 27.5046 17.7774 27.0083 18.5078C26.6978 18.966 26.1864 19.2142 25.6657 19.2142C25.358 19.2142 25.0461 19.1272 24.7699 18.9455L22.4168 17.3941V20.4933L24.4142 28.1829L24.3783 28.1914C23.3621 28.2635 22.2762 28.3137 21.1237 28.3413L19.4935 22.0659H19.0065L17.3813 28.3208C16.2833 28.2699 15.1924 28.1737 14.1188 28.0549L16.0832 20.4933V17.3941L13.7294 18.9455C13.4532 19.1272 13.1413 19.2142 12.8336 19.2142C12.3129 19.2142 11.8015 18.966 11.491 18.5078C10.9947 17.7774 11.1948 16.7888 11.9349 16.3009L16.2245 13.4733C16.3851 13.3679 16.5601 13.3099 16.7359 13.2668C16.7947 13.2513 16.8413 13.2407 16.8908 13.2336C16.979 13.211 17.0636 13.1805 17.159 13.1805H21.341ZM19.2144 0L36.278 13.4079L34.267 15.8968L32.8462 14.7803V26.8341C31.9878 27.0929 30.9198 27.3489 29.6188 27.5766V12.2461L19.2202 4.07356L8.88101 12.2433V27.2641C7.61516 27.0229 6.52143 26.7825 5.65361 26.5732V14.7924L4.25938 15.894L2.24046 13.4107L19.2144 0ZM19.2503 7.26021C20.5334 7.26021 21.574 8.2862 21.574 9.55119C21.574 10.8169 20.5334 11.8429 19.2503 11.8429C17.9665 11.8429 16.9258 10.8169 16.9258 9.55119C16.9258 8.2862 17.9665 7.26021 19.2503 7.26021Z", box: CGSize(width: 38.5, height: 34.3741))
+    static let standby = SVGPathShape(d: "M33.4826 12.8259L35.75 14.6833L33.6371 17.4079L32.1456 16.1861V33.1964H7.79746L12.1906 29.7123H28.7558V16.5748L33.4826 12.8259ZM31.6498 6.21291L33.7198 8.97079L3.45091 32.9765L1.3809 30.2178L31.6498 6.21291ZM17.8278 0L26.2049 6.86297L23.4412 9.05487L17.8338 4.46046L6.97458 13.4062V22.115L3.58484 24.8032V16.1981L2.12047 17.4052L0 14.686L17.8278 0Z", box: CGSize(width: 35.75, height: 33.1964))
+
+    static func shape(_ mode: SecurityMode) -> SVGPathShape {
+        switch mode {
+        case .armAway: return armAway
+        case .armHome: return armHome
+        case .standby: return standby
+        }
     }
 }
 
@@ -128,8 +242,12 @@ public struct QuidgetView: View {
         self.namespace = namespace
     }
 
-    public static let smallSize = CGSize(width: 130, height: 140)
-    public static let mediumWidth: CGFloat = 370
+    /// The file's small quidget: 129 × 146, radius 34.
+    public static let smallSize = CGSize(width: 129, height: 146)
+    /// The file's wide panel: 384, radius 34 (inset 9 on a 402 screen).
+    public static let wideWidth: CGFloat = 384
+    static let wellSize = CGSize(width: 109, height: 126)
+    static let tileSize = CGSize(width: 101, height: 118)
 
     public var body: some View {
         Group {
@@ -137,9 +255,25 @@ public struct QuidgetView: View {
             case .light: light
             case .security: security
             case .clip: clip
+            case .lock: lock
+            case .thermostat: thermostat
             }
         }
         .matched(kind, namespace)
+    }
+
+    /// The small container: the well in the glass, with the tile in it.
+    private func small<Tile: View>(_ tile: () -> Tile) -> some View {
+        tile()
+            .frame(width: Self.tileSize.width, height: Self.tileSize.height)
+            .padding(4)
+            .frame(width: Self.wellSize.width, height: Self.wellSize.height)
+            .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.well))
+            .padding(.top, 11).padding(.bottom, 9).padding(.horizontal, 10)
+            .frame(width: Self.smallSize.width, height: Self.smallSize.height)
+            .modifier(QuidgetGlass(radius: 34))
+            .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+            .onTapGesture { expand() }
     }
 
     // MARK: Light
@@ -147,40 +281,70 @@ public struct QuidgetView: View {
     @ViewBuilder
     private var light: some View {
         switch size {
-        case .small:
-            QuidgetDimmer(level: $demo.lightLevel, track: CGSize(width: 102, height: 118), knob: CGSize(width: 94, height: 46), radius: 20, icon: 15)
-                .padding(.horizontal, 14).padding(.vertical, 11)
-                .frame(width: Self.smallSize.width, height: Self.smallSize.height)
-                .modifier(QuidgetGlass(radius: 26))
-                .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .onTapGesture { expand() }
-        case .medium:
-            HStack(spacing: 18) {
-                QuidgetDimmer(level: $demo.lightLevel, track: CGSize(width: 102, height: 118), knob: CGSize(width: 94, height: 46), radius: 20, icon: 15)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Patio Light").font(.system(size: 17, weight: .semibold))
-                    Text("\(Int((demo.lightLevel * 100).rounded()))%").font(.system(size: 17))
-                        .contentTransition(.numericText())
-                }
-                Spacer(minLength: 0)
+        case .small, .medium:
+            small {
+                QuidgetDimmer(level: $demo.lightLevel, track: Self.tileSize, knob: CGSize(width: 101, height: 44), radius: 20, icon: 16)
             }
-            .padding(.horizontal, 14).padding(.vertical, 11)
-            .frame(width: Self.mediumWidth, height: Self.smallSize.height)
-            .modifier(QuidgetGlass(radius: 26))
-            .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .onTapGesture { expand() }
         case .large:
             VStack(spacing: 0) {
-                Text("Patio Light").font(.system(size: 17, weight: .semibold)).padding(.top, 36)
-                Text("\(Int((demo.lightLevel * 100).rounded()))%").font(.system(size: 17))
+                Text("Patio Light").font(.system(size: 17, weight: .semibold)).foregroundStyle(.black).padding(.top, 34)
+                Text("\(Int((demo.lightLevel * 100).rounded()))%").font(.system(size: 17)).foregroundStyle(.black)
                     .contentTransition(.numericText())
                     .padding(.top, 2)
-                QuidgetDimmer(level: $demo.lightLevel, track: CGSize(width: 154, height: 378), knob: CGSize(width: 140, height: 60), radius: 24, icon: 22)
+                QuidgetDimmer(level: $demo.lightLevel, track: CGSize(width: 154, height: 378), knob: CGSize(width: 154, height: 60), radius: 24, icon: 22)
                     .padding(.top, 26)
                 Spacer(minLength: 0)
             }
-            .frame(width: Self.mediumWidth, height: 520)
-            .modifier(QuidgetGlass(radius: 28, tint: QuidgetInk.panel))
+            .frame(width: Self.wideWidth, height: 528)
+            .modifier(QuidgetGlass(radius: 34, white: 0.8))
+        }
+    }
+
+    // MARK: Lock and thermostat (the file's other small quidgets)
+
+    private var lock: some View {
+        small {
+            VStack(spacing: 0) {
+                Image(systemName: demo.locked ? "lock.fill" : "lock.open.fill")
+                    .font(.system(size: 30, weight: .medium))
+                    .frame(width: 32, height: 32)
+                    .padding(.top, 6)
+                Spacer(minLength: 0)
+                Text("Front Door").font(.system(size: 12, weight: .semibold)).tracking(-0.43)
+                Text(demo.locked ? "Locked" : "Unlocked").font(.system(size: 12)).tracking(-0.43).padding(.bottom, 12)
+            }
+            .foregroundStyle(demo.locked ? QuidgetInk.greenInk : QuidgetInk.amberInk)
+            .frame(width: Self.tileSize.width, height: Self.tileSize.height)
+            .modifier(QuidgetInset(radius: 20, fill: demo.locked ? QuidgetInk.green : QuidgetInk.amber, strong: true))
+            .onTapGesture { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { demo.locked.toggle() } }
+        }
+    }
+
+    private var thermostat: some View {
+        small {
+            VStack(spacing: 0) {
+                Text("\(demo.thermostat)°").font(.system(size: 36, weight: .light)).tracking(-0.43)
+                    .foregroundStyle(QuidgetInk.blueInk)
+                    .padding(.top, 22)
+                    .contentTransition(.numericText())
+                Spacer(minLength: 0)
+                HStack(spacing: 0) {
+                    Button { demo.thermostat = max(50, demo.thermostat - 1) } label: {
+                        Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    Rectangle().fill(Color.white.opacity(0.25)).frame(width: 1, height: 18)
+                    Button { demo.thermostat = min(90, demo.thermostat + 1) } label: {
+                        Image(systemName: "chevron.up").font(.system(size: 13, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .frame(width: 85, height: 32)
+                .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(QuidgetInk.blueInk))
+                .padding(.bottom, 8)
+            }
+            .frame(width: Self.tileSize.width, height: Self.tileSize.height)
+            .modifier(QuidgetInset(radius: 20, fill: QuidgetInk.blue, strong: true))
         }
     }
 
@@ -190,88 +354,98 @@ public struct QuidgetView: View {
     private var security: some View {
         switch size {
         case .small:
-            VStack(spacing: 10) {
-                modeButton(demo.mode, selected: true)
-                Text(demo.mode.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(QuidgetInk.label)
-            }
-            .frame(width: 110, height: 120)
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(QuidgetInk.well))
-            .padding(10)
-            .frame(width: Self.smallSize.width, height: Self.smallSize.height)
-            .modifier(QuidgetGlass(radius: 26))
-            .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .onTapGesture { expand() }
+            modeCard(demo.mode, selected: true)
+                .frame(width: 103.33)
+                .padding(.top, 18)
+                .frame(width: Self.wellSize.width, height: Self.wellSize.height, alignment: .top)
+                .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.modeWell))
+                .padding(.top, 11).padding(.bottom, 9).padding(.horizontal, 10)
+                .frame(width: Self.smallSize.width, height: Self.smallSize.height)
+                .modifier(QuidgetGlass(radius: 34))
+                .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+                .onTapGesture { expand() }
         case .medium:
             modeTray
-                .padding(10)
-                .frame(width: Self.mediumWidth, height: 162)
-                .modifier(QuidgetGlass(radius: 28))
-                .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .padding(.top, 10).padding(.bottom, 10).padding(.horizontal, 10.5)
+                .frame(width: Self.wideWidth, height: 168)
+                .modifier(QuidgetGlass(radius: 34, white: 0.8))
+                .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
                 .onTapGesture { expand() }
         case .large:
             VStack(spacing: 0) {
                 modeTray
-                    .padding(10)
+                    .padding(.top, 10).padding(.horizontal, 10.5)
                 VStack(spacing: 0) {
                     statusRow(symbol: "house.fill", title: demo.mode.label, status: demo.mode == .standby ? "Off" : "Active")
                     Divider().padding(.leading, 60)
                     statusRow(symbol: "shield.lefthalf.filled", title: "Automated Threat Response", status: demo.mode == .standby ? "Paused" : "Monitoring")
                 }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 10.5)
+                .padding(.bottom, 10)
             }
-            .frame(width: Self.mediumWidth)
-            .modifier(QuidgetGlass(radius: 28, tint: QuidgetInk.panel))
+            .frame(width: Self.wideWidth)
+            .modifier(QuidgetGlass(radius: 34, white: 0.8))
         }
     }
 
-    /// The three modes, as round buttons in a grey tray.
+    /// The file's tray: the modes' well, 363 × 148, three 103.33 cards.
     private var modeTray: some View {
         HStack(spacing: 0) {
             ForEach(SecurityMode.allCases) { mode in
                 Button {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { demo.mode = mode }
                 } label: {
-                    VStack(spacing: 14) {
-                        modeButton(mode, selected: demo.mode == mode)
-                        Text(mode.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(QuidgetInk.label)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
+                    modeCard(mode, selected: demo.mode == mode)
+                        .frame(width: 103.33)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 18)
-        .frame(height: 142)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(QuidgetInk.well))
+        .padding(.horizontal, 18.5)
+        .padding(.top, 30)
+        .frame(width: 363, height: 148, alignment: .top)
+        .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.modeWell))
     }
 
-    private func modeButton(_ mode: SecurityMode, selected: Bool) -> some View {
-        ZStack {
-            Circle()
-                .fill(selected && mode == .armAway
-                      ? AnyShapeStyle(LinearGradient(colors: [QuidgetInk.red, QuidgetInk.redDeep], startPoint: .top, endPoint: .bottom))
-                      : AnyShapeStyle(Color.white))
-                .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
-            Image(systemName: mode.symbol)
-                .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(selected && mode == .armAway ? Color.white : QuidgetInk.grey)
+    /// Icon + label, as the file's "Card": a 64 circle with the mode's
+    /// own glyph in a 44 box, the label 10 below.
+    private func modeCard(_ mode: SecurityMode, selected: Bool) -> some View {
+        VStack(spacing: 10) {
+            ZStack {
+                if selected {
+                    Circle()
+                        .fill(LinearGradient(colors: [QuidgetInk.redTop, QuidgetInk.redBottom], startPoint: .top, endPoint: .bottom))
+                        .overlay(Circle().stroke(Color.black.opacity(0.16), lineWidth: 2).blur(radius: 3).offset(y: 1).mask(Circle()))
+                        .shadow(color: .white.opacity(0.25), radius: 0.5, y: 1)
+                } else {
+                    Circle()
+                        .fill(Color.white)
+                        .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 3).blur(radius: 4).offset(y: -3).mask(Circle()))
+                        .shadow(color: .black.opacity(0.16), radius: 2, y: 2)
+                        .shadow(color: .black.opacity(0.08), radius: 6, y: 6)
+                }
+                QuidgetGlyph.shape(mode)
+                    .fill(selected ? Color.white : QuidgetInk.glyphGrey)
+                    .frame(width: 36, height: 36)
+            }
+            .frame(width: 64, height: 64)
+            Text(mode.label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(QuidgetInk.label)
+                .lineLimit(1)
         }
-        .frame(width: 62, height: 62)
-        .overlay(Circle().strokeBorder(Color.white.opacity(selected && mode != .armAway ? 0 : 0), lineWidth: 2))
-        .scaleEffect(selected ? 1 : 0.96)
     }
 
     private func statusRow(symbol: String, title: String, status: String) -> some View {
         HStack(spacing: 14) {
             Image(systemName: symbol)
                 .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(QuidgetInk.grey)
+                .foregroundStyle(QuidgetInk.glyphGrey)
                 .frame(width: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(.black)
-                Text(status).font(.system(size: 15)).foregroundStyle(QuidgetInk.green)
+                Text(status).font(.system(size: 15)).foregroundStyle(QuidgetInk.statusGreen)
                     .contentTransition(.numericText())
             }
             Spacer(minLength: 0)
@@ -286,45 +460,81 @@ public struct QuidgetView: View {
     private var clip: some View {
         switch size {
         case .small:
-            clipImage(size: Self.smallSize, radius: 26, caption: false)
+            small {
+                Image("porch-clip", bundle: .module)
+                    .resizable().scaledToFill()
+                    .frame(width: Self.tileSize.width, height: Self.tileSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+        case .medium:
+            cameraWidget(side: 370, radius: 26)
                 .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 .onTapGesture { expand() }
-        case .medium:
-            clipImage(size: CGSize(width: Self.mediumWidth, height: 362), radius: 22, caption: true)
-                .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .onTapGesture { expand() }
         case .large:
-            clipImage(size: CGSize(width: Self.mediumWidth, height: 380), radius: 22, caption: true)
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.95), lineWidth: 3))
+            cameraWidget(side: 370, radius: 29)
+                .padding(7)
+                .frame(width: Self.wideWidth, height: Self.wideWidth)
+                .modifier(QuidgetGlass(radius: 34, white: 0.8))
         }
     }
 
-    private func clipImage(size: CGSize, radius: CGFloat, caption: Bool) -> some View {
+    /// The file's "Camera Widget": the frame with a fade top and bottom,
+    /// and the caption on glass, inset 10.
+    private func cameraWidget(side: CGFloat, radius: CGFloat) -> some View {
         ZStack(alignment: .bottom) {
             Image("porch-clip", bundle: .module)
                 .resizable()
                 .scaledToFill()
-                .frame(width: size.width, height: size.height)
+                .frame(width: side, height: side)
                 .clipped()
-            if caption {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Amazon package was delivered").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
-                    Text("Front Door | 2:15pm").font(.system(size: 13)).foregroundStyle(.white.opacity(0.8))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .modifier(QuidgetGlass(radius: 12, tint: Color.black.opacity(0.18), rim: 0.35, shadow: false))
-                .padding(10)
+            VStack(spacing: 0) {
+                LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom).frame(height: 116)
+                Spacer(minLength: 0)
+                LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom).frame(height: 116)
             }
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Amazon package was delivered")
+                        .font(.system(size: 15, weight: .semibold)).tracking(-0.23)
+                        .lineLimit(1)
+                    Text("Front Door | 2:15pm")
+                        .font(.system(size: 11)).tracking(-0.23)
+                        .frame(height: 23)
+                }
+                .foregroundStyle(.white)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 14).padding(.trailing, 17).padding(.vertical, 8)
+            .frame(width: side - 20, height: 64)
+            .modifier(QuidgetCaptionGlass())
+            .padding(10)
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: side, height: side)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .shadow(color: .black.opacity(0.10), radius: 14, y: 6)
+        .shadow(color: .black.opacity(0.06), radius: 10, y: 10)
     }
 
     private func expand() {
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) { demo.expanded = kind }
+    }
+}
+
+/// The caption's glass: the file's white-at-7% screen over a blur, 16
+/// radius.
+struct QuidgetCaptionGlass: ViewModifier {
+    @Environment(\.labNoGlass) private var noGlass
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        Group {
+            if noGlass {
+                content.background(shape.fill(Color.white.opacity(0.18)))
+            } else if #available(iOS 26.0, macOS 26.0, *) {
+                content.glassEffect(.regular.tint(Color.white.opacity(0.07)), in: shape)
+            } else {
+                content.background(.ultraThinMaterial, in: shape)
+            }
+        }
+        .overlay(shape.strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
     }
 }
 
@@ -337,8 +547,9 @@ private extension View {
 
 // MARK: - The dimmer
 
-/// The light's control: a rounded track, amber from the bottom up to the
-/// level, and a capsule knob carrying the bulb. Drag anywhere on it.
+/// The light's tile: dark when off, the amber rising with the level, and
+/// the file's glass knob — 101 × 44, radius 20, white at 20% with two
+/// soft shadows — carrying the bulb. Drag anywhere.
 struct QuidgetDimmer: View {
     @Binding var level: Double
     let track: CGSize
@@ -350,20 +561,20 @@ struct QuidgetDimmer: View {
         let fillH = max(knob.height / 2, CGFloat(level) * track.height)
         ZStack(alignment: .bottom) {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(QuidgetInk.track)
+                .fill(QuidgetInk.tileOff)
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(QuidgetInk.amber)
                 .frame(height: fillH)
-            // The knob rides the fill's top edge: a Liquid Glass squircle
-            // carrying the bulb (Chris: "the slider grabbers are liquid
-            // glass squircles with SF Symbols within").
-            QuidgetKnob(radius: min(radius, knob.height / 2 - 2), tint: QuidgetInk.amberKnob) {
-                Image(systemName: "lightbulb.fill").font(.system(size: icon, weight: .semibold)).foregroundStyle(QuidgetInk.amberInk)
+            QuidgetKnob(radius: radius) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: icon, weight: .medium))
+                    .foregroundStyle(Color.black.opacity(0.75))
             }
             .frame(width: knob.width, height: knob.height)
             .padding(.bottom, min(track.height - knob.height, max(0, fillH - knob.height / 2)))
         }
         .frame(width: track.width, height: track.height)
+        .modifier(QuidgetInset(radius: radius, fill: .clear, strong: true))
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .gesture(DragGesture(minimumDistance: 0)
@@ -375,10 +586,10 @@ struct QuidgetDimmer: View {
     }
 }
 
-/// A slider's grabber: a glass squircle with a glyph in it.
+/// A slider's grabber: a glass squircle with a glyph in it. The file:
+/// white at 20%, shadows 0 4 16 and 0 4 32 at 16%.
 struct QuidgetKnob<Glyph: View>: View {
     let radius: CGFloat
-    let tint: Color
     @ViewBuilder let glyph: () -> Glyph
     @Environment(\.labNoGlass) private var noGlass
 
@@ -386,44 +597,47 @@ struct QuidgetKnob<Glyph: View>: View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Group {
             if noGlass {
-                glyph().frame(maxWidth: .infinity, maxHeight: .infinity).background(shape.fill(tint))
+                glyph().frame(maxWidth: .infinity, maxHeight: .infinity).background(shape.fill(Color.white.opacity(0.35)))
             } else if #available(iOS 26.0, macOS 26.0, *) {
-                glyph().frame(maxWidth: .infinity, maxHeight: .infinity).glassEffect(.regular.tint(tint.opacity(0.7)).interactive(), in: shape)
+                glyph().frame(maxWidth: .infinity, maxHeight: .infinity).glassEffect(.regular.tint(Color.white.opacity(0.2)).interactive(), in: shape)
             } else {
                 glyph().frame(maxWidth: .infinity, maxHeight: .infinity).background(.thinMaterial, in: shape)
             }
         }
-        .overlay(shape.strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
-        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+        .shadow(color: .black.opacity(0.16), radius: 8, y: 4)
+        .shadow(color: .black.opacity(0.16), radius: 16, y: 4)
     }
 }
 
 // MARK: - The chat, and the overlay
 
 /// One exchange as designed: the ask as a bubble on the right, the
-/// reply, the quidget inline, and — for some — the follow-up chips.
+/// reply, the quidgets inline (up to three small, side by side), and the
+/// follow-up chips.
 public struct QuidgetExchange: Identifiable, Sendable {
     public var id: String
     public var ask: String
     public var reply: String
-    public var kind: QuidgetKind
+    public var kinds: [QuidgetKind]
     public var chips: [String]
 
     public static let all: [QuidgetExchange] = [
-        QuidgetExchange(id: "light", ask: "Dim the Patio Light", reply: "I’ve dimmed the lights to 40%.", kind: .light, chips: []),
-        QuidgetExchange(id: "security", ask: "Arm my system", reply: "Your cameras are armed and your system is in Arm Away mode.", kind: .security, chips: ["Arm Away when you leave?", "Disarm when you arrive home?"]),
-        QuidgetExchange(id: "clip", ask: "Did I receive any packages today?", reply: "You received a package from Amazon at 2:15PM.", kind: .clip, chips: []),
+        QuidgetExchange(id: "light", ask: "Dim the Patio Light", reply: "I’ve dimmed the lights to 40%.", kinds: [.light], chips: []),
+        QuidgetExchange(id: "security", ask: "Arm the system in Away mode", reply: "Your cameras are armed and your system is in Arm Away mode.", kinds: [.security], chips: ["Arm Away when you leave?", "Disarm when you arrive home?"]),
+        QuidgetExchange(id: "clip", ask: "Is there a package at my front door?", reply: "You received a package from Amazon at 2:15PM.", kinds: [.clip], chips: ["Notify Amazon Deliveries", "Notify of Stolen Packages"]),
+        QuidgetExchange(id: "multi", ask: "Lock the front door, turn on the hallway lights, and set it to 70 degrees", reply: "Front door is locked, hallways lights are on and the thermostat is set to 70°.", kinds: [.lock, .light, .thermostat], chips: ["Create Automation", "Set as Mockupency", "Turn Lights on When I leave"]),
     ]
 }
 
-/// The chat screen from the designs, with the quidgets live: tap one to
-/// expand it over a dim; tap the dim to put it back.
+/// The chat screen from the file, with the quidgets live: tap one to
+/// expand it over a blur; tap the blur to put it back.
 public struct QuidgetChatView: View {
     @ObservedObject var demo: QuidgetDemo
     let exchanges: [QuidgetExchange]
     let size: QuidgetSize
     let screen: CGSize
     @Namespace private var ns
+    @Environment(\.labNoGlass) private var noGlass
 
     public init(demo: QuidgetDemo, exchanges: [QuidgetExchange], size: QuidgetSize = .small, screen: CGSize) {
         self.demo = demo
@@ -441,8 +655,7 @@ public struct QuidgetChatView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.top, 132)
-            .padding(.horizontal, 16)
+            .padding(.top, 125)
             .frame(width: screen.width, height: screen.height, alignment: .top)
             // Full-screen modal: the chat blurs behind the expanded quidget.
             .blur(radius: demo.expanded == nil ? 0 : 16)
@@ -455,54 +668,102 @@ public struct QuidgetChatView: View {
 
     private func exchange(_ x: QuidgetExchange) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            // The ask: white, radius 26, 16 × 10, 27 in from the right.
             HStack {
                 Spacer(minLength: 40)
                 Text(x.ask)
-                    .font(.system(size: 17))
+                    .font(.system(size: 17)).tracking(-0.43)
                     .foregroundStyle(.black)
+                    .multilineTextAlignment(.trailing)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 11)
-                    .background(Capsule().fill(Color.white))
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color.white))
+                    .frame(maxWidth: 307, alignment: .trailing)
             }
+            .padding(.trailing, 27)
             Text(x.reply)
-                .font(.system(size: 17))
+                .font(.system(size: 17)).tracking(-0.43)
                 .foregroundStyle(.black)
+                .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 40)
-            // The quidget's place stays while it's expanded — it comes
-            // back here.
-            ZStack(alignment: .leading) {
-                let inline = x.kind == .clip && size == .small ? QuidgetSize.medium : size
-                let h: CGFloat = inline == .small ? QuidgetView.smallSize.height : (x.kind == .clip ? 362 : x.kind == .security ? 162 : QuidgetView.smallSize.height)
-                Color.clear.frame(height: h)
-                if demo.expanded != x.kind {
-                    QuidgetView(kind: x.kind, size: inline, demo: demo, namespace: ns)
+                .frame(width: 370, alignment: .leading)
+                .padding(.leading, 16)
+                .padding(.top, 48)
+            // The quidgets' place stays while one is expanded — it comes
+            // back here. Three small sit side by side, 10 apart, and the
+            // row scrolls: the file shows the third cut off at the edge.
+            let row = HStack(alignment: .top, spacing: 10) {
+                ForEach(x.kinds) { kind in
+                    let inline = inlineSize(kind, count: x.kinds.count)
+                    ZStack(alignment: .leading) {
+                        Color.clear.frame(width: inlineWidth(kind, inline), height: inlineHeight(kind, inline))
+                        if demo.expanded != kind {
+                            QuidgetView(kind: kind, size: inline, demo: demo, namespace: ns)
+                        }
+                    }
                 }
             }
-            .padding(.top, 12)
+            .padding(.leading, 16)
+            .padding(.trailing, 16)
+            Group {
+                if noGlass {
+                    row.frame(width: screen.width, alignment: .leading).clipped()
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) { row }
+                        .frame(width: screen.width)
+                }
+            }
+            .padding(.top, 15)
             if !x.chips.isEmpty {
-                HStack(spacing: 8) {
+                // The chips scroll too; the file runs them off the edge.
+                let chips = HStack(spacing: 10) {
                     ForEach(x.chips, id: \.self) { chip in
-                        HStack(spacing: 5) {
-                            Image(systemName: "sparkles").font(.system(size: 11, weight: .semibold))
-                            Text(chip).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles.2").font(.system(size: 10, weight: .semibold))
+                            Text(chip).font(.system(size: 11, weight: .semibold)).lineLimit(1)
                         }
                         .fixedSize()
-                        .foregroundStyle(QuidgetInk.blue)
-                        .padding(.horizontal, 10)
-                        .frame(height: 30)
+                        .foregroundStyle(QuidgetInk.chip)
+                        .padding(.horizontal, 12)
+                        .frame(height: 28)
                         .background(Capsule().fill(Color.white))
                     }
                 }
-                .padding(.top, 44)
+                .padding(.horizontal, 16)
+                Group {
+                    if noGlass {
+                        chips.frame(width: screen.width, alignment: .leading).clipped()
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) { chips }
+                            .frame(width: screen.width)
+                    }
+                }
+                .padding(.top, 20)
             }
         }
         .padding(.bottom, 28)
     }
+
+    private func inlineSize(_ kind: QuidgetKind, count: Int) -> QuidgetSize {
+        if kind == .clip { return count > 1 ? .small : .medium }
+        return count > 1 ? .small : size
+    }
+    private func inlineWidth(_ kind: QuidgetKind, _ s: QuidgetSize) -> CGFloat {
+        s == .small ? QuidgetView.smallSize.width : (kind == .clip ? 370 : QuidgetView.wideWidth)
+    }
+    private func inlineHeight(_ kind: QuidgetKind, _ s: QuidgetSize) -> CGFloat {
+        if s == .small { return QuidgetView.smallSize.height }
+        switch kind {
+        case .clip: return 370
+        case .security: return 168
+        default: return QuidgetView.smallSize.height
+        }
+    }
 }
 
-/// The expanded quidget over a dim of the screen. Tap the dim to put it
-/// back; the geometry matches, so it grows out of its inline place.
+/// The expanded quidget over the blurred, dimmed screen (the file's dim:
+/// black at 5% over black at 25%). Tap the dim to put it back; the
+/// geometry matches, so it grows out of its inline place.
 public struct QuidgetOverlay: View {
     @ObservedObject var demo: QuidgetDemo
     let namespace: Namespace.ID
@@ -517,7 +778,7 @@ public struct QuidgetOverlay: View {
     public var body: some View {
         ZStack(alignment: .top) {
             if let kind = demo.expanded {
-                Color.black.opacity(0.32)
+                Color.black.opacity(0.29)
                     .frame(width: screen.width, height: screen.height)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -525,7 +786,7 @@ public struct QuidgetOverlay: View {
                     }
                     .transition(.opacity)
                 QuidgetView(kind: kind, size: .large, demo: demo, namespace: namespace)
-                    .padding(.top, 120)
+                    .padding(.top, 118)
             }
         }
         .frame(width: screen.width, height: screen.height, alignment: .top)
@@ -533,10 +794,9 @@ public struct QuidgetOverlay: View {
     }
 }
 
-
 // MARK: - The lab
 
-/// Containers · Quidgets: the chat from the designs, with the quidgets
+/// Containers · Quidgets: the chat from the file, with the quidgets
 /// live. Tap one to expand it; change the thing; tap the dim.
 struct LabQuidgetsView: View {
     let frame: LabFrame
@@ -545,7 +805,7 @@ struct LabQuidgetsView: View {
     var body: some View {
         let scene = Int(frame.p("scene", .quidgets))
         let size: QuidgetSize = frame.p("size", .quidgets) >= 0.5 ? .medium : .small
-        let exchanges = scene >= 3 ? QuidgetExchange.all : [QuidgetExchange.all[min(2, scene)]]
+        let exchanges = scene >= QuidgetExchange.all.count ? QuidgetExchange.all : [QuidgetExchange.all[scene]]
         LabPhoneCanvas(frame: frame) { screen in
             QuidgetChatView(demo: demo, exchanges: exchanges, size: size, screen: screen)
         }
