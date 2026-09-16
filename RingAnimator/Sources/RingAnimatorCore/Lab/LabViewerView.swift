@@ -105,8 +105,11 @@ public struct LabViewerView: View {
         .contentShape(Rectangle())
         .onTapGesture { if experiment.isTappable { lab.advance() } }
         .gesture(DragGesture(minimumDistance: 0)
-            .onChanged { _ in if experiment.isHoldable { lab.beginHold() } }
-            .onEnded { _ in lab.endHold() })
+            .onChanged { g in
+                if experiment.isHoldable { lab.beginHold() }
+                if experiment.usesPointer { lab.pointer = CGPoint(x: g.location.x - size.width / 2, y: g.location.y - size.height / 2) }
+            }
+            .onEnded { _ in lab.endHold(); if experiment.usesPointer { lab.pointer = nil } })
     }
 
     // MARK: - Chrome

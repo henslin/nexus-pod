@@ -90,6 +90,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case hold
     // Libraries.dev kits (Vendor/).
     case beamKit
+    case gooey
+    case metal
     // Flows — the tap-on-Nexus question, on a phone canvas.
     case journey
     case agentStates
@@ -154,6 +156,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .thinkingOrbs: return "Thinking Orbs"
         case .orbKit:     return "Thinking Orbs · Kit"
         case .beamKit:    return "Border Beam · Kit"
+        case .gooey:      return "Gooey"
+        case .metal:      return "Metal"
         case .water:      return "Water"
         case .haze:       return "Haze"
         case .fizz:       return "Fizz"
@@ -230,6 +234,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .thinkingOrbs: return "SwiftUI · Canvas"
         case .orbKit:     return "Libraries.dev · ThinkingOrbsKit"
         case .beamKit:    return "Libraries.dev · BorderBeamKit"
+        case .gooey:      return "SwiftUI · Canvas filters"
+        case .metal:      return "Metal · colorEffect + distortionEffect"
         case .water, .haze, .fizz, .glints, .parallax, .focus: return "Metal · layerEffect"
         case .buttonGlow: return "SwiftUI · Liquid Glass + glow"
         case .sheet:      return "SwiftUI · Liquid Glass"
@@ -306,6 +312,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .thinkingOrbs: return "circle.hexagongrid.circle"
         case .orbKit:     return "shippingbox"
         case .beamKit:    return "shippingbox"
+        case .gooey:      return "plus.circle.fill"
+        case .metal:      return "circle.circle"
         case .water:      return "water.waves"
         case .haze:       return "cloud.fog"
         case .fizz:       return "bubbles.and.sparkles"
@@ -446,6 +454,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "Libraries.dev’s Thinking orbs, the real SwiftUI port (MIT, vendored): nine states, two tuned size presets drawn at any display size, a theme, a speed. Beside our own Thinking Orbs so the two can be compared on one stage."
         case .beamKit:
             return "Libraries.dev’s Border beam, the real SwiftUI port (MIT, vendored): rotate (large / small / line) and pulse (outside / inner) families, four colour variants, and their tuning — stroke, inner glow, bloom, brightness, saturation, hue range. Also available as a Morph adornment beside our edge glow."
+        case .gooey:
+            return "A round + button that opens into items with a gooey stretch — SwiftUI’s own Canvas blur + alpha-threshold is the goo. Morph, Move, Bend or Melt, with their physics: durations, staggers, spread, anticipation, icon timing. Tap to open and close. The libraries.dev Gooey, natively, with its rail."
+        case .metal:
+            return "A polished metal ring round a control — circle button, button, text or badge — chromatic, silver or gold, with an inner shadow, a glow that appears on hover, a cursor-driven dent, and a reflection that follows the pointer (touch on the phone). The libraries.dev Metal v2, natively, with its rail."
         case .water:
             return "Post: the layer seen through a rippling water surface — a noise height field refracts it, caustics brighten the slopes. A glyph under Water is a glyph under water."
         case .haze:
@@ -554,7 +566,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// Advances through stages on tap — see `LabState.advance()`.
-    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols }
+    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols || self == .gooey }
+
+    /// Reads the pointer — hover on the Mac, touch on the phone.
+    public var usesPointer: Bool { self == .metal }
 
     /// Responds to press-and-hold — see `LabState.hold`.
     public var isHoldable: Bool { self == .hold }
@@ -573,7 +588,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     public var section: LabSection {
         switch self {
         case .journey, .agentStates, .hold: return .flows
-        case .waveform, .edgeGlow, .caption, .morph, .buttonGlow, .sheet, .beamKit: return .ui
+        case .waveform, .edgeGlow, .caption, .morph, .buttonGlow, .sheet, .beamKit, .gooey, .metal: return .ui
         default: return .orb
         }
     }
@@ -1013,6 +1028,46 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("inner", "Inner glow", 0...2, 1, "The inward wash.", "%.1f×", group: "Glow styling"),
             .init("bloom", "Bloom", 0...2, 1, "The wide halo.", "%.1f×", group: "Glow styling"),
             .init("hueRange", "Hue range", 0...180, 30, "Degrees of hue the beam spans.", "%.0f°", group: "Glow styling"),
+        ]
+        case .gooey: return [
+            .init("effect", "Effect", 0...3, 0, "How the items come out.", "%.0f", group: "Effect", choices: ["Morph", "Move", "Bend", "Melt"]),
+            .init("blur", "Goo blur", 0...20, 6, "The blur that makes shapes merge, points.", "%.0f", group: "Effect settings"),
+            .init("contrast", "Contrast", 4...40, 18, "How hard the merged edge is.", "%.0f", group: "Effect settings"),
+            .init("waviness", "Waviness", 0...10, 0, "Wobble on the shapes' edges.", "%.0f", group: "Effect settings"),
+            .init("fill", "Button fill color", 0...4, 1, "The goo's colour.", "%.0f", group: "Button fill color", choices: ["Dark", "Light", "Blue", "Peach", "Palette"]),
+            .init("items", "Items", 1...6, 3, "Buttons that come out.", "%.0f", group: "Component animation"),
+            .init("openDuration", "Open duration", 100...1500, 550, "Milliseconds.", "%.0f ms", group: "Component animation"),
+            .init("closeDuration", "Close duration", 100...1500, 250, "Milliseconds.", "%.0f ms", group: "Component animation"),
+            .init("openStagger", "Open stagger", 0...200, 40, "Per item, milliseconds.", "%.0f ms", group: "Component animation"),
+            .init("closeStagger", "Close stagger", 0...200, 0, "Per item, milliseconds.", "%.0f ms", group: "Component animation"),
+            .init("spread", "Spread", 0.5...2, 1, "How far the items travel.", "%.1f×", group: "Component animation"),
+            .init("anticipation", "Anticipation", 0...20, 5, "A pull back before the move, points.", "%.0f pt", group: "Component animation"),
+            .init("anticipationDuration", "Anticipation duration", 0...1500, 700, "Milliseconds.", "%.0f ms", group: "Component animation"),
+            .init("iconFade", "Icon fade", 0...600, 180, "Milliseconds.", "%.0f ms", group: "Component animation"),
+            .init("iconDelay", "Icon delay", 0...600, 120, "Milliseconds.", "%.0f ms", group: "Component animation"),
+            .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", group: "Component animation", choices: ["Tap", "Auto"]),
+        ]
+        case .metal: return [
+            .init("type", "Type", 0...3, 0, "What wears the metal.", "%.0f", group: "Type", choices: ["Circle button", "Button", "Text", "Badge"]),
+            .init("color", "Color", 0...2, 0, "The metal.", "%.0f", group: "Color", choices: ["Chromatic", "Silver", "Gold"]),
+            .init("strength", "Strength", 0...1, 0.81, "How metallic.", "%.0f%%", group: "Metal effect styling"),
+            .init("scale", "Shader scale", 0.3...3, 1.3, "Band density.", "%.1f×", group: "Metal effect styling"),
+            .init("ring", "Ring width", 1...8, 2, "Points.", "%.0f pt", group: "Metal effect styling"),
+            .init("innerShadow", "Inner shadow", 0...2, 1, "Inside the ring.", "%.1f×", group: "Metal effect styling"),
+            .init("glow", "Intensity", 0...4, 2, "Glow on hover.", "%.0f×", group: "Glow"),
+            .init("appear", "Appear", 50...1000, 300, "Milliseconds.", "%.0f ms", group: "Glow"),
+            .init("disappear", "Disappear", 50...1500, 450, "Milliseconds.", "%.0f ms", group: "Glow"),
+            .init("bend", "Strength", 0...2, 0.74, "How much the surface dents toward the pointer.", "%.2f×", group: "Cursor bend"),
+            .init("reach", "Reach", 0...120, 36, "Points.", "%.0f pt", group: "Cursor bend"),
+            .init("dent", "Max dent", 0...30, 9, "Points.", "%.0f pt", group: "Cursor bend"),
+            .init("rDistance", "Distance", 20...400, 186, "How far the reflection is felt, points.", "%.0f pt", group: "Cursor reflection"),
+            .init("rSpecular", "Specular", 0.5...10, 3.35, "Highlight tightness.", "%.2f", group: "Cursor reflection"),
+            .init("rFalloff", "Falloff", 0...120, 37, "Points before it starts fading.", "%.0f pt", group: "Cursor reflection"),
+            .init("rReach", "Reach", 0...40, 11.5, "Highlight strength.", "%.1f", group: "Cursor reflection"),
+            .init("optGlow", "Glow", 0...1, 1, "", "%.0f", group: "Options", choices: ["Off", "On"]),
+            .init("optReflection", "Reflection", 0...1, 1, "", "%.0f", group: "Options", choices: ["Off", "On"]),
+            .init("optShadow", "Inner shadow", 0...1, 1, "", "%.0f", group: "Options", choices: ["Off", "On"]),
+            .init("optBend", "Bend", 0...1, 1, "", "%.0f", group: "Options", choices: ["Off", "On"]),
         ]
         case .water: return [
             .init("amount", "Amount", 0...30, 8, "Refraction, points.", "%.0f pt"),
@@ -1554,6 +1609,11 @@ public final class LabState: ObservableObject {
         }
     }
 
+    /// The pointer over the stage, in the experiment's own coordinates
+    /// (points from its centre), or nil — hover on the Mac, touch on the
+    /// phone. For Metal's bend and reflection.
+    @Published public var pointer: CGPoint? = nil
+
     /// Press-and-hold, for the Hold flow: when the press began, or nil.
     @Published public var holdStart: Date? = nil
     /// When the last hold ended — the flow's "talking" runs from here.
@@ -1635,12 +1695,14 @@ public struct LabFrame {
     public var sinceHold: Double = .infinity
     /// The Morph's states — see `LabState.morphStates`.
     public var morphStates: [LabMorphState] = []
+    /// See `LabState.pointer`.
+    public var pointer: CGPoint? = nil
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
                 params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
                 taps: Int = 0, sinceTap: Double = .infinity,
                 hero: LabExperiment? = nil, heroPost: [LabPostEffect] = [], fill: Double = 1,
-                holding: Double = 0, sinceHold: Double = .infinity, morphStates: [LabMorphState] = []) {
+                holding: Double = 0, sinceHold: Double = .infinity, morphStates: [LabMorphState] = [], pointer: CGPoint? = nil) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -1658,6 +1720,7 @@ public struct LabFrame {
         self.holding = holding
         self.sinceHold = sinceHold
         self.morphStates = morphStates
+        self.pointer = pointer
     }
 
     /// A knob's value, or its declared default when the frame was built
@@ -1719,7 +1782,8 @@ extension LabState {
                         fill: fill,
                         holding: holdStart.map { date.timeIntervalSince($0) } ?? 0,
                         sinceHold: date.timeIntervalSince(holdEnd),
-                        morphStates: morphStates)
+                        morphStates: morphStates,
+                        pointer: pointer)
     }
 
     private static func hueShifted(_ color: Color, by turns: Double) -> Color {

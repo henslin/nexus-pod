@@ -2190,3 +2190,84 @@ static float lab_fbm3(float3 p, int octaves) {
     }
     return acc / max(wsum, half(0.001));
 }
+
+// MARK: - Metal ring (colorEffect) — libraries.dev's "Metal", natively
+//
+// A polished metal ring round a shape: the sheen is a conic band pattern
+// (chromatic: hue bands; silver: grey bands; gold: warm bands) with a
+// specular hit that follows the pointer, and an inner shadow inside the
+// ring. Drawn over a transparent view whose size is the control's
+// footprint. `shapeKind`: 0 circle, 1 capsule, 2 rounded rect. Pointer
+// is in the view's own points; a negative pointer.x means none.
+
+static float metal_sd(float2 p, float2 hs, float kind) {
+    if (kind < 0.5f) return length(p) - min(hs.x, hs.y);
+    float r = kind < 1.5f ? min(hs.x, hs.y) : min(hs.x, hs.y) * 0.45f;
+    float2 q = abs(p) - (hs - r);
+    return length(max(q, 0.0f)) + min(max(q.x, q.y), 0.0f) - r;
+}
+
+[[ stitchable ]] half4 labMetal(float2 position, half4 color,
+                                float2 size, float time, float shapeKind, float ringWidth,
+                                float preset, float strength, float bandScale, float innerShadow,
+                                float2 pointer, float reflect, float reflectDistance, float reflectFalloff, float specular,
+                                device const float *lab, int labCount)
+{
+    float2 hs = size * 0.5f;
+    float2 p = position - hs;
+    float d = metal_sd(p, hs - 1.0f, shapeKind);          // 0 at the outer edge, negative inside
+    // The ring: a band `ringWidth` wide just inside the edge.
+    float ring = (1.0f - smoothstep(-0.8f, 0.8f, d)) * smoothstep(-ringWidth - 0.8f, -ringWidth + 0.8f, d);
+    // Inside the ring: a soft inner shadow falling in from it.
+    float inside = 1.0f - smoothstep(-ringWidth - 0.5f, -ringWidth + 0.5f, d);
+    float shadow = inside * (1.0f - smoothstep(-ringWidth - 10.0f * innerShadow, -ringWidth, d)) * 0.35f * innerShadow;
+    if (ring <= 0.001f && shadow <= 0.001f) return half4(0);
+
+    // Sheen: bands round the ring by angle, turning slowly.
+    float a = atan2(p.y, p.x);
+    float bands = 0.5f + 0.5f * sin(a * bandScale * 3.0f + time * 0.4f)
+                * (0.6f + 0.4f * sin(a * bandScale * 7.0f - time * 0.25f));
+    float3 metal;
+    if (preset < 0.5f) {
+        // Chromatic: thin hue fringes on a bright ring — rainbow at the
+        // bands' edges, white between.
+        float3 hue = lab_linear_to_srgb(lab_palette_linear(fract(a / 6.2831f * 2.0f + time * 0.03f), lab, labCount));
+        metal = mix(float3(0.85f), hue * 1.2f, pow(bands, 3.0f) * 0.9f);
+    } else if (preset < 1.5f) {
+        metal = float3(0.35f + 0.6f * pow(bands, 1.5f));       // silver
+    } else {
+        metal = float3(0.95f, 0.78f, 0.45f) * (0.45f + 0.6f * pow(bands, 1.5f)); // gold
+    }
+    // Reflection: a specular highlight on the ring facing the pointer,
+    // falling off with distance to it.
+    if (pointer.x >= 0.0f && reflect > 0.0f) {
+        float2 toP = pointer - hs;
+        float pa = atan2(toP.y, toP.x);
+        float da = abs(atan2(sin(a - pa), cos(a - pa)));
+        float dist = length(toP);
+        float near = 1.0f - smoothstep(0.0f, reflectDistance, max(dist - reflectFalloff, 0.0f));
+        float spot = pow(max(0.0f, 1.0f - da / 1.2f), specular) * near * reflect;
+        metal += float3(1.0f) * spot;
+    }
+    metal = mix(float3(0.5f), metal, strength);
+    float3 out = metal * ring;
+    float alpha = min(1.0f, ring + shadow);
+    // Premultiplied: the shadow darkens (black at its alpha), the ring adds.
+    return half4(half3(out), half(alpha));
+}
+
+// MARK: - Dent (distortionEffect) — the cursor bend
+//
+// Pixels within `reach` of the pointer are pulled toward it by up to
+// `maxDent`, strongest at the pointer, easing to nothing at the reach.
+
+[[ stitchable ]] float2 labDent(float2 position, float2 pointer, float reach, float maxDent)
+{
+    if (pointer.x < 0.0f) return position;
+    float2 d = pointer - position;
+    float dist = length(d);
+    if (dist > reach || dist < 0.001f) return position;
+    float k = 1.0f - dist / reach;
+    k = k * k * (3.0f - 2.0f * k);
+    return position - normalize(d) * maxDent * k * -1.0f;
+}

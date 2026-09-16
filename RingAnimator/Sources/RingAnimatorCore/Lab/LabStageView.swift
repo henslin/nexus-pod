@@ -22,6 +22,12 @@ public struct LabStageView: View {
     @State private var savedFrameMessage: String?
     @State private var savingPreset = false
     @State private var presetName = ""
+    @State private var stageSize: CGSize = .zero
+
+    /// A stage location as points from the experiment's centre.
+    private func pointerLocal(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x - stageSize.width / 2, y: p.y - stageSize.height / 2)
+    }
     /// Which post effect's knobs are open in the panel.
     @State private var openPost: LabPostEffect?
 
@@ -93,8 +99,19 @@ public struct LabStageView: View {
             // ends on release — `DragGesture(minimumDistance: 0)` is the
             // one gesture that reports both.
             .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in if lab.experiment.isHoldable { lab.beginHold() } }
+                .onChanged { g in
+                    if lab.experiment.isHoldable { lab.beginHold() }
+                    if lab.experiment.usesPointer { lab.pointer = pointerLocal(g.location) }
+                }
                 .onEnded { _ in lab.endHold() })
+            .onContinuousHover { phase in
+                guard lab.experiment.usesPointer else { return }
+                switch phase {
+                case .active(let p): lab.pointer = pointerLocal(p)
+                case .ended: lab.pointer = nil
+                }
+            }
+            .background(GeometryReader { geo in Color.clear.onAppear { stageSize = geo.size }.onChange(of: geo.size) { _, s in stageSize = s } })
             if lab.showPod, !lab.experiment.usesPhoneCanvas {
                 podPreview
                     .padding(20)
@@ -585,6 +602,8 @@ public struct LabExperimentView: View {
         case .thinkingOrbs: LabThinkingOrbsView(frame: frame)
         case .orbKit: LabOrbKitView(frame: frame)
         case .beamKit: LabBeamKitView(frame: frame)
+        case .gooey: LabGooeyView(frame: frame, config: config)
+        case .metal: LabMetalView(frame: frame, config: config)
         case .water: LabWaterView(frame: frame) { ring }
         case .haze: LabHazeView(frame: frame) { ring }
         case .fizz: LabFizzView(frame: frame) { ring }

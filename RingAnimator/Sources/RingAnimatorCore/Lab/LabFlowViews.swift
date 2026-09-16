@@ -743,3 +743,228 @@ struct LabHoldView: View {
         }
     }
 }
+
+// MARK: - Gooey (UI) — libraries.dev's Gooey, natively
+
+/// A round + button opening into items with a gooey stretch. The goo is
+/// SwiftUI's own Canvas filters — a blur, then an alpha threshold — the
+/// same construction as the web's SVG `feGaussianBlur` + `feColorMatrix`.
+/// Icons are drawn separately on top so they stay crisp.
+struct LabGooeyView: View {
+    let frame: LabFrame
+    @ObservedObject var config: RingConfig
+
+    private static let icons = ["camera.fill", "photo.fill", "mic.fill", "paperclip", "location.fill", "face.smiling"]
+
+    var body: some View {
+        let effect = Int(frame.p("effect", .gooey))
+        let items = Int(frame.p("items", .gooey))
+        let blur = frame.p("blur", .gooey)
+        let contrast = frame.p("contrast", .gooey)
+        let waviness = frame.p("waviness", .gooey)
+        let spread = frame.p("spread", .gooey)
+        let openD = frame.p("openDuration", .gooey) / 1000, closeD = frame.p("closeDuration", .gooey) / 1000
+        let openS = frame.p("openStagger", .gooey) / 1000, closeS = frame.p("closeStagger", .gooey) / 1000
+        let antic = frame.p("anticipation", .gooey), anticD = frame.p("anticipationDuration", .gooey) / 1000
+        let iconFade = frame.p("iconFade", .gooey) / 1000, iconDelay = frame.p("iconDelay", .gooey) / 1000
+        let auto = frame.p("auto", .gooey) >= 0.5
+        // Open or closed: taps toggle; auto flips every 3 s.
+        let autoOpen = auto && Int(frame.time / 3) % 2 == 1
+        let open = (frame.taps % 2 == 1) != autoOpen
+        // Time since the last toggle: the tap, or the auto flip.
+        let since = min(frame.sinceTap, auto ? frame.time.truncatingRemainder(dividingBy: 3) : .infinity)
+        let fill: Color = {
+            switch Int(frame.p("fill", .gooey)) {
+            case 1: return Color(white: 0.92)
+            case 2: return Color(hex: "#5AC8FA")
+            case 3: return Color(hex: "#FFCF9E")
+            case 4: return frame.colors.first ?? .white
+            default: return Color(white: 0.13)
+            }
+        }()
+        let iconColor: Color = Int(frame.p("fill", .gooey)) == 0 ? .white : Color(white: 0.1)
+        let R: CGFloat = 26
+        let travel = 64.0 * spread
+
+        // Per-item progress 0…1 with stagger, eased, plus the anticipation
+        // (a pull the other way before the move).
+        func progress(_ i: Int) -> Double {
+            let d = open ? openD : closeD
+            let s = open ? openS : closeS
+            let t = max(0, since - Double(i) * s)
+            let raw = min(1, t / max(d, 0.01))
+            let eased = 1 - pow(1 - raw, 3)
+            return open ? eased : 1 - eased
+        }
+        func anticipationOffset(_ i: Int) -> Double {
+            guard open, antic > 0 else { return 0 }
+            let t = max(0, since - Double(i) * openS)
+            guard t < anticD else { return 0 }
+            let u = t / anticD
+            return -antic * sin(u * .pi)
+        }
+        func position(_ i: Int, _ p: Double, center: CGPoint) -> (CGPoint, CGSize) {
+            let dist = travel * p + anticipationOffset(i)
+            switch effect {
+            case 1: // Move: straight up in a column.
+                return (CGPoint(x: center.x, y: center.y - dist * Double(i + 1) * 0.9), CGSize(width: R * 2, height: R * 2))
+            case 2: // Bend: along an arc up and to the left.
+                let a = .pi / 2 + Double(i) * 0.55 * p
+                return (CGPoint(x: center.x - cos(a) * dist * 1.4 * Double(i + 1) * 0.5, y: center.y - sin(a) * dist * Double(i + 1) * 0.6),
+                        CGSize(width: R * 2, height: R * 2))
+            case 3: // Melt: drips downward, stretching as they go.
+                return (CGPoint(x: center.x, y: center.y + dist * Double(i + 1) * 0.8),
+                        CGSize(width: R * 2 * (1 - 0.2 * p), height: R * 2 * (1 + 0.5 * p * (1 - p) * 4)))
+            default: // Morph: fan out up-left, growing from nothing.
+                let a = .pi / 2 + Double(i) * 0.5 + 0.1
+                return (CGPoint(x: center.x - cos(a) * dist * Double(i + 1) * 0.5 * 1.3, y: center.y - sin(a) * dist * Double(i + 1) * 0.55),
+                        CGSize(width: R * 2 * (0.3 + 0.7 * p), height: R * 2 * (0.3 + 0.7 * p)))
+            }
+        }
+
+        return LabPhoneCanvas(frame: frame) { size in
+            let center = CGPoint(x: size.width * 0.75, y: size.height * 0.7)
+            ZStack {
+                Color.black.opacity(frame.darkStage ? 0.5 : 0.1)
+                Canvas { ctx, _ in
+                    // The goo: everything drawn in this layer is blurred, then
+                    // thresholded, so nearby shapes bridge.
+                    ctx.addFilter(.alphaThreshold(min: 0.5, max: 1, color: fill))
+                    ctx.addFilter(.blur(radius: blur * (contrast / 18)))
+                    ctx.drawLayer { layer in
+                        let wob = waviness * sin(frame.time * 6)
+                        layer.fill(Path(ellipseIn: CGRect(x: center.x - R - wob, y: center.y - R, width: R * 2 + wob * 2, height: R * 2)), with: .color(fill))
+                        for i in 0..<items {
+                            let p = progress(i)
+                            guard p > 0.001 else { continue }
+                            let (pt, sz) = position(i, p, center: center)
+                            layer.fill(Path(ellipseIn: CGRect(x: pt.x - sz.width / 2, y: pt.y - sz.height / 2, width: sz.width, height: sz.height)), with: .color(fill))
+                        }
+                    }
+                }
+                // Icons, crisp, on top: the + rotates to × as it opens.
+                let mainP = progress(0)
+                Image(systemName: "plus")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .rotationEffect(.degrees(45 * mainP))
+                    .position(center)
+                ForEach(0..<items, id: \.self) { i in
+                    let p = progress(i)
+                    let (pt, _) = position(i, p, center: center)
+                    let t = max(0, since - Double(i) * openS - iconDelay)
+                    let iconAlpha = open ? min(1, t / max(iconFade, 0.01)) : max(0, 1 - since / max(iconFade, 0.01))
+                    Image(systemName: Self.icons[i % Self.icons.count])
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(iconColor)
+                        .opacity(iconAlpha * (p > 0.6 ? 1 : 0))
+                        .position(pt)
+                }
+                VStack {
+                    Spacer()
+                    Text("Tap to open")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.bottom, 20)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Metal (UI) — libraries.dev's Metal v2, natively
+
+struct LabMetalView: View {
+    let frame: LabFrame
+    @ObservedObject var config: RingConfig
+
+    var body: some View {
+        let type = Int(frame.p("type", .metal))
+        let preset = Float(frame.p("color", .metal))
+        let ringW = frame.p("ring", .metal)
+        let optGlow = frame.p("optGlow", .metal) >= 0.5, optRefl = frame.p("optReflection", .metal) >= 0.5
+        let optShadow = frame.p("optShadow", .metal) >= 0.5, optBend = frame.p("optBend", .metal) >= 0.5
+        let footprint: CGSize = {
+            switch type {
+            case 1: return CGSize(width: 180, height: 52)
+            case 2: return CGSize(width: 220, height: 44)
+            case 3: return CGSize(width: 96, height: 30)
+            default: return CGSize(width: 56, height: 56)
+            }
+        }()
+        let shapeKind: Float = type == 0 ? 0 : (type == 3 ? 1 : (type == 1 ? 1 : 2))
+        let lab = PerceptualGradient.labTriples(frame.colors)
+        // Pointer, in the control's own points. Hover is felt within the
+        // control's footprint plus the bend reach.
+        let local: CGPoint? = frame.pointer.map { CGPoint(x: $0.x + footprint.width / 2, y: $0.y + footprint.height / 2) }
+        let hovering = local.map { p in
+            p.x > -40 && p.y > -40 && p.x < footprint.width + 40 && p.y < footprint.height + 40
+        } ?? false
+        let pointerArg = local ?? CGPoint(x: -1, y: -1)
+        let glowOn = optGlow && hovering
+        ZStack {
+            // The glow: the palette, soft, under the control, on hover.
+            RoundedRectangle(cornerRadius: shapeKind == 0 ? footprint.width / 2 : (shapeKind == 1 ? footprint.height / 2 : footprint.height * 0.45), style: .continuous)
+                .fill(AngularGradient(colors: PerceptualGradient.closedSweep(through: frame.colors.map(PerceptualGradient.rgb), count: 24), center: .center, angle: .degrees(frame.time * 30)))
+                .frame(width: footprint.width, height: footprint.height)
+                .blur(radius: 14)
+                .opacity(glowOn ? 0.35 * frame.p("glow", .metal) : 0)
+                .animation(.easeOut(duration: frame.p(glowOn ? "appear" : "disappear", .metal) / 1000), value: glowOn)
+            // The control itself.
+            controlBody(type: type, footprint: footprint)
+            // The ring, the inner shadow, the reflection.
+            // Not `.clear`: a view with nothing in it gives colorEffect
+            // nothing to rasterise and the ring never draws. 1% alpha is
+            // invisible and enough.
+            Rectangle()
+                .fill(Color.white.opacity(0.01))
+                .frame(width: footprint.width, height: footprint.height)
+                .colorEffect(ShaderLibrary.bundle(.module).labMetal(
+                    .float2(footprint), .float(Float(frame.time)), .float(shapeKind), .float(Float(ringW)),
+                    .float(preset), .float(Float(frame.p("strength", .metal))), .float(Float(frame.p("scale", .metal))),
+                    .float(Float(optShadow ? frame.p("innerShadow", .metal) : 0)),
+                    .float2(optRefl ? pointerArg : CGPoint(x: -1, y: -1)),
+                    .float(Float(frame.p("rReach", .metal) / 10)), .float(Float(frame.p("rDistance", .metal))),
+                    .float(Float(frame.p("rFalloff", .metal))), .float(Float(frame.p("rSpecular", .metal))),
+                    .floatArray(lab)))
+        }
+        .frame(width: footprint.width + 80, height: footprint.height + 80)
+        .visualEffect { content, proxy in
+            // The dent: the whole control bends toward the pointer.
+            let p = local.map { CGPoint(x: $0.x + 40, y: $0.y + 40) } ?? CGPoint(x: -1, y: -1)
+            return content.distortionEffect(
+                ShaderLibrary.bundle(.module).labDent(.float2(optBend ? p : CGPoint(x: -1, y: -1)),
+                                                       .float(Float(frame.p("reach", .metal))),
+                                                       .float(Float(frame.p("dent", .metal) * frame.p("bend", .metal)))),
+                maxSampleOffset: CGSize(width: 30, height: 30))
+        }
+    }
+
+    @ViewBuilder
+    private func controlBody(type: Int, footprint: CGSize) -> some View {
+        let dark = frame.darkStage
+        let bg = dark ? Color(white: 0.1) : Color(white: 0.97)
+        let fg = dark ? Color.white : Color.black
+        switch type {
+        case 1:
+            Text("Continue")
+                .font(.headline).foregroundStyle(fg)
+                .frame(width: footprint.width, height: footprint.height)
+                .background(Capsule().fill(bg))
+        case 2:
+            Text("Nexus")
+                .font(.system(size: 28, weight: .bold)).foregroundStyle(fg)
+                .frame(width: footprint.width, height: footprint.height)
+        case 3:
+            Text("NEW")
+                .font(.caption.weight(.bold)).foregroundStyle(fg)
+                .frame(width: footprint.width, height: footprint.height)
+                .background(Capsule().fill(bg))
+        default:
+            Image(systemName: "arrow.up")
+                .font(.system(size: 20, weight: .semibold)).foregroundStyle(fg)
+                .frame(width: footprint.width, height: footprint.height)
+                .background(Circle().fill(bg))
+        }
+    }
+}
