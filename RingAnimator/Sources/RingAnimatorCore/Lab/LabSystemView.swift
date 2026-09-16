@@ -90,14 +90,21 @@ public struct LabPlayView: View {
         // What the panel is: the pod, or the action's surface.
         let item: LabActionItem? = { if case .surface(let i, _) = step { return i } else { return nil } }()
         let verb: LabAgentVerb = { if case .surface(_, let v) = step { return v } else { return .idle } }()
-        let surface = item.map { spec.resolvedSurface(for: $0) } ?? LabSurfaceSpec(kind: .pod)
+        // A hold that asks for the whole screen gets it, whatever Talk's
+        // container is — same adornments, full-screen shape.
+        let held = frame.holding > 0 || frame.sinceHold < talk
+        let surface: LabSurfaceSpec = {
+            guard let item else { return LabSurfaceSpec(kind: .pod) }
+            var s = spec.resolvedSurface(for: item)
+            if held, spec.longPress.isFullScreen { s.kind = .fullScreen }
+            return s
+        }()
         let state = surface.morphState
         let look = spec.resolvedLook(for: verb)
         let panelFrame = frame.applying(look, config: config).applying(surface)
         // The content's transition clock runs from when the surface
         // opened, not from each verb — the verbs change inside it.
         let firstSurface = steps.firstIndex { if case .surface = $0 { return true } else { return false } } ?? index
-        let held = frame.holding > 0 || frame.sinceHold < talk
         let surfaceAge = held ? sinceChange
             : (auto && index >= firstSurface ? sinceChange + Double(index - firstSurface) * hold : sinceChange)
         let lastSurface = steps.lastIndex { if case .surface = $0 { return true } else { return false } } ?? index

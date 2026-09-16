@@ -122,15 +122,20 @@ public enum LabAskPlacement: String, CaseIterable, Identifiable, Codable, Sendab
 /// What a gesture on the pod does.
 public enum LabGestureResult: String, CaseIterable, Identifiable, Codable, Sendable {
     case nothing, menu, ask, talk, show, remind, photo
+    /// Talk, taking the whole screen whatever container Talk normally
+    /// opens — the voice-forward hold (Chris, 2026-09-16).
+    case fullScreen
     public var id: String { rawValue }
     public var label: String {
         switch self {
         case .nothing: return "Nothing"
         case .menu: return "Open the menu"
+        case .fullScreen: return "Talk, full screen"
         default: return item.map { "Open \($0.label)" } ?? rawValue
         }
     }
-    public var item: LabActionItem? { LabActionItem(rawValue: rawValue) }
+    public var item: LabActionItem? { self == .fullScreen ? .talk : LabActionItem(rawValue: rawValue) }
+    public var isFullScreen: Bool { self == .fullScreen }
 }
 
 // MARK: - A look, a surface, a spec
