@@ -51,7 +51,8 @@ public enum QuidgetSize: String, CaseIterable, Identifiable, Sendable {
     public var label: String { rawValue.capitalized }
 }
 
-/// The house's modes, as the security quidget shows them.
+/// The house's modes, as the security quidget shows them — each with
+/// its own colour from the Gap UI page: red, amber, teal.
 public enum SecurityMode: String, CaseIterable, Identifiable, Sendable {
     case armAway, armHome, standby
     public var id: String { rawValue }
@@ -60,6 +61,24 @@ public enum SecurityMode: String, CaseIterable, Identifiable, Sendable {
         case .armAway: return "Arm Away"
         case .armHome: return "Arm Home"
         case .standby: return "Standby"
+        }
+    }
+    /// The selected button's gradient, top to bottom.
+    var gradient: [Color] {
+        switch self {
+        case .armAway: return [Color(hex: "#EA333A"), Color(hex: "#BB2722")]
+        case .armHome: return [Color(hex: "#F7CE46"), Color(hex: "#F19E39")]
+        case .standby: return [Color(hex: "#6AE5BC"), Color(hex: "#5CC9A5")]
+        }
+    }
+    /// The selected glyph: white in light mode, the colour's own dark
+    /// in dark mode.
+    func glyphInk(dark: Bool) -> Color {
+        guard dark else { return .white }
+        switch self {
+        case .armAway: return Color(hex: "#851918")
+        case .armHome: return Color(hex: "#B27628")
+        case .standby: return Color(hex: "#408F76")
         }
     }
 }
@@ -91,10 +110,13 @@ enum QuidgetInk {
     static let greenInk = Color(hex: "#174A2C")
     static let blue = Color(hex: "#69A2E8")            // the thermostat, cooling
     static let blueInk = Color(hex: "#17539C")
-    static let redTop = Color(red: 234 / 255, green: 51 / 255, blue: 58 / 255)
-    static let redBottom = Color(red: 187 / 255, green: 39 / 255, blue: 34 / 255)
     static let glyphGrey = Color(hex: "#8E919E")
     static let label = Color(hex: "#636466")
+    // Dark mode, from the Gap UI page (25672:5560).
+    static let groundDark = Color.black
+    static let modeWellDark = Color(hex: "#2C2C30")
+    static let iconDark = Color(hex: "#404040")
+    static let bubbleDark = Color(hex: "#2C2C30")
     static let chip = Color(hex: "#2487FF")
     static let statusGreen = Color(hex: "#1EB955")
 }
@@ -105,14 +127,16 @@ struct QuidgetGlass: ViewModifier {
     /// The file's white-at-80% panel, or clear glass over the chat.
     var white: Double = 0
     @Environment(\.labNoGlass) private var noGlass
+    @Environment(\.colorScheme) private var scheme
+    private var dark: Bool { scheme == .dark }
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Group {
             if noGlass {
-                content.background(shape.fill(Color.white.opacity(max(0.7, white))))
+                content.background(shape.fill((dark ? Color(hex: "#1C1C1E") : Color.white).opacity(max(0.7, white))))
             } else if #available(iOS 26.0, macOS 26.0, *) {
-                content.glassEffect(white > 0 ? .regular.tint(Color.white.opacity(white)) : .regular, in: shape)
+                content.glassEffect(white > 0 ? .regular.tint((dark ? Color(hex: "#1C1C1E") : Color.white).opacity(white)) : .regular, in: shape)
             } else {
                 content.background(.regularMaterial, in: shape)
             }
@@ -235,6 +259,8 @@ public struct QuidgetView: View {
     public let size: QuidgetSize
     @ObservedObject var demo: QuidgetDemo
     var namespace: Namespace.ID? = nil
+    @Environment(\.colorScheme) private var scheme
+    private var dark: Bool { scheme == .dark }
 
     public init(kind: QuidgetKind, size: QuidgetSize, demo: QuidgetDemo, namespace: Namespace.ID? = nil) {
         self.kind = kind
@@ -293,8 +319,8 @@ public struct QuidgetView: View {
             // The file's tall card (2:721): 384 × 527, the title 38 down,
             // the track 160 × 383 at 111, the fill inset 10, the knob 64.
             VStack(spacing: 0) {
-                Text("Patio Light").font(.system(size: 17, weight: .semibold)).foregroundStyle(.black).padding(.top, 38)
-                Text("\(Int((demo.lightLevel * 100).rounded()))%").font(.system(size: 17)).foregroundStyle(.black)
+                Text("Patio Light").font(.system(size: 17, weight: .semibold)).foregroundStyle(dark ? .white : .black).padding(.top, 38)
+                Text("\(Int((demo.lightLevel * 100).rounded()))%").font(.system(size: 17)).foregroundStyle(dark ? .white : .black)
                     .contentTransition(.numericText())
                 QuidgetDimmer(level: $demo.lightLevel, track: CGSize(width: 160, height: 383), inset: 10, knobHeight: 64, icon: 22)
                     .padding(.top, 30)
@@ -363,7 +389,7 @@ public struct QuidgetView: View {
                 .frame(width: 103.33)
                 .padding(.top, 18)
                 .frame(width: Self.wellSize.width, height: Self.wellSize.height, alignment: .top)
-                .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.modeWell))
+                .modifier(QuidgetInset(radius: 24, fill: dark ? QuidgetInk.modeWellDark : QuidgetInk.modeWell))
                 .padding(.top, 11).padding(.bottom, 9).padding(.horizontal, 10)
                 .frame(width: Self.smallSize.width, height: Self.smallSize.height)
                 .modifier(QuidgetGlass(radius: 34))
@@ -410,7 +436,7 @@ public struct QuidgetView: View {
         .padding(.horizontal, 18.5)
         .padding(.top, 30)
         .frame(width: 363, height: 148, alignment: .top)
-        .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.modeWell))
+        .modifier(QuidgetInset(radius: 24, fill: dark ? QuidgetInk.modeWellDark : QuidgetInk.modeWell))
     }
 
     /// Icon + label, as the file's "Card": a 64 circle with the mode's
@@ -420,24 +446,24 @@ public struct QuidgetView: View {
             ZStack {
                 if selected {
                     Circle()
-                        .fill(LinearGradient(colors: [QuidgetInk.redTop, QuidgetInk.redBottom], startPoint: .top, endPoint: .bottom))
+                        .fill(LinearGradient(colors: mode.gradient, startPoint: .top, endPoint: .bottom))
                         .overlay(Circle().stroke(Color.black.opacity(0.16), lineWidth: 2).blur(radius: 3).offset(y: 1).mask(Circle()))
                         .shadow(color: .white.opacity(0.25), radius: 0.5, y: 1)
                 } else {
                     Circle()
-                        .fill(Color.white)
+                        .fill(dark ? QuidgetInk.iconDark : Color.white)
                         .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 3).blur(radius: 4).offset(y: -3).mask(Circle()))
                         .shadow(color: .black.opacity(0.16), radius: 2, y: 2)
                         .shadow(color: .black.opacity(0.08), radius: 6, y: 6)
                 }
                 QuidgetGlyph.shape(mode)
-                    .fill(selected ? Color.white : QuidgetInk.glyphGrey)
+                    .fill(selected ? mode.glyphInk(dark: dark) : QuidgetInk.glyphGrey)
                     .frame(width: 36, height: 36)
             }
             .frame(width: 64, height: 64)
             Text(mode.label)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(QuidgetInk.label)
+                .foregroundStyle(dark ? QuidgetInk.glyphGrey : QuidgetInk.label)
                 .lineLimit(1)
         }
     }
@@ -449,7 +475,7 @@ public struct QuidgetView: View {
                 .foregroundStyle(QuidgetInk.glyphGrey)
                 .frame(width: 32)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(.black)
+                Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(dark ? .white : .black)
                 Text(status).font(.system(size: 15)).foregroundStyle(QuidgetInk.statusGreen)
                     .contentTransition(.numericText())
             }
@@ -646,19 +672,22 @@ public struct QuidgetChatView: View {
     let exchanges: [QuidgetExchange]
     let size: QuidgetSize
     let screen: CGSize
+    /// The Gap UI page's dark mode.
+    var dark = false
     @Namespace private var ns
     @Environment(\.labNoGlass) private var noGlass
 
-    public init(demo: QuidgetDemo, exchanges: [QuidgetExchange], size: QuidgetSize = .small, screen: CGSize) {
+    public init(demo: QuidgetDemo, exchanges: [QuidgetExchange], size: QuidgetSize = .small, screen: CGSize, dark: Bool = false) {
         self.demo = demo
         self.exchanges = exchanges
         self.size = size
         self.screen = screen
+        self.dark = dark
     }
 
     public var body: some View {
         ZStack(alignment: .top) {
-            QuidgetInk.ground
+            dark ? QuidgetInk.groundDark : QuidgetInk.ground
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(exchanges) { x in
                     exchange(x)
@@ -673,7 +702,7 @@ public struct QuidgetChatView: View {
             QuidgetOverlay(demo: demo, namespace: ns, screen: screen)
         }
         .frame(width: screen.width, height: screen.height)
-        .environment(\.colorScheme, .light)
+        .environment(\.colorScheme, dark ? .dark : .light)
     }
 
     private func exchange(_ x: QuidgetExchange) -> some View {
@@ -683,17 +712,17 @@ public struct QuidgetChatView: View {
                 Spacer(minLength: 40)
                 Text(x.ask)
                     .font(.system(size: 17)).tracking(-0.43)
-                    .foregroundStyle(.black)
+                    .foregroundStyle(dark ? .white : .black)
                     .multilineTextAlignment(.trailing)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color.white))
+                    .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(dark ? QuidgetInk.bubbleDark : Color.white))
                     .frame(maxWidth: 307, alignment: .trailing)
             }
             .padding(.trailing, 27)
             Text(x.reply)
                 .font(.system(size: 17)).tracking(-0.43)
-                .foregroundStyle(.black)
+                .foregroundStyle(dark ? .white : .black)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(width: 370, alignment: .leading)
@@ -736,7 +765,7 @@ public struct QuidgetChatView: View {
                         .foregroundStyle(QuidgetInk.chip)
                         .padding(.horizontal, 12)
                         .frame(height: 28)
-                        .background(Capsule().fill(Color.white))
+                        .background(Capsule().fill(dark ? QuidgetInk.bubbleDark : Color.white))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -817,7 +846,7 @@ struct LabQuidgetsView: View {
         let size: QuidgetSize = frame.p("size", .quidgets) >= 0.5 ? .medium : .small
         let exchanges = scene >= QuidgetExchange.all.count ? QuidgetExchange.all : [QuidgetExchange.all[scene]]
         LabPhoneCanvas(frame: frame) { screen in
-            QuidgetChatView(demo: demo, exchanges: exchanges, size: size, screen: screen)
+            QuidgetChatView(demo: demo, exchanges: exchanges, size: size, screen: screen, dark: frame.darkStage)
         }
     }
 }
