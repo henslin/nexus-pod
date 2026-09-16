@@ -25,6 +25,9 @@ public struct LabScript: Identifiable, Equatable, Sendable {
     public var checking: String
     public var answer: String
     public var followUps: [String]
+    /// A quidget the reply carries — the thing you asked about, as a
+    /// control, so you never ask twice to get a setting right.
+    public var quidget: QuidgetKind? = nil
 
     public static let all: [LabScript] = [
         LabScript(id: "battery", title: "Quick question",
@@ -47,6 +50,21 @@ public struct LabScript: Identifiable, Equatable, Sendable {
                   checking: "Checking what the app used…",
                   answer: "Nexus used 9% today, nearly all of it Live View on the doorbell. Turning off background refresh for the Feed saves most of that without missing an alert.",
                   followUps: ["Turn it off", "Show usage", "Not now"]),
+        LabScript(id: "patio", title: "Dim the patio light",
+                  ask: "Dim the Patio Light",
+                  checking: "Dimming the patio light…",
+                  answer: "I’ve dimmed the lights to 40%.",
+                  followUps: [], quidget: .light),
+        LabScript(id: "arm", title: "Arm the house",
+                  ask: "Arm my system",
+                  checking: "Arming the cameras…",
+                  answer: "Your cameras are armed and your system is in Arm Away mode.",
+                  followUps: ["Arm Away when you leave?", "Disarm when you arrive home?"], quidget: .security),
+        LabScript(id: "packages", title: "Packages today",
+                  ask: "Did I receive any packages today?",
+                  checking: "Checking the front door…",
+                  answer: "You received a package from Amazon at 2:15PM.",
+                  followUps: [], quidget: .clip),
     ]
 
     public static func named(_ index: Int) -> LabScript { all[max(0, min(all.count - 1, index))] }
@@ -164,8 +182,12 @@ struct LabConversationView: View {
     @ObservedObject var config: RingConfig
     let size: CGSize
     var heroScale: Double = 0.42
+    @StateObject private var quidgets = QuidgetDemo()
+    @Namespace private var quidgetNS
 
     private var c: LabConversation { conversation }
+    /// The reply's quidget, once the answer has landed.
+    private var quidget: QuidgetKind? { c.verb == .done ? c.script.quidget : nil }
     private var primary: Color { frame.colors.first ?? .accentColor }
 
     var body: some View {
@@ -250,11 +272,15 @@ struct LabConversationView: View {
                     LabStreamWords(text: c.script.answer, elapsed: c.answerElapsed, size: 17, glow: primary.opacity(0.5))
                         .padding(.leading, 4)
                 }
+                if let quidget {
+                    quidgetInline(quidget, medium: quidget == .clip)
+                }
                 if c.showsFollowUps { followUps(size: 13).padding(.leading, 4) }
                 Spacer(minLength: 0)
                 inputBar(height: 44)
             }
             .padding(20)
+            .overlay { QuidgetOverlay(demo: quidgets, namespace: quidgetNS, screen: size) }
         case .fullScreen:
             VStack(spacing: 16) {
                 Spacer(minLength: 30)
@@ -276,6 +302,9 @@ struct LabConversationView: View {
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: size.width - 56)
                 }
+                if let quidget {
+                    quidgetInline(quidget, medium: quidget == .clip)
+                }
                 if c.showsFollowUps { followUps(size: 14, centered: true) }
                 Spacer()
                 if c.mode == .voice {
@@ -288,6 +317,20 @@ struct LabConversationView: View {
                 Spacer().frame(height: 34)
             }
         }
+    }
+
+    /// The quidget's place in the reply. It stays while the quidget is
+    /// expanded over the container, and the quidget comes back to it.
+    private func quidgetInline(_ kind: QuidgetKind, medium: Bool) -> some View {
+        let s: QuidgetSize = medium ? .medium : .small
+        let h: CGFloat = s == .small ? QuidgetView.smallSize.height : (kind == .clip ? 362 : 162)
+        return ZStack(alignment: .leading) {
+            Color.clear.frame(height: h)
+            if quidgets.expanded != kind {
+                QuidgetView(kind: kind, size: s, demo: quidgets, namespace: quidgetNS)
+            }
+        }
+        .transition(.opacity)
     }
 
     /// The next move, as taps.

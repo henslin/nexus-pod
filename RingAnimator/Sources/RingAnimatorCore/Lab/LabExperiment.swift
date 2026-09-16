@@ -101,6 +101,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case system
     case sunflower
     case askButton
+    case quidgets
 
     public var id: String { rawValue }
 
@@ -187,6 +188,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .system:     return "The Agent"
         case .sunflower:  return "Bloom Field"
         case .askButton:  return "Ask Button"
+        case .quidgets:   return "Quidgets"
         }
     }
 
@@ -263,6 +265,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .system:     return "Assembly · every slot, played"
         case .sunflower:  return "SwiftUI · Canvas + Speech"
         case .askButton:  return "SwiftUI · Liquid Glass + Canvas filters"
+        case .quidgets:   return "SwiftUI · Liquid Glass + matched geometry"
         }
     }
 
@@ -349,6 +352,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .system:     return "square.grid.2x2"
         case .sunflower:  return "sun.max.fill"
         case .askButton:  return "sparkles"
+        case .quidgets:   return "square.grid.2x2.fill"
         }
     }
 
@@ -510,6 +514,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "The iOS 18 Siri signature: a glow that runs round the screen’s edge in the palette, breathing with the voice. The full-screen voice interface probably wants this with the ring in the middle, and it’s a blurred stroke — cheap."
         case .caption:
             return "The transcript: words arriving as the agent speaks — fading, blurring in, or typed — with a glow in the palette. The voice interface’s text, to go with Edge Glow and the hero ring."
+        case .quidgets:
+            return "Quick widgets in the agent’s replies — Chris’s designs, to the pixel. Ask for the patio light and the reply carries the dimmer; ask to arm the house and it carries the modes; ask about packages and it carries the clip. Tap a quidget to expand it over the chat, change the thing, tap off and it goes back — so you never ask twice to get a setting right. Small, medium, or expanded; up to three small ones side by side."
         case .askButton:
             return "Ask Nexus, everywhere — the agent on a screen that isn’t its tab. Placement (floating, in the navigation bar, or the pod itself), style (the goo, a glass pill, the orb, a bar above the tab bar), and what it offers when tapped: with Context on, the first suggestions are about the screen you’re on. Tap to open."
         case .sunflower:
@@ -578,7 +584,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// which are about the whole screen.
     public var usesPhoneCanvas: Bool {
         switch self {
-        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system, .sunflower, .askButton: return true
+        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system, .sunflower, .askButton, .quidgets: return true
         default: return false
         }
     }
@@ -613,7 +619,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .journey, .agentStates, .hold, .sunflower: return .flows
         case .askButton, .beamKit, .gooey, .metal, .buttonGlow: return .controls
-        case .waveform, .edgeGlow, .caption, .morph, .sheet: return .surfaces
+        case .waveform, .edgeGlow, .caption, .morph, .sheet, .quidgets: return .surfaces
         case .system: return .qBranch
         default: return .orb
         }
@@ -1215,7 +1221,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("desat", "Desaturate", 0...1, 0, "Toward monochrome."),
         ]
         case .journey: return [
-            .init("script", "Conversation", 0...3, 0, "Which ask the chat shows.", "%.0f", group: "Chat", choices: LabScript.all.map(\.title), kind: .popup),
+            .init("script", "Conversation", 0...6, 0, "Which ask the chat shows.", "%.0f", group: "Chat", choices: LabScript.all.map(\.title), kind: .popup),
             .init("orbPod", "In the pod", 0...8, 7, "Their orb's verb in the tab bar.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("orbChat", "In chat", 0...8, 0, "Their orb's verb in the chat sheet.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("orbVoice", "In voice", 0...8, 3, "Their orb's verb full screen.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
@@ -1259,6 +1265,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("inset", "Inset", 0...40, 0, "Distance in from the edge.", "%.0f pt"),
             .init("ringSize", "Hero Ring", 0...0.9, 0.5, "A ring in the middle, as a fraction of width. 0 hides it."),
         ]
+        case .quidgets: return [
+            .init("scene", "Exchange", 0...3, 3, "Which reply the chat shows — or all three.", "%.0f", group: "Chat", choices: ["Patio light", "Arm the house", "Packages", "All three"], kind: .popup),
+            .init("size", "Size", 0...1, 0, "How the quidget sits in the reply. Clips are always medium.", "%.0f", group: "Chat", choices: ["Small", "Medium"], kind: .segmented),
+        ]
         case .askButton: return [
             .init("placement", "Placement", 0...2, 0, "Where it sits on screens that aren’t the Nexus tab.", "%.0f", group: "Placement", choices: ["Floating", "Nav bar", "The pod"]),
             .init("style", "Style", 0...3, 0, "What it is.", "%.0f", group: "Appearance", choices: ["Goo", "Pill", "Orb", "Bar"]),
@@ -1294,7 +1304,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("textGlow", "Glow", 0...1, 0.4, "On each arriving word.", group: "Transcript"),
         ]
         case .system: return [
-            .init("script", "Conversation", 0...3, 0, "Which ask the play runs through the states.", "%.0f", group: "Play", choices: LabScript.all.map(\.title), kind: .popup),
+            .init("script", "Conversation", 0...6, 0, "Which ask the play runs through the states.", "%.0f", group: "Play", choices: LabScript.all.map(\.title), kind: .popup),
             .init("hold", "Hold", 0.5...8, 3, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
             .init("auto", "Auto-advance", 0...1, 1, "Steps on the clock; off, only a tap or the strip does.", "%.0f", group: "Play", choices: ["Off", "On"]),
             .init("spring", "Spring", 0.2...1.2, 0.55, "Response of the morph between surfaces.", group: "Play"),
