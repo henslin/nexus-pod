@@ -622,7 +622,10 @@ struct QuidgetDimmer: View {
 
     var body: some View {
         let inner = CGSize(width: track.width - inset * 2, height: track.height - inset * 2)
-        let fillH = max(knobHeight * 0.6, CGFloat(level) * inner.height)
+        // At the bottom the fill is gone — the light is off, and only the
+        // grabber is left (Chris, 2026-09-16). It fades over the last 8%.
+        let fillH = CGFloat(level) * inner.height
+        let fillAlpha = min(1, level / 0.08)
         ZStack(alignment: .bottom) {
             // The fill grows up from the bottom and darkens as the light
             // dims (Chris, 2026-09-16): the file's amber at full, a deep
@@ -632,7 +635,8 @@ struct QuidgetDimmer: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Self.fill(at: level))
                     .modifier(QuidgetInset(radius: 20, fill: .clear, strong: true))
-                    .frame(width: inner.width, height: fillH)
+                    .frame(width: inner.width, height: max(0, fillH))
+                    .opacity(fillAlpha)
             }
             .frame(width: inner.width, height: inner.height, alignment: .bottom)
             .padding(.bottom, inset)
@@ -645,6 +649,8 @@ struct QuidgetDimmer: View {
             // The knob's top sits 7 above the fill's top on the tall card
             // (421 vs 428); the same proportion here.
             .padding(.bottom, min(track.height - inset - knobHeight, max(inset, inset + fillH - knobHeight + knobHeight * 0.11)))
+            // The bulb dims with the light.
+            .opacity(0.6 + 0.4 * fillAlpha)
         }
         .frame(width: track.width, height: track.height)
         .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.well))
