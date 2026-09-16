@@ -574,6 +574,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// Responds to press-and-hold — see `LabState.hold`.
     public var isHoldable: Bool { self == .hold }
 
+    /// Libraries.dev's nine orb verbs, for the flows' per-state chips.
+    public static let orbVerbs = ["Working", "Searching", "Solving", "Listening", "Connecting", "Weaving", "Composing", "Breathing", "Shaping"]
+
     /// Hidden from the lists but kept in code — the UI room narrowed to
     /// Morph (Chris, 2026-09-15: "comment these out"). Their pieces live
     /// on as Morph adornments (edge glow, waveform, caption).
@@ -1125,6 +1128,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("dim", "Dim", 0...1, 0.5, "How much the app dims behind."),
         ]
         case .hold: return [
+            .init("orbListening", "Listening", 0...8, 3, "Their orb's verb while held.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
+            .init("orbSpeaking", "Speaking", 0...8, 6, "Their orb's verb after release.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("grow", "Grow Time", 0.2...2, 0.7, "Seconds of hold to reach full screen.", "%.1f s"),
             .init("spring", "Spring", 0.2...1.2, 0.45, "Response."),
             .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom."),
@@ -1177,6 +1182,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("desat", "Desaturate", 0...1, 0, "Toward monochrome."),
         ]
         case .journey: return [
+            .init("orbPod", "In the pod", 0...8, 7, "Their orb's verb in the tab bar.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
+            .init("orbChat", "In chat", 0...8, 0, "Their orb's verb in the chat sheet.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
+            .init("orbVoice", "In voice", 0...8, 3, "Their orb's verb full screen.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("hold", "Hold", 1...8, 3, "Seconds per stage when cycling.", "%.1f s"),
             .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", choices: ["Tap", "Auto"]),
             .init("spring", "Spring", 0.2...1.2, 0.5, "Response — lower is snappier."),
@@ -1188,7 +1196,11 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("dim", "Dim", 0...1, 0.6, "How much the app dims behind the sheet."),
         ]
         case .agentStates: return [
-            .init("hold", "Hold", 0.5...8, 2.5, "Seconds per state when cycling.", "%.1f s"),
+            .init("orbIdle", "Idle", 0...8, 7, "Their orb's verb while idle.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
+            .init("orbListening", "Listening", 0...8, 3, "Their orb's verb while listening.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
+            .init("orbThinking", "Thinking", 0...8, 0, "Their orb's verb while thinking.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
+            .init("orbSpeaking", "Speaking", 0...8, 6, "Their orb's verb while speaking.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
+            .init("hold", "Hold", 0.5...8, 2.5, "Seconds per state when cycling.", "%.1f s", group: "Motion"),
             .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", choices: ["Tap", "Auto"]),
             .init("breath", "Idle Breath", 0...0.2, 0.05, "Idle scale swing."),
             .init("open", "Listen Open", 0...0.6, 0.25, "How much the ring opens when listening."),
@@ -1736,6 +1748,14 @@ public struct LabFrame {
     public func resized(_ d: CGFloat) -> LabFrame {
         var f = self
         f.diameter = d
+        return f
+    }
+
+    /// The same frame with Libraries.dev's orb put in a given verb — how
+    /// a flow drives the hero's state. No effect on any other hero.
+    public func orbVerb(_ index: Double) -> LabFrame {
+        var f = self
+        f.params["orbKit.state"] = index
         return f
     }
 }

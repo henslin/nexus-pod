@@ -101,7 +101,8 @@ struct LabJourneyView: View {
 
                 // The ring, one view, moving between its three homes.
                 let ringFrame = ringFrame(stage, size)
-                LabHeroView(frame: frame, config: config, diameter: ringFrame.width)
+                let verb = [frame.p("orbPod", .journey), frame.p("orbChat", .journey), frame.p("orbVoice", .journey)][stage.rawValue]
+                LabHeroView(frame: frame.orbVerb(verb), config: config, diameter: ringFrame.width)
                     .position(x: ringFrame.midX, y: ringFrame.midY)
                     .animation(spring, value: stage)
             }
@@ -267,11 +268,16 @@ struct LabAgentStatesView: View {
                     .frame(width: d * 1.35 * (1 + voice * 0.25), height: d * 1.35 * (1 + voice * 0.25))
                     .blur(radius: 8)
                     .animation(spring, value: stage)
-                LabHeroView(frame: frame, config: config, diameter: d * 1.3)
+                // The hero, in the verb this state maps to (their orb only —
+                // any other hero ignores it).
+                let verb = [frame.p("orbIdle", .agentStates), frame.p("orbListening", .agentStates),
+                            frame.p("orbThinking", .agentStates), frame.p("orbSpeaking", .agentStates)][stage]
+                LabHeroView(frame: frame.orbVerb(verb), config: config, diameter: d * 1.3)
                     .scaleEffect(scale)
                     .animation(spring, value: stage)
-                // Comet
-                if stage == 2 {
+                // Comet — our own thinking motion, for the ring. Their orb
+                // carries its own verb, so it goes without.
+                if stage == 2, frame.hero == nil {
                     let a = t * frame.p("orbit", .agentStates) * 2
                     let r = d * 0.62
                     ForEach(0..<6, id: \.self) { i in
@@ -720,7 +726,8 @@ struct LabHoldView: View {
                 let heroCenter = CGPoint(x: size.width / 2, y: size.height * 0.42)
                 let d = pod + (heroD - pod) * eased
                 let c = CGPoint(x: podCenter.x + (heroCenter.x - podCenter.x) * eased, y: podCenter.y + (heroCenter.y - podCenter.y) * eased)
-                LabHeroView(frame: frame, config: config, diameter: d)
+                let verb = phase == .talking ? frame.p("orbSpeaking", .hold) : (phase == .idle ? 7 : frame.p("orbListening", .hold))
+                LabHeroView(frame: frame.orbVerb(verb), config: config, diameter: d)
                     .scaleEffect(phase == .talking ? 1 + frame.audio * 0.15 + 0.03 * sin(frame.time * 9) : 1)
                     .position(c)
                     .animation(spring, value: phase)
