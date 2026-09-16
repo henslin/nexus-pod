@@ -32,6 +32,7 @@ public struct LabViewerView: View {
         // The viewer is a room, not a desk: audio on, a bigger stage.
         let state = LabState()
         state.audioReactive = true
+        state.transcribe = true
         state.showPod = false
         // Launch arguments, for screenshots from the command line:
         // `-lab.experiment frostOrb -lab.light 1`.
@@ -67,6 +68,7 @@ public struct LabViewerView: View {
         .onChange(of: lab.audioReactive) { _, on in if on { audio.start() } else { audio.stop() } }
         .onChange(of: lab.audioAttack, initial: true) { _, v in audio.attack = v }
         .onChange(of: lab.audioRelease, initial: true) { _, v in audio.release = v }
+        .onChange(of: lab.transcribe, initial: true) { _, on in audio.transcribing = on }
         .sheet(isPresented: $showingKnobs) { LabKnobsSheet(lab: lab, config: config) }
         .sheet(isPresented: $showingReviews) { LabReviewsSheet(reviews: reviews, order: Self.order) }
         .sheet(isPresented: $showingList) { LabPickerSheet(lab: lab, order: Self.order) }

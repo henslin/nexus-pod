@@ -485,6 +485,7 @@ struct LabCaptionWords: View {
     let rate: Double
     let glow: Double
     let hold: Double
+    @Environment(\.labTextOnDark) private var onDark
 
     private static let sentences = [
         "John arrived home a few minutes ago.",
@@ -510,7 +511,7 @@ struct LabCaptionWords: View {
                         let isNew = age < 0.35
                         Text(style == 2 && w.index == shown - 1 ? String(w.text.prefix(max(1, Int(age * rate * Double(w.text.count) + 1)))) : w.text)
                             .font(.system(size: size, weight: .medium))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(onDark ? Color.white : Color(white: 0.12))
                             .opacity(style == 0 ? min(1, max(0, age * 4 + 0.2)) : 1)
                             .blur(radius: style == 1 && isNew ? (0.35 - age) * 20 : 0)
                             .shadow(color: primary.opacity(isNew ? glow : glow * 0.25), radius: isNew ? 12 : 4)

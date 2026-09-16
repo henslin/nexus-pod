@@ -99,6 +99,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case edgeGlow
     case caption
     case system
+    case sunflower
 
     public var id: String { rawValue }
 
@@ -183,6 +184,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .edgeGlow:   return "Edge Glow"
         case .caption:    return "Caption"
         case .system:     return "Nexus System"
+        case .sunflower:  return "Bloom Field"
         }
     }
 
@@ -257,6 +259,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .edgeGlow:   return "SwiftUI · blur + gradient"
         case .caption:    return "SwiftUI · text transitions"
         case .system:     return "Spec · every slot, played"
+        case .sunflower:  return "SwiftUI · Canvas + Speech"
         }
     }
 
@@ -341,6 +344,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .edgeGlow:   return "iphone.gen3.radiowaves.left.and.right"
         case .caption:    return "text.bubble"
         case .system:     return "square.grid.2x2"
+        case .sunflower:  return "sun.max.fill"
         }
     }
 
@@ -502,6 +506,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "The iOS 18 Siri signature: a glow that runs round the screen’s edge in the palette, breathing with the voice. The full-screen voice interface probably wants this with the ring in the middle, and it’s a blurred stroke — cheap."
         case .caption:
             return "The transcript: words arriving as the agent speaks — fading, blurring in, or typed — with a glow in the palette. The voice interface’s text, to go with Edge Glow and the hero ring."
+        case .sunflower:
+            return "The Bloom app, brought in: a sunflower’s seed spiral filling the screen, and blooms of colour opening across it — on the clock, on a tap, and on your voice. A full-screen, ethereal way to talk to the agent: the field is the agent. A live transcript, natively animated, sits at the bottom when Audio Reactive is on."
         case .system:
             return "The product, assembled. Every slot the Nexus surface needs — the pod, a look per agent state, the menu a tap reveals, the surface each action opens, what tap and long press do — filled from the Lab and played end to end. Tap to step; hold to talk."
         }
@@ -566,16 +572,16 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// which are about the whole screen.
     public var usesPhoneCanvas: Bool {
         switch self {
-        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system: return true
+        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system, .sunflower: return true
         default: return false
         }
     }
 
     /// Advances through stages on tap — see `LabState.advance()`.
-    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols || self == .gooey || self == .system }
+    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols || self == .gooey || self == .system || self == .sunflower }
 
     /// Reads the pointer — hover on the Mac, touch on the phone.
-    public var usesPointer: Bool { self == .metal }
+    public var usesPointer: Bool { self == .metal || self == .sunflower }
 
     /// Responds to press-and-hold — see `LabState.hold`.
     public var isHoldable: Bool { self == .hold || self == .system }
@@ -599,7 +605,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// Which room of the Lab this lives in.
     public var section: LabSection {
         switch self {
-        case .journey, .agentStates, .hold: return .flows
+        case .journey, .agentStates, .hold, .sunflower: return .flows
         case .system: return .system
         case .waveform, .edgeGlow, .caption, .morph, .buttonGlow, .sheet, .beamKit, .gooey, .metal: return .ui
         default: return .orb
@@ -1232,6 +1238,30 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("inset", "Inset", 0...40, 0, "Distance in from the edge.", "%.0f pt"),
             .init("ringSize", "Hero Ring", 0...0.9, 0.5, "A ring in the middle, as a fraction of width. 0 hides it."),
         ]
+        case .sunflower: return [
+            .init("spacing", "Density", 6...24, 10, "Seed spacing, points — the spiral’s scale.", "%.0f pt", group: "Field"),
+            .init("dot", "Dot Size", 1...8, 2.6, "Points, at the centre.", "%.1f pt", group: "Field"),
+            .init("growth", "Edge Growth", 0...1.5, 0.7, "How much bigger the dots get toward the edge.", group: "Field"),
+            .init("centerX", "Centre X", 0...1, 0.42, "The spiral’s centre across the screen.", group: "Field"),
+            .init("centerY", "Centre Y", 0...1, 0.52, "The spiral’s centre down the screen.", group: "Field"),
+            .init("breathe", "Breathe", 0...1, 0.4, "Idle pulsing of the whole field.", group: "Field"),
+            .init("ground", "Ground", 0...2, 0, "White like the original, or dark, or the stage’s.", "%.0f", group: "Field", choices: ["Stage", "Light", "Dark"]),
+            .init("rate", "Rate", 0...3, 1.2, "Blooms per second, on the clock.", "%.1f /s", group: "Blooms"),
+            .init("life", "Life", 1...10, 4, "Seconds a bloom lives.", "%.1f s", group: "Blooms"),
+            .init("radius", "Radius", 40...300, 130, "Points, fully open.", "%.0f pt", group: "Blooms"),
+            .init("grow", "Dot Growth", 0...3, 1.4, "How much a bloom swells the dots under it.", "%.1f×", group: "Blooms"),
+            .init("tint", "Colour", 0...1, 1, "How far the dots take the bloom’s colour.", group: "Blooms"),
+            .init("core", "Core", 0...1, 0.6, "A brighter centre to each bloom.", group: "Blooms"),
+            .init("wave", "Ripple", 0...3, 1.2, "A ring from the centre whose height is the voice.", "%.1f×", group: "Voice"),
+            .init("waveSpeed", "Ripple Speed", 20...400, 140, "Points per second.", "%.0f pt/s", group: "Voice"),
+            .init("spawn", "Bloom on Beat", 0...1, 1, "A new bloom where the voice lands.", "%.0f", group: "Voice", choices: ["Off", "On"]),
+            .init("threshold", "Threshold", 0.05...0.8, 0.35, "How loud before a bloom opens.", group: "Voice"),
+            .init("hero", "Hero", 0...1, 0, "The hero orb at the spiral’s centre, or the field alone.", "%.0f", group: "Hero", choices: ["Off", "On"]),
+            .init("heroSize", "Hero Size", 0.2...0.7, 0.4, "As a fraction of the width.", group: "Hero"),
+            .init("transcript", "Transcript", 0...1, 1, "Words at the bottom as you speak — sample copy until the mic is on.", "%.0f", group: "Transcript", choices: ["Off", "On"]),
+            .init("textSize", "Text Size", 14...28, 20, "Points.", "%.0f pt", group: "Transcript"),
+            .init("textGlow", "Glow", 0...1, 0.4, "On each arriving word.", group: "Transcript"),
+        ]
         case .system: return [
             .init("hold", "Hold", 0.5...8, 2.5, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
             .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", group: "Play", choices: ["Tap", "Auto"]),
@@ -1282,7 +1312,7 @@ public enum LabMorphKind: String, CaseIterable, Identifiable, Codable, Sendable 
 
 /// A UI animation a state can carry — the pieces of the hidden UI labs.
 public enum LabMorphAdornment: String, CaseIterable, Identifiable, Codable, Sendable {
-    case edgeGlow, borderBeam, waveform, caption
+    case edgeGlow, borderBeam, waveform, caption, transcript
     public var id: String { rawValue }
     public var label: String {
         switch self {
@@ -1290,6 +1320,7 @@ public enum LabMorphAdornment: String, CaseIterable, Identifiable, Codable, Send
         case .borderBeam: return "Border Beam"
         case .waveform: return "Waveform"
         case .caption: return "Caption"
+        case .transcript: return "Transcript"
         }
     }
     public var symbol: String {
@@ -1298,6 +1329,7 @@ public enum LabMorphAdornment: String, CaseIterable, Identifiable, Codable, Send
         case .borderBeam: return "shippingbox"
         case .waveform: return "waveform"
         case .caption: return "text.bubble"
+        case .transcript: return "text.quote"
         }
     }
 }
@@ -1584,6 +1616,8 @@ public final class LabState: ObservableObject {
     @Published public var audioSource: LabAudioSource = .level
     @Published public var audioAttack: Double = 0.03
     @Published public var audioRelease: Double = 0.25
+    /// Run speech recognition on the mic, for the transcript flows.
+    @Published public var transcribe: Bool = false
     @Published public var palette: LabPalette = .nexus
     /// Post effects, in the order they are applied.
     @Published public var post: [LabPostEffect] = []
@@ -1739,6 +1773,10 @@ public struct LabFrame {
     public var pointer: CGPoint? = nil
     /// See `LabState.spec`.
     public var spec: LabSpec = LabSpec()
+    /// The live transcript's words with their age in seconds, newest
+    /// last. Empty when the transcript is off or nothing has been said.
+    public var transcript: [(text: String, age: Double)] = []
+    public var transcribing: Bool = false
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
                 params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
@@ -1771,6 +1809,13 @@ public struct LabFrame {
     /// without one (a harness, a thumbnail).
     public func p(_ id: String, _ experiment: LabExperiment) -> Double {
         params["\(experiment.id).\(id)"] ?? experiment.parameters.first { $0.id == id }?.defaultValue ?? 0
+    }
+
+    func withTranscript(_ words: [(text: String, age: Double)], on: Bool) -> LabFrame {
+        var f = self
+        f.transcript = words
+        f.transcribing = on
+        return f
     }
 
     /// The same frame at another size — for the pod-size preview.
@@ -1837,6 +1882,7 @@ extension LabState {
                         morphStates: morphStates,
                         pointer: pointer,
                         spec: spec)
+            .withTranscript(audio.words.map { ($0.text, date.timeIntervalSince($0.at)) }, on: audioReactive && transcribe)
     }
 
     private static func hueShifted(_ color: Color, by turns: Double) -> Color {

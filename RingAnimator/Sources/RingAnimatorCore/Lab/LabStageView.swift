@@ -50,6 +50,7 @@ public struct LabStageView: View {
         }
         .onChange(of: lab.audioAttack, initial: true) { _, v in audio.attack = v }
         .onChange(of: lab.audioRelease, initial: true) { _, v in audio.release = v }
+        .onChange(of: lab.transcribe, initial: true) { _, on in audio.transcribing = on }
         .onDisappear { audio.stop() }
         .alert("Save Preset", isPresented: $savingPreset) {
             TextField("Name", text: $presetName)
@@ -230,6 +231,10 @@ public struct LabStageView: View {
                               help: "How slowly a fall is followed. Long release is the ‘breathing’ look.")
                     let b = bands
                     LabBandMeters(bands: b)
+                    Toggle("Live Transcript", isOn: $lab.transcribe)
+                    Text(audio.transcriptError ?? (lab.transcribe ? "Speech recognition on the mic — Bloom, and the Transcript adornment, show your words as you say them." : "Off: the transcript flows show sample copy."))
+                        .font(.caption2).foregroundStyle(audio.transcriptError == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.red))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Divider()
@@ -637,6 +642,8 @@ public struct LabExperimentView: View {
             LabCaptionView(frame: frame, config: config)
         case .system:
             LabPlayView(frame: frame, config: config)
+        case .sunflower:
+            LabSunflowerView(frame: frame, config: config)
         }
     }
 

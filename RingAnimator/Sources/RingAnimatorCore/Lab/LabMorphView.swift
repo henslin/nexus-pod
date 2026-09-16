@@ -196,6 +196,7 @@ struct LabMorphPanel: View {
     private var content: some View {
         let hasWave = state.adornments.contains(.waveform)
         let hasCaption = state.adornments.contains(.caption)
+        let hasTranscript = state.adornments.contains(.transcript)
         switch state.kind {
         case .pod:
             LabHeroView(frame: frame, config: config, diameter: 62)
@@ -242,7 +243,10 @@ struct LabMorphPanel: View {
                         .font(.title2.bold())
                     Spacer(minLength: 0)
                 }
-                if hasCaption {
+                if hasTranscript {
+                    LabTranscriptView(frame: frame, width: size.width - 40, size: 17, glow: 0.35)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else if hasCaption {
                     LabCaptionWords(frame: frame, width: size.width - 40, size: 17, style: 1, rate: 4, glow: 0.35, hold: 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
@@ -280,6 +284,11 @@ struct LabMorphPanel: View {
                 }
                 if hasWave { LabWaveformBars(frame: frame, bars: 32, height: 24).frame(height: 30).padding(.horizontal, 24) }
                 Spacer()
+                if hasTranscript {
+                    LabTranscriptView(frame: frame, width: size.width - 48, size: 20, glow: 0.4)
+                        .frame(height: 120)
+                        .padding(.bottom, 40)
+                }
             }
         }
     }
