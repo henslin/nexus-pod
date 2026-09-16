@@ -183,7 +183,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "Waveform"
         case .edgeGlow:   return "Edge Glow"
         case .caption:    return "Caption"
-        case .system:     return "Nexus System"
+        case .system:     return "The Agent"
         case .sunflower:  return "Bloom Field"
         }
     }
@@ -258,7 +258,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "SwiftUI · Canvas"
         case .edgeGlow:   return "SwiftUI · blur + gradient"
         case .caption:    return "SwiftUI · text transitions"
-        case .system:     return "Spec · every slot, played"
+        case .system:     return "Assembly · every slot, played"
         case .sunflower:  return "SwiftUI · Canvas + Speech"
         }
     }
@@ -606,9 +606,23 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     public var section: LabSection {
         switch self {
         case .journey, .agentStates, .hold, .sunflower: return .flows
-        case .system: return .system
-        case .waveform, .edgeGlow, .caption, .morph, .buttonGlow, .sheet, .beamKit, .gooey, .metal: return .ui
+        case .beamKit, .gooey, .metal, .buttonGlow: return .controls
+        case .waveform, .edgeGlow, .caption, .morph, .sheet: return .surfaces
+        case .system: return .qBranch
         default: return .orb
+        }
+    }
+
+    /// The orb base's family — `nil` for anything that isn't one.
+    public var family: LabFamily? {
+        switch self {
+        case .aurora, .orb, .sphere, .liquid, .tunnel, .cells, .nebula, .deep, .lava, .holo, .lenticular, .moire: return .light
+        case .tide, .droplet, .pour, .pool, .caustics, .jelly, .slick, .bubble: return .water
+        case .frostOrb, .globe, .silk, .liquidRing: return .frosted
+        case .mesh, .swarm, .sparks, .constellation, .ink, .stipple, .lattice, .bokeh, .warp: return .particles
+        case .harmonograph, .shapeshift, .slices, .stack, .cascade, .prism, .orrery, .symbols: return .shape
+        case .volumetric, .orbKit, .thinkingOrbs: return .kits
+        default: return nil
         }
     }
 
@@ -1264,7 +1278,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("textGlow", "Glow", 0...1, 0.4, "On each arriving word.", group: "Transcript"),
         ]
         case .system: return [
-            .init("hold", "Hold", 0.5...8, 2.5, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
+            .init("script", "Conversation", 0...3, 0, "Which ask the play runs through the states.", "%.0f", group: "Play", choices: LabScript.all.map(\.title)),
+            .init("hold", "Hold", 0.5...8, 3, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
             .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", group: "Play", choices: ["Tap", "Auto"]),
             .init("spring", "Spring", 0.2...1.2, 0.55, "Response of the morph between surfaces.", group: "Play"),
             .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Play"),
@@ -1372,39 +1387,73 @@ public struct LabMorphState: Identifiable, Equatable, Sendable {
     }
 }
 
-/// The Lab's three rooms (Chris, 2026-09-15): what the thing is, what
-/// it sits in, and what a touch does.
+/// The Lab's rooms — the parts of an AI agent's UI, in the order a
+/// designer meets them: what the agent looks like, what you tap, what
+/// opens, how it moves, and where it all comes together.
+///
+/// Reorganised overnight 2026-09-15/16 (Chris: "a deep clean and logical
+/// organization … think of the Labs section as if you're a designer in a
+/// discovery design phase"). The old "UI" room mixed buttons and
+/// surfaces; they are different questions.
 public enum LabSection: String, CaseIterable, Identifiable, Sendable {
-    case orb, ui, flows, system
+    case orb, controls, surfaces, flows, qBranch
     public var id: String { rawValue }
     public var title: String {
         switch self {
         case .orb: return "Orb"
-        case .ui: return "UI"
+        case .controls: return "Controls"
+        case .surfaces: return "Surfaces"
         case .flows: return "Flows"
-        case .system: return "System"
+        case .qBranch: return "Q Branch"
         }
     }
+    /// The question the room answers.
     public var caption: String {
         switch self {
-        case .orb: return "What lives in the circle. Bases, and post effects that stack over any of them."
-        case .ui: return "The surfaces it sits in — buttons, the sheet, the screen’s edge."
-        case .flows: return "What a touch does — tap, hold, listen, talk."
-        case .system: return "The product, assembled: a look for every slot, played end to end."
+        case .orb: return "The agent’s presence. What lives in the circle — a base, and post effects stacked over it."
+        case .controls: return "What you tap. The Ask button, buttons, beams."
+        case .surfaces: return "What opens. Pill, card, sheet, full screen — and what rides on them."
+        case .flows: return "How it moves. Tap, hold, listen, talk — voice-forward and full screen."
+        case .qBranch: return "Where it comes together. A look for every slot, the whole agent played."
         }
     }
     public var symbol: String {
         switch self {
         case .orb: return "circle.fill"
-        case .ui: return "rectangle.on.rectangle"
-        case .flows: return "hand.tap"
-        case .system: return "square.grid.2x2"
+        case .controls: return "hand.tap"
+        case .surfaces: return "rectangle.on.rectangle"
+        case .flows: return "waveform.path"
+        case .qBranch: return "wrench.and.screwdriver"
         }
     }
     public var experiments: [LabExperiment] { LabExperiment.allCases.filter { $0.section == self && !$0.isHidden } }
     /// Orb splits into bases and post effects.
     public var bases: [LabExperiment] { experiments.filter { !$0.decoratesRing } }
     public var posts: [LabExperiment] { experiments.filter { $0.decoratesRing } }
+    /// The bases, by family — for the sidebar's sub-headings.
+    public var families: [(family: LabFamily, bases: [LabExperiment])] {
+        LabFamily.allCases.compactMap { f in
+            let b = bases.filter { $0.family == f }
+            return b.isEmpty ? nil : (f, b)
+        }
+    }
+}
+
+/// A family of orb bases — what kind of thing it is, for a list of
+/// sixty to read as six shelves.
+public enum LabFamily: String, CaseIterable, Identifiable, Sendable {
+    case light, water, frosted, particles, shape, kits
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .light: return "Light"
+        case .water: return "Water"
+        case .frosted: return "Frosted"
+        case .particles: return "Particles"
+        case .shape: return "Shape"
+        case .kits: return "3D & Kits"
+        }
+    }
 }
 
 /// Which audio signal an experiment listens to.
@@ -1596,7 +1645,9 @@ public final class LabPresetStore: ObservableObject {
 /// comparison of two different settings.
 @MainActor
 public final class LabState: ObservableObject {
-    @Published public var experiment: LabExperiment = .aurora
+    @Published public var experiment: LabExperiment = .aurora {
+        didSet { if oldValue != .system { benchBefore = oldValue } }
+    }
     /// 0…1. What "more" means is per experiment — warp for Aurora, glow
     /// for Orb, radius for Bloom — but it always means more.
     @Published public var intensity: Double = 0.5
@@ -1688,6 +1739,12 @@ public final class LabState: ObservableObject {
     @Published public var spec: LabSpec = LabSpecStore.loadCurrent() {
         didSet { LabSpecStore.autosave(spec) }
     }
+    /// The slot Q Branch sent you to the Lab to fill — see `LabSlotTarget`.
+    @Published public var target: LabSlotTarget? = nil
+    /// The last experiment tuned on the bench (anything but The Agent),
+    /// so Q Branch can offer "the bench, as it is".
+    public var lastBench: LabExperiment? { experiment == .system ? benchBefore : experiment }
+    var benchBefore: LabExperiment? = nil
 
     /// Press-and-hold, for the Hold flow: when the press began, or nil.
     @Published public var holdStart: Date? = nil
@@ -1707,6 +1764,13 @@ public final class LabState: ObservableObject {
 
     public func togglePost(_ effect: LabPostEffect) {
         if let i = post.firstIndex(of: effect) { post.remove(at: i) } else { post.append(effect) }
+    }
+    /// Reorder the stack: effects apply in list order.
+    public func movePost(_ effect: LabPostEffect, by delta: Int) {
+        guard let i = post.firstIndex(of: effect) else { return }
+        let j = i + delta
+        guard post.indices.contains(j) else { return }
+        post.swapAt(i, j)
     }
 
     /// Every experiment's knobs, resolved — the base and the post stack

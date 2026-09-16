@@ -224,13 +224,28 @@ struct LabJourneyView: View {
 struct LabGlassShape: ViewModifier {
     let cornerRadius: CGFloat
     let glass: Glass
+    @Environment(\.labNoGlass) private var noGlass
 
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
+        if noGlass {
+            // Harnesses: ImageRenderer drops what is inside a glass
+            // effect, so verification renders draw a plain dark panel.
+            content.background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else if #available(iOS 26.0, macOS 26.0, *) {
             content.glassEffect(glass, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         } else {
             content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
+    }
+}
+
+/// Set by verification harnesses: draw glass panels flat, because
+/// `ImageRenderer` doesn't rasterise Liquid Glass or what sits in it.
+public struct LabNoGlassKey: EnvironmentKey { public static let defaultValue = false }
+extension EnvironmentValues {
+    public var labNoGlass: Bool {
+        get { self[LabNoGlassKey.self] }
+        set { self[LabNoGlassKey.self] = newValue }
     }
 }
 

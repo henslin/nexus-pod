@@ -106,6 +106,20 @@ public enum LabActionItem: String, CaseIterable, Identifiable, Codable, Sendable
     }
 }
 
+/// Where the app-wide Ask button lives on screens that aren't the
+/// Nexus tab.
+public enum LabAskPlacement: String, CaseIterable, Identifiable, Codable, Sendable {
+    case floating, navBar, tabBar
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .floating: return "Floating, bottom right"
+        case .navBar: return "Navigation bar"
+        case .tabBar: return "The Nexus pod itself"
+        }
+    }
+}
+
 /// What a gesture on the pod does.
 public enum LabGestureResult: String, CaseIterable, Identifiable, Codable, Sendable {
     case nothing, menu, ask, talk, show, remind, photo
@@ -213,6 +227,11 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
     public var surfaces: [String: LabSurfaceSpec] = [:]
     public var tap: LabGestureResult = .menu
     public var longPress: LabGestureResult = .talk
+    /// The app-wide Ask button — "Ask Siri everywhere" (Chris,
+    /// 2026-09-15): Gooey as tuned, and where it sits on screens that
+    /// aren't the Nexus tab.
+    public var ask: LabLook?
+    public var askPlacement: LabAskPlacement?
 
     public init() {}
 
@@ -227,9 +246,9 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
 
     /// Slots filled, out of the slots the spec has.
     public var filled: Int {
-        (pod == nil ? 0 : 1) + states.count + (action == nil ? 0 : 1) + items.filter { surfaces[$0.rawValue] != nil }.count
+        (pod == nil ? 0 : 1) + states.count + (ask == nil ? 0 : 1) + (action == nil ? 0 : 1) + items.filter { surfaces[$0.rawValue] != nil }.count
     }
-    public var total: Int { 1 + LabAgentVerb.allCases.count + 1 + items.count }
+    public var total: Int { 1 + LabAgentVerb.allCases.count + 2 + items.count }
 }
 
 // MARK: - Store
@@ -296,6 +315,65 @@ public final class LabSpecStore: ObservableObject {
         #else
         return UIPasteboard.general.string.flatMap(spec(fromJSON:))
         #endif
+    }
+}
+
+// MARK: - Choosing for a slot
+
+/// A slot Q Branch sent you to the Lab to fill. While set, the rail
+/// shows the errand and a "Use" button; using it assigns and returns.
+public enum LabSlotTarget: Equatable, Sendable {
+    case pod
+    case state(LabAgentVerb)
+    case action
+    case ask
+
+    public var label: String {
+        switch self {
+        case .pod: return "the Pod"
+        case .state(let v): return v.label
+        case .action: return "the Menu"
+        case .ask: return "the Ask button"
+        }
+    }
+    public var hint: String {
+        switch self {
+        case .pod, .state: return "Tune any orb, then Use. The knobs, post stack and palette come with it."
+        case .action, .ask: return "Tune Gooey, then Use."
+        }
+    }
+    public func accepts(_ e: LabExperiment) -> Bool {
+        switch self {
+        case .pod, .state: return e.canBeHero
+        case .action, .ask: return e == .gooey
+        }
+    }
+    /// Where to start looking.
+    public var startingExperiment: LabExperiment {
+        switch self {
+        case .pod, .state: return .orbKit
+        case .action, .ask: return .gooey
+        }
+    }
+}
+
+extension LabState {
+    /// Go to the Lab to choose for a slot.
+    public func choose(for target: LabSlotTarget) {
+        self.target = target
+        experiment = lastBench.flatMap { target.accepts($0) ? $0 : nil } ?? target.startingExperiment
+    }
+    /// The current experiment into the target slot, and back to Q Branch.
+    public func fulfilTarget() {
+        guard let target, target.accepts(experiment) else { return }
+        switch target {
+        case .pod: useCurrentLookAsPod()
+        case .state(let v): useCurrentLook(for: v)
+        case .action: useCurrentGooeyAsAction()
+        case .ask: spec.ask = LabLook(from: self, experiment: .gooey)
+        }
+        self.target = nil
+        experiment = .system
     }
 }
 
@@ -373,6 +451,17 @@ extension LabFrame {
     public func applying(_ surface: LabSurfaceSpec) -> LabFrame {
         var f = self
         for (k, v) in surface.values { f.params[k] = v }
+        return f
+    }
+}
+
+extension LabFrame {
+    /// For harnesses: this frame at a given tap count, so many seconds
+    /// after the tap.
+    public func withTaps(_ taps: Int, since: Double) -> LabFrame {
+        var f = self
+        f.taps = taps
+        f.sinceTap = since
         return f
     }
 }

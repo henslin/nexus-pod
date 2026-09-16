@@ -6,8 +6,10 @@ import SwiftUI
 // MARK: - Play
 
 /// The spec, end to end, on a phone: the pod at rest → a tap opens the
-/// menu → an action opens its surface → the agent listens, thinks,
-/// searches, speaks, finishes → back to the pod. Every piece is what the
+/// menu → an action opens its surface → a real conversation runs
+/// through the states (the ask, thinking, the named work, the answer
+/// arriving, the follow-ups) → back to the pod. Then the app-wide Ask
+/// button on another screen, and its menu. Every piece is what the
 /// board assigned; an empty slot plays as the ring or the default
 /// surface, so a gap is visible rather than fatal. A hold goes straight
 /// to the long-press action, listening while held and speaking after.
@@ -23,7 +25,9 @@ public struct LabPlayView: View {
     enum Step: Equatable {
         case idle, menu
         case surface(LabActionItem, LabAgentVerb)
-        var kind: LabMorphKind? { if case .surface(let item, _) = self { return item.defaultSurface } else { return nil } }
+        /// The Ask button on a screen that isn't the Nexus tab.
+        case askAnywhere
+        case askMenu
     }
 
     /// The tap-driven sequence this spec plays.
@@ -34,14 +38,23 @@ public struct LabPlayView: View {
         if let item {
             for verb in [LabAgentVerb.listening, .thinking, .searching, .speaking, .done] { steps.append(.surface(item, verb)) }
         }
+        steps.append(.askAnywhere)
+        steps.append(.askMenu)
         return steps
     }
+
+    /// For harnesses: how many steps the spec plays.
+    public static func stepCount(of spec: LabSpec) -> Int { steps(of: spec).count }
 
     static func title(of step: Step) -> String {
         switch step {
         case .idle: return "Idle"
         case .menu: return "Menu"
-        case .surface(let item, let verb): return "\(item.label) · \(verb.label)"
+        case .surface(let item, let verb):
+            let v = item == .ask && verb == .listening ? "Typing" : verb.label
+            return "\(item.label) · \(v)"
+        case .askAnywhere: return "Ask · Devices"
+        case .askMenu: return "Ask · Menu"
         }
     }
 
@@ -68,6 +81,7 @@ public struct LabPlayView: View {
         let hold = max(frame.p("hold", .system), 0.2)
         let auto = frame.p("auto", .system) >= 0.5
         let talk = frame.p("talk", .system)
+        let script = LabScript.named(Int(frame.p("script", .system)))
         let spring = Animation.spring(response: frame.p("spring", .system), dampingFraction: 1 - frame.p("bounce", .system) * 0.45)
         let index = frame.stage(of: .system, count: steps.count)
         let (step, sinceChange, untilChange) = situation(spec, steps: steps, index: index, hold: hold, auto: auto, talk: talk)
@@ -81,24 +95,37 @@ public struct LabPlayView: View {
         // The content's transition clock runs from when the surface
         // opened, not from each verb — the verbs change inside it.
         let firstSurface = steps.firstIndex { if case .surface = $0 { return true } else { return false } } ?? index
-        let surfaceAge = (frame.holding > 0 || frame.sinceHold < talk) ? sinceChange
+        let held = frame.holding > 0 || frame.sinceHold < talk
+        let surfaceAge = held ? sinceChange
             : (auto && index >= firstSurface ? sinceChange + Double(index - firstSurface) * hold : sinceChange)
-        let untilClose = (auto && index == steps.count - 1) || frame.sinceHold < talk ? untilChange : .infinity
+        let lastSurface = steps.lastIndex { if case .surface = $0 { return true } else { return false } } ?? index
+        let untilClose = (auto && index == lastSurface) || frame.sinceHold < talk ? untilChange : .infinity
+        let conversation = item.map { LabConversation(script: script, mode: $0 == .talk ? .voice : .text, verb: verb, since: sinceChange, age: surfaceAge) }
+        let onAnotherScreen = step == .askAnywhere || step == .askMenu
         let phone = LabMorphView.phone
         let home = LabMorphView.home(of: state.kind)
         let podHome = LabMorphView.home(of: .pod)
+        let placement = spec.askPlacement ?? .floating
+        let askHome: CGPoint = {
+            switch placement {
+            case .floating: return CGPoint(x: phone.width - 16 - 26, y: phone.height - 24 - 62 - 14 - 26)
+            case .navBar: return CGPoint(x: phone.width - 16 - 22, y: 62)
+            case .tabBar: return podHome
+            }
+        }()
         let showChrome = frame.p("chrome", .system) >= 0.5
 
         return ZStack {
-            DemoTab.dashboard.screenshotImage(dark: frame.darkStage)
+            (onAnotherScreen ? DemoTab.devices : DemoTab.dashboard).screenshotImage(dark: frame.darkStage)
                 .resizable().scaledToFill()
                 .frame(width: phone.width, height: phone.height)
                 .clipped()
+                .animation(.easeInOut(duration: 0.25), value: onAnotherScreen)
             Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? 0.85 : state.kind == .pod ? 0 : 0.15)
                 .animation(spring, value: state.kind)
             VStack {
                 Spacer()
-                TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: phone.width - 32, hidesPodContent: true)
+                TabBarPreview(config: config, selectedTab: .constant(onAnotherScreen ? .devices : .dashboard), width: phone.width - 32, hidesPodContent: true)
                     .allowsHitTesting(false)
                     .padding(.bottom, 24)
                     .opacity(state.kind == .fullScreen ? 0 : 1)
@@ -106,7 +133,7 @@ public struct LabPlayView: View {
             }
             // The menu, out of the pod's slot. Drawn under the pod so its
             // own disc sits behind the glass.
-            if spec.tap == .menu {
+            if spec.tap == .menu, !onAnotherScreen {
                 LabGooeyMenu(frame: frame.applying(spec.action, config: config),
                              center: podHome, open: step == .menu,
                              since: step == .menu ? sinceChange : (index > 1 && auto ? sinceChange + Double(index - 2) * hold : sinceChange),
@@ -114,31 +141,45 @@ public struct LabPlayView: View {
                     .opacity(state.kind == .pod ? 1 : 0)
                     .animation(spring, value: state.kind)
             }
+            // The Ask button, elsewhere in the app: the goo, with the
+            // agent's mark on it, where the spec places it; the menu
+            // comes out of it.
+            if onAnotherScreen {
+                let askFrame = frame.applying(spec.ask ?? spec.action, config: config)
+                LabGooeyMenu(frame: askFrame, center: askHome, open: step == .askMenu,
+                             since: sinceChange, icons: spec.items.map(\.symbol), drawsButton: placement != .tabBar)
+                if placement != .tabBar {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Int(askFrame.p("fill", .gooey)) == 0 ? .white : Color(white: 0.1))
+                        .rotationEffect(.degrees(step == .askMenu ? 90 : 0))
+                        .animation(spring, value: step)
+                        .position(askHome)
+                        // Under the +, which the menu draws.
+                        .opacity(step == .askMenu ? 0 : 1)
+                }
+            }
             LabMorphPanel(state: state, frame: panelFrame, config: config,
                           sinceChange: state.kind == .pod ? .infinity : surfaceAge,
                           untilChange: untilClose,
-                          caption: verb.caption)
-                .position(home)
+                          caption: verb.caption,
+                          conversation: conversation)
+                .position(onAnotherScreen ? podHome : home)
                 .animation(spring, value: state.kind)
             if showChrome {
-                VStack(spacing: 4) {
+                VStack(spacing: 3) {
                     Text(Self.title(of: step))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .contentTransition(.numericText())
                         .animation(spring, value: step)
-                    Text(steps.count > 1 ? "Tap to step · hold to talk" : "Hold to talk")
-                        .font(.caption)
+                    Text("\(index + 1) of \(steps.count) · \(script.title)")
+                        .font(.caption2)
                         .opacity(0.6)
-                    if spec.filled < spec.total {
-                        Text("\(spec.total - spec.filled) empty slots play as defaults")
-                            .font(.caption2)
-                            .opacity(0.5)
-                    }
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(.black.opacity(0.35)))
-                .padding(.top, 60)
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Capsule().fill(.black.opacity(0.4)))
+                .padding(.top, 14)
                 .frame(maxHeight: .infinity, alignment: .top)
             }
         }
@@ -148,17 +189,19 @@ public struct LabPlayView: View {
     }
 }
 
-// MARK: - The stage: play beside the board
+// MARK: - The stage: play, with a strip of steps
 
+/// Q Branch's stage: the phone, and the steps under it. The board is
+/// the rail (see `LabSpecBoard`), so this is only the thing being
+/// played and the way to move through it.
 struct LabSystemStage: View {
     @ObservedObject var lab: LabState
     @ObservedObject var config: RingConfig
     let frame: LabFrame
-    @StateObject private var specs = LabSpecStore()
 
     var body: some View {
         let scale = frame.diameter * 1.9 / LabMorphView.phone.height
-        HStack(alignment: .top, spacing: 24) {
+        VStack(spacing: 18) {
             LabPlayView(frame: frame, config: config)
                 .scaleEffect(scale)
                 .frame(width: LabMorphView.phone.width * scale, height: LabMorphView.phone.height * scale)
@@ -167,26 +210,73 @@ struct LabSystemStage: View {
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { _ in lab.beginHold() }
                     .onEnded { _ in lab.endHold() })
-            ScrollView(.vertical) {
-                LabSpecBoard(lab: lab, config: config, frame: frame, specs: specs)
-                    .padding(.trailing, 16)
-            }
-            .frame(width: 440)
+            LabPlayStrip(lab: lab, frame: frame)
         }
-        .padding(.horizontal, 24)
+    }
+}
+
+/// The steps of the play as chips — click any to go there — with the
+/// auto/tap switch and a restart.
+struct LabPlayStrip: View {
+    @ObservedObject var lab: LabState
+    let frame: LabFrame
+
+    var body: some View {
+        let steps = LabPlayView.steps(of: frame.spec)
+        let current = frame.stage(of: .system, count: steps.count)
+        let auto = frame.p("auto", .system) >= 0.5
+        VStack(spacing: 10) {
+            LabWrap(spacing: 6) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
+                    Button {
+                        // Tap mode, at this step: the clock stops, taps count.
+                        lab.values["system.auto"] = 0
+                        lab.taps = i
+                        lab.lastTap = Date()
+                    } label: {
+                        HStack(spacing: 4) {
+                            if i > 0 { Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold)).foregroundStyle(.tertiary) }
+                            Text(LabPlayView.title(of: step))
+                                .font(.caption.weight(i == current ? .semibold : .regular))
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Capsule().fill(i == current ? AnyShapeStyle(.fill.secondary) : AnyShapeStyle(.fill.quaternary)))
+                        .overlay(Capsule().strokeBorder(i == current ? Color.primary.opacity(0.25) : .clear))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: 560)
+            HStack(spacing: 14) {
+                Toggle("Auto", isOn: Binding(get: { auto }, set: { lab.values["system.auto"] = $0 ? 1 : 0; lab.taps = 0 }))
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                Button {
+                    lab.taps = 0
+                    lab.lastTap = Date()
+                } label: { Label("Restart", systemImage: "arrow.counterclockwise") }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                Text("Tap the phone to step · hold it to talk")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+        .foregroundStyle(frame.darkStage ? Color.white : Color.black)
     }
 }
 
 // MARK: - The board
 
-/// Every slot the product has, with what is in it. Filling one is a
-/// "Use as…" from the Lab; here you see the whole, clear a slot, or send
-/// its look back to the bench.
+/// Every slot the product has, with what is in it — Q Branch's rail.
+/// A slot's menu is where it gets filled: from the bench as it stands,
+/// from a saved preset, or by going to the Lab to choose (the rail there
+/// shows the errand and a Use button). Surfaces are edited in place.
 public struct LabSpecBoard: View {
     @ObservedObject var lab: LabState
     @ObservedObject var config: RingConfig
     let frame: LabFrame
     @ObservedObject var specs: LabSpecStore
+    @StateObject private var presets = LabPresetStore()
     @State private var pasteFailed = false
 
     public init(lab: LabState, config: RingConfig, frame: LabFrame, specs: LabSpecStore) {
@@ -199,49 +289,65 @@ public struct LabSpecBoard: View {
     private var spec: LabSpec { lab.spec }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 0) {
             header
-            group("Pod", "What lives in the tab bar at rest.") {
-                slot(title: "Pod", look: spec.pod, clear: { lab.spec.pod = nil })
+            Divider().padding(.vertical, 12)
+            group("Pod", "At rest, in the tab bar.") {
+                slot(title: "Pod", look: spec.pod, target: .pod, set: { lab.spec.pod = $0 })
             }
-            group("Agent states", "One look per verb. Their orb wears its nearest verb; any orb can take any state.") {
-                LabWrap(spacing: 10) {
-                    ForEach(LabAgentVerb.allCases) { verb in
-                        slot(title: verb.label, look: spec.look(for: verb), clear: { lab.spec.states[verb.rawValue] = nil })
-                    }
-                }
-            }
-            group("Actions", "The menu a tap reveals, and what is in it.") {
-                HStack(alignment: .top, spacing: 14) {
-                    slot(title: "Menu", look: spec.action, clear: { lab.spec.action = nil }, subtitle: spec.action.map { LabExperiment.gooey.parameters.first!.choices![Int($0.values["gooey.effect"] ?? 0)] })
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Items").font(.caption.weight(.semibold))
-                        LabWrap(spacing: 6) {
-                            ForEach(LabActionItem.allCases) { item in
-                                let on = spec.items.contains(item)
-                                Button { lab.toggleItem(item) } label: {
-                                    Label(item.label, systemImage: item.symbol)
-                                        .font(.caption)
-                                        .padding(.horizontal, 8).padding(.vertical, 4)
-                                        .background(Capsule().fill(on ? Color.accentColor.opacity(0.25) : Color.clear))
-                                        .overlay(Capsule().strokeBorder(on ? Color.accentColor : Color.secondary.opacity(0.4)))
-                                }
-                                .buttonStyle(.plain)
-                            }
+            group("Agent States", "One look per verb. Their orb wears its nearest verb; any orb can take any state.", trailing: {
+                Menu {
+                    Button("Their Orb, Their Verbs") { lab.useOrbKitForEveryState() }
+                    if let bench = lab.lastBench, bench.canBeHero {
+                        Button("\(bench.name), Every State") {
+                            let look = LabLook(from: lab, experiment: bench)
+                            for v in LabAgentVerb.allCases { lab.spec.states[v.rawValue] = look }
                         }
-                        Text(spec.items.map(\.label).joined(separator: " · "))
-                            .font(.caption2).foregroundStyle(.tertiary)
+                    }
+                    Button("Clear All", role: .destructive) { lab.spec.states = [:] }
+                } label: { Image(systemName: "ellipsis.circle") }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            }) {
+                LabWrap(spacing: 8) {
+                    ForEach(LabAgentVerb.allCases) { verb in
+                        slot(title: verb.label, look: spec.look(for: verb), target: .state(verb), set: { lab.spec.states[verb.rawValue] = $0 })
                     }
                 }
             }
-            group("Surfaces", "What each action opens. Assign from a Morph state's menu; unassigned ones open the default.") {
-                LabWrap(spacing: 10) {
-                    ForEach(spec.items) { item in
-                        surfaceSlot(item)
+            group("Ask", "The Ask button — everywhere in the app, not only the tab. What it looks like, where it sits, what it reveals.") {
+                HStack(alignment: .top, spacing: 14) {
+                    slot(title: "Button", look: spec.ask, target: .ask, set: { lab.spec.ask = $0 }, menu: true)
+                    slot(title: "Menu", look: spec.action, target: .action, set: { lab.spec.action = $0 }, menu: true)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Placement").font(.caption.weight(.semibold))
+                        Picker("", selection: Binding(get: { lab.spec.askPlacement ?? .floating }, set: { lab.spec.askPlacement = $0 })) {
+                            ForEach(LabAskPlacement.allCases) { Text($0.label).tag($0) }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                    }
+                }
+                Text("Items").font(.caption.weight(.semibold))
+                LabWrap(spacing: 6) {
+                    ForEach(LabActionItem.allCases) { item in
+                        let on = spec.items.contains(item)
+                        Button { lab.toggleItem(item) } label: {
+                            Label(item.label, systemImage: item.symbol)
+                                .font(.caption)
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(Capsule().fill(on ? Color.accentColor.opacity(0.25) : Color.clear))
+                                .overlay(Capsule().strokeBorder(on ? Color.accentColor : Color.secondary.opacity(0.4)))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
-            group("Gestures", "What the two touches on the pod do.") {
+            group("Surfaces", "What each item opens. Edit in place, or send a Morph state here from its card.") {
+                ForEach(spec.items) { item in
+                    surfaceEditor(item)
+                }
+            }
+            group("Gestures", "The two touches on the pod.") {
                 Picker("Tap", selection: Binding(get: { lab.spec.tap }, set: { lab.spec.tap = $0 })) {
                     ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
                 }
@@ -249,9 +355,13 @@ public struct LabSpecBoard: View {
                     ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
                 }
             }
+            group("Play", "How the stage steps through it.") {
+                LabKnobList(lab: lab, experiment: .system)
+            }
         }
-        .padding(.vertical, 8)
     }
+
+    // MARK: Header
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -276,7 +386,7 @@ public struct LabSpecBoard: View {
             if pasteFailed {
                 Text("The pasteboard doesn't hold a spec.").font(.caption2).foregroundStyle(.red)
             }
-            Text("Fill a slot with “Use as…” on any orb, Gooey or Morph state; right-click a filled slot to open it in the Lab or clear it. JSON travels to Nexus Lab on the phone through Paste.")
+            Text("Click a slot to fill it — from the bench, a preset, or the Lab. Copy JSON, then Paste Spec in Nexus Lab to play it on the phone.")
                 .font(.caption2).foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -305,82 +415,156 @@ public struct LabSpecBoard: View {
         .fixedSize()
     }
 
-    private func group<Content: View>(_ title: String, _ caption: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
+    private func group<Content: View, Trailing: View>(_ title: String, _ caption: String,
+                                                      @ViewBuilder trailing: () -> Trailing = { EmptyView() },
+                                                      @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title).font(.headline)
+                Spacer()
+                trailing()
+            }
             Text(caption).font(.caption2).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
             content()
         }
+        .padding(.bottom, 20)
     }
 
-    /// One orb slot: the look at pod size in the pod's glass, or a gap.
-    private func slot(title: String, look: LabLook?, clear: @escaping () -> Void, subtitle: String? = nil) -> some View {
+    // MARK: Slots
+
+    /// One orb slot: the look at pod size in the pod's glass, or a gap —
+    /// and, as its menu, every way to fill it.
+    private func slot(title: String, look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void, menu: Bool = false) -> some View {
         VStack(spacing: 6) {
-            ZStack {
-                if let look, look.experimentCase == .gooey {
-                    // The menu's button, in the goo's fill.
-                    let fillChoice = Int(look.values["gooey.fill"] ?? 1)
-                    let fill: Color = [Color(white: 0.13), Color(white: 0.92), Color(hex: "#5AC8FA"), Color(hex: "#FFCF9E"), frame.colors.first ?? .white][min(max(fillChoice, 0), 4)]
-                    Circle().fill(fill).frame(width: 52, height: 52)
-                    Image(systemName: "plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(fillChoice == 0 ? .white : Color(white: 0.1))
-                } else if let look {
-                    LabPodGlass(config: config, dark: frame.darkStage) {
-                        LabHeroView(frame: frame.applying(look, config: config), config: config, diameter: 62)
+            Menu {
+                Button {
+                    lab.choose(for: target)
+                } label: { Label("Choose in the Lab…", systemImage: "flask") }
+                if let bench = lab.lastBench, target.accepts(bench) {
+                    Button("Use the Bench · \(bench.name)") { set(LabLook(from: lab, experiment: bench)) }
+                }
+                let mine = presets.presets.filter { p in LabExperiment(rawValue: p.experiment).map(target.accepts) ?? false }
+                if !mine.isEmpty {
+                    Menu("From a Preset") {
+                        ForEach(mine) { p in
+                            Button("\(LabExperiment(rawValue: p.experiment)?.name ?? p.experiment) · \(p.name)") {
+                                set(LabLook(experiment: p.experiment, values: p.values, post: p.post, palette: p.palette))
+                            }
+                        }
                     }
-                } else {
-                    Circle()
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 62, height: 62)
-                    Image(systemName: "plus").font(.caption).foregroundStyle(.tertiary)
                 }
-            }
-            .frame(width: 62, height: 62)
-            .contextMenu {
                 if let look {
+                    Divider()
                     Button("Open in Lab") { lab.open(look) }
-                    Button("Clear", role: .destructive, action: clear)
+                    Button("Clear", role: .destructive) { set(nil) }
                 }
+            } label: {
+                ZStack {
+                    if let look, menu {
+                        // The menu's button, in the goo's fill.
+                        let fillChoice = Int(look.values["gooey.fill"] ?? 1)
+                        let fill: Color = [Color(white: 0.13), Color(white: 0.92), Color(hex: "#5AC8FA"), Color(hex: "#FFCF9E"), frame.colors.first ?? .white][min(max(fillChoice, 0), 4)]
+                        Circle().fill(fill).frame(width: 52, height: 52)
+                        Image(systemName: "plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(fillChoice == 0 ? .white : Color(white: 0.1))
+                    } else if let look {
+                        LabPodGlass(config: config, dark: frame.darkStage) {
+                            LabHeroView(frame: frame.applying(look, config: config), config: config, diameter: 62)
+                        }
+                    } else {
+                        Circle()
+                            .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 62, height: 62)
+                        Image(systemName: "plus").font(.caption).foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(width: 62, height: 62)
+                .contentShape(Circle())
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             Text(title).font(.caption.weight(.semibold))
-            Text(subtitle ?? look?.title ?? "Empty")
+            Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty")
                 .font(.caption2)
                 .foregroundStyle(look == nil ? .tertiary : .secondary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
-                .frame(width: 96)
+                .frame(width: 92)
         }
-        .frame(width: 100)
+        .frame(width: 96)
     }
 
-    /// One surface slot: the Morph panel the action opens, small.
-    private func surfaceSlot(_ item: LabActionItem) -> some View {
+    private func gooeyEffectName(_ look: LabLook) -> String {
+        let choices = LabExperiment.gooey.parameters.first { $0.id == "effect" }?.choices ?? []
+        let i = Int(look.values["gooey.effect"] ?? 0)
+        return choices.indices.contains(i) ? "Gooey · \(choices[i])" : "Gooey"
+    }
+
+    /// One surface, edited in place: its shape, what it carries, how it
+    /// comes and goes — with the panel beside, small.
+    private func surfaceEditor(_ item: LabActionItem) -> some View {
         let assigned = spec.surface(for: item)
         let surface = spec.resolvedSurface(for: item)
         let real = LabMorphPanel.size(of: surface.kind)
-        let box: CGFloat = 140
+        let box: CGFloat = 96
         let scale = min(box / real.width, box / real.height, 1)
         let look = spec.resolvedLook(for: .listening)
-        return VStack(spacing: 6) {
+        func update(_ change: (inout LabSurfaceSpec) -> Void) {
+            var s = surface
+            change(&s)
+            lab.spec.surfaces[item.rawValue] = s
+        }
+        return HStack(alignment: .top, spacing: 12) {
             LabMorphPanel(state: surface.morphState, frame: frame.applying(look, config: config).applying(surface), config: config, caption: LabAgentVerb.listening.caption)
                 .scaleEffect(scale)
                 .frame(width: box, height: box)
-                .opacity(assigned == nil ? 0.45 : 1)
-                .contextMenu {
+                .opacity(assigned == nil ? 0.5 : 1)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label(item.label, systemImage: item.symbol).font(.caption.weight(.semibold))
+                    if assigned == nil { Text("default").font(.caption2).foregroundStyle(.tertiary) }
+                    Spacer()
                     if assigned != nil {
-                        Button("Open in Lab") { lab.open(surface) }
-                        Button("Clear", role: .destructive) { lab.spec.surfaces[item.rawValue] = nil }
+                        Menu {
+                            Button("Open in Morph") { lab.open(surface) }
+                            Button("Reset to Default", role: .destructive) { lab.spec.surfaces[item.rawValue] = nil }
+                        } label: { Image(systemName: "ellipsis.circle") }
+                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                     }
                 }
-            Label(item.label, systemImage: item.symbol).font(.caption.weight(.semibold))
-            Text(assigned == nil ? "Default · \(surface.kind.label)" : surface.kind.label + (surface.adornments.isEmpty ? "" : " · " + surface.adornments.map(\.label).joined(separator: ", ")))
-                .font(.caption2)
-                .foregroundStyle(assigned == nil ? .tertiary : .secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(width: box)
+                LabChips(choices: LabMorphKind.allCases.map(\.label),
+                         selection: Binding(get: { LabMorphKind.allCases.firstIndex(of: surface.kind) ?? 0 },
+                                            set: { i in update { $0.kind = LabMorphKind.allCases[i] } }))
+                    .controlSize(.small)
+                LabWrap(spacing: 4) {
+                    ForEach(LabMorphAdornment.allCases) { a in
+                        let on = surface.adornments.contains(a)
+                        Button {
+                            update { s in if on { s.adornments.removeAll { $0 == a } } else { s.adornments.append(a) } }
+                        } label: {
+                            Label(a.label, systemImage: a.symbol)
+                                .font(.caption2)
+                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                .background(Capsule().fill(on ? Color.accentColor.opacity(0.25) : Color.clear))
+                                .overlay(Capsule().strokeBorder(on ? Color.accentColor : Color.secondary.opacity(0.4)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Picker("In", selection: Binding(get: { surface.enter }, set: { v in update { $0.enter = v } })) {
+                        ForEach(LabMorphTransition.allCases) { Text($0.label).tag($0) }
+                    }
+                    Picker("Out", selection: Binding(get: { surface.exit }, set: { v in update { $0.exit = v } })) {
+                        ForEach(LabMorphTransition.allCases.filter { $0 != .flare }) { Text($0.label).tag($0) }
+                    }
+                }
+                .font(.caption)
+                .controlSize(.small)
+            }
         }
-        .frame(width: box + 4)
+        .padding(.bottom, 6)
     }
 }
 
@@ -389,13 +573,16 @@ struct LabPodGlass<Content: View>: View {
     @ObservedObject var config: RingConfig
     let dark: Bool
     @ViewBuilder let content: () -> Content
+    @Environment(\.labNoGlass) private var noGlass
 
     var body: some View {
         let inner = content()
             .frame(width: 62, height: 62)
             .clipShape(Circle())
         Group {
-            if #available(iOS 26.0, macOS 26.0, *) {
+            if noGlass {
+                inner.background(Color.black.opacity(0.5), in: Circle())
+            } else if #available(iOS 26.0, macOS 26.0, *) {
                 inner.glassEffect(config.glass, in: Circle())
             } else {
                 inner.background(.ultraThinMaterial, in: Circle())

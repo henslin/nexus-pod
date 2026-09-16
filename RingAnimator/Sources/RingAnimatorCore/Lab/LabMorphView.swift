@@ -99,7 +99,7 @@ struct LabMorphView: View {
 /// One state as a glass panel: the shape its kind takes, the content it
 /// carries, and its adornments. Drawn by the hero (animated between
 /// states) and by the workbench (one per state, still).
-struct LabMorphPanel: View {
+public struct LabMorphPanel: View {
     let state: LabMorphState
     let frame: LabFrame
     @ObservedObject var config: RingConfig
@@ -110,6 +110,19 @@ struct LabMorphPanel: View {
     /// What the surface says — the agent's state, in play. `nil` shows
     /// the workbench's sample copy.
     var caption: String? = nil
+    /// A conversation to lay out instead of the sample copy — Q Branch's
+    /// play, running a script through the states.
+    var conversation: LabConversation? = nil
+
+    public init(state: LabMorphState, frame: LabFrame, config: RingConfig, sinceChange: Double = .infinity, untilChange: Double = .infinity, caption: String? = nil, conversation: LabConversation? = nil) {
+        self.state = state
+        self.frame = frame
+        self.config = config
+        self.sinceChange = sinceChange
+        self.untilChange = untilChange
+        self.caption = caption
+        self.conversation = conversation
+    }
 
     /// 0 → 1 as the content arrives, 1 → 0 as it leaves.
     private var envelope: Double {
@@ -143,7 +156,7 @@ struct LabMorphPanel: View {
     /// Real iOS sizes, in points, on a 393-wide phone: the pod is the tab
     /// bar's; the pill is the tab bar accessory's width; the card is a
     /// notification's; the sheet a medium detent; full screen the screen.
-    static func size(of kind: LabMorphKind) -> CGSize {
+    public static func size(of kind: LabMorphKind) -> CGSize {
         switch kind {
         case .pod:        return CGSize(width: 62, height: 62)
         case .pill:       return CGSize(width: 361, height: 62)
@@ -163,7 +176,7 @@ struct LabMorphPanel: View {
         }
     }
 
-    var body: some View {
+    public var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let env = envelope
         ZStack {
@@ -194,6 +207,15 @@ struct LabMorphPanel: View {
 
     @ViewBuilder
     private var content: some View {
+        if let conversation {
+            LabConversationView(kind: state.kind, conversation: conversation, frame: frame, config: config, size: size)
+        } else {
+            sample
+        }
+    }
+
+    @ViewBuilder
+    private var sample: some View {
         let hasWave = state.adornments.contains(.waveform)
         let hasCaption = state.adornments.contains(.caption)
         let hasTranscript = state.adornments.contains(.transcript)

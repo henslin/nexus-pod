@@ -18,19 +18,15 @@ public struct LabStageView: View {
     @ObservedObject var config: RingConfig
     @StateObject private var audio = AudioSpectrumMonitor()
     @StateObject private var presets = LabPresetStore()
+    @StateObject private var specs = LabSpecStore()
     @State private var appeared = Date()
     @State private var savedFrameMessage: String?
-    @State private var savingPreset = false
-    @State private var presetName = ""
     @State private var stageSize: CGSize = .zero
 
     /// A stage location as points from the experiment's centre.
     private func pointerLocal(_ p: CGPoint) -> CGPoint {
         CGPoint(x: p.x - stageSize.width / 2, y: p.y - stageSize.height / 2)
     }
-    /// Which post effect's knobs are open in the panel.
-    @State private var openPost: LabPostEffect?
-
     public init(lab: LabState, config: RingConfig) {
         self.lab = lab
         self.config = config
@@ -42,7 +38,7 @@ public struct LabStageView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             controls
-                .frame(width: 300)
+                .frame(width: lab.experiment == .system ? 360 : 300)
         }
         .onAppear { appeared = Date() }
         .onChange(of: lab.audioReactive, initial: true) { _, on in
@@ -52,13 +48,6 @@ public struct LabStageView: View {
         .onChange(of: lab.audioRelease, initial: true) { _, v in audio.release = v }
         .onChange(of: lab.transcribe, initial: true) { _, on in audio.transcribing = on }
         .onDisappear { audio.stop() }
-        .alert("Save Preset", isPresented: $savingPreset) {
-            TextField("Name", text: $presetName)
-            Button("Save") { if !presetName.isEmpty { presets.save(presetName, from: lab); presetName = "" } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The \(lab.experiment.name) knobs, the post stack, the hero and the palette.")
-        }
     }
 
     private func colors(at time: Double) -> [Color] {
@@ -159,163 +148,17 @@ public struct LabStageView: View {
         }
     }
 
+    /// The inspector: the experiment's rail, or — in Q Branch — the board.
+    @ViewBuilder
     private var controls: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(lab.experiment.name).font(.title3.weight(.semibold))
-                    Text(lab.experiment.technology)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                // Into the System: this, as tuned, for a slot.
-                if lab.experiment.canBeHero || lab.experiment == .gooey {
-                    LabUseAsMenu(lab: lab)
-                }
-                Text(lab.experiment.summary)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Divider()
-                sectionTitle("Stage")
-                LabSlider(title: "Intensity", value: $lab.intensity, range: 0...1)
-                LabSlider(title: "Speed", value: $lab.speed, range: 0.1...3, format: "%.1f×")
-                LabSlider(title: "Size", value: $lab.diameter, range: 62...600, format: "%.0f pt")
-                LabSlider(title: "Fill", value: $lab.fill, range: 0...1.3,
-                          help: "Scales the experiment to fill the circle. 1 is edge to edge; past it crops.")
-                Toggle("Dark Stage", isOn: $lab.darkStage)
-                Toggle("Pod Preview", isOn: $lab.showPod)
-                if lab.showPod {
-                    Toggle("Fill Pod", isOn: $lab.podFill)
-                        .padding(.leading, 12)
-                }
-                if lab.experiment.drawsHero {
-                    Picker("Hero", selection: $lab.hero) {
-                        Text("Ring").tag(LabExperiment?.none)
-                        ForEach(LabExperiment.allCases.filter(\.canBeHero)) { e in
-                            Text(e.name).tag(LabExperiment?.some(e))
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    Text("What this flow draws where the ring goes. Any animation lab, with the post stack.")
-                        .font(.caption2).foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Divider()
-                sectionTitle("Colour")
-                Picker("Palette", selection: $lab.palette) {
-                    ForEach(LabPalette.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.menu)
-                paletteStrip
-                LabSlider(title: "Hue Drift", value: $lab.hueDrift, range: -90...90, format: "%.0f°/s",
-                          help: "Rotates every colour's hue over time. The palette's relationships hold.")
-                TextField("Glyph (SF Symbol)", text: $lab.glyph)
-                Text("Drawn inside. Orb, Refraction, Liquid and Sphere are the ones built for it.")
-                    .font(.caption2).foregroundStyle(.tertiary)
-
-                Divider()
-                sectionTitle("Audio")
-                Toggle("Audio Reactive", isOn: $lab.audioReactive)
-                if lab.audioReactive {
-                    Picker("Drives", selection: $lab.audioSource) {
-                        ForEach(LabAudioSource.allCases) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    LabSlider(title: "Sensitivity", value: $lab.audioSensitivity, range: 0.5...5, format: "%.1f×")
-                    LabSlider(title: "Attack", value: $lab.audioAttack, range: 0.005...0.3, format: "%.3f s",
-                              help: "How fast a rise is followed.")
-                    LabSlider(title: "Release", value: $lab.audioRelease, range: 0.05...2, format: "%.2f s",
-                              help: "How slowly a fall is followed. Long release is the ‘breathing’ look.")
-                    let b = bands
-                    LabBandMeters(bands: b)
-                    Toggle("Live Transcript", isOn: $lab.transcribe)
-                    Text(audio.transcriptError ?? (lab.transcribe ? "Speech recognition on the mic — Bloom, and the Transcript adornment, show your words as you say them." : "Off: the transcript flows show sample copy."))
-                        .font(.caption2).foregroundStyle(audio.transcriptError == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.red))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Divider()
-                sectionTitle("Post Effects")
-                Text("Stacked over the experiment, in this order. Each uses its own knobs below.")
-                    .font(.caption2).foregroundStyle(.tertiary)
-                ForEach(LabPostEffect.allCases) { effect in
-                    let on = lab.post.contains(effect)
-                    HStack {
-                        Toggle(effect.experiment.name, isOn: Binding(
-                            get: { on }, set: { _ in lab.togglePost(effect) }))
-                        Spacer()
-                        if on {
-                            Button {
-                                openPost = openPost == effect ? nil : effect
-                            } label: {
-                                Image(systemName: openPost == effect ? "chevron.up" : "slider.horizontal.3")
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                    }
-                    if on, openPost == effect {
-                        knobs(for: effect.experiment)
-                            .padding(.leading, 12)
-                    }
-                }
-
-                if !lab.experiment.parameters.isEmpty {
-                    Divider()
-                    HStack {
-                        sectionTitle(lab.experiment.name)
-                        Spacer()
-                        LabPresetsMenu(presets: presets, lab: lab, saving: $savingPreset, name: $presetName)
-                        Button("Reset") { lab.resetParameters(of: lab.experiment) }
-                            .buttonStyle(.borderless)
-                            .font(.caption)
-                    }
-                    knobs(for: lab.experiment)
-                }
-
-                Divider()
-                Button {
-                    saveFrame()
-                } label: {
-                    Label("Save Frame…", systemImage: "square.and.arrow.down")
-                        .frame(maxWidth: .infinity)
-                }
-                .ringGlassButtonStyle()
-                if let savedFrameMessage {
-                    Text(savedFrameMessage).font(.caption2).foregroundStyle(.tertiary)
-                }
-                Text("A still of the stage at 2×. Liquid Glass and RealityKit don't rasterise — Morph and Volumetric save empty.")
-                    .font(.caption2).foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+        if lab.experiment == .system {
+            ScrollView {
+                LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: CGFloat(lab.diameter)), specs: specs)
+                    .padding(16)
             }
-            .padding(16)
-        }
-    }
-
-    private func sectionTitle(_ title: String) -> some View {
-        Text(title).font(.headline)
-    }
-
-    private func knobs(for experiment: LabExperiment) -> some View {
-        let params = experiment.parameters
-        return ForEach(Array(params.enumerated()), id: \.element.id) { i, parameter in
-            // A heading wherever the group changes.
-            if let g = parameter.group, i == 0 || params[i - 1].group != g {
-                Text(g)
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.top, i == 0 ? 0 : 8)
-            }
-            LabKnob(parameter: parameter, value: lab.binding(parameter, of: experiment))
-        }
-    }
-
-    private var paletteStrip: some View {
-        HStack(spacing: 4) {
-            ForEach(Array(colors(at: 0).enumerated()), id: \.offset) { _, c in
-                RoundedRectangle(cornerRadius: 4).fill(c).frame(height: 14)
-            }
+        } else {
+            LabRailView(lab: lab, config: config, audio: audio, presets: presets, bands: bands,
+                        onSaveFrame: saveFrame, savedFrameMessage: savedFrameMessage)
         }
     }
 
@@ -437,15 +280,36 @@ public struct LabListView: View {
         List(selection: selection) {
             ForEach(LabSection.allCases) { section in
                 Section {
-                    ForEach(section.bases) { row($0) }
+                    if section == .orb {
+                        // Sixty bases read as six shelves.
+                        ForEach(section.families, id: \.family) { family, bases in
+                            Text(family.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .listRowSeparator(.hidden)
+                                .padding(.top, 4)
+                            ForEach(bases) { row($0) }
+                        }
+                    } else {
+                        ForEach(section.bases) { row($0) }
+                    }
                     if !section.posts.isEmpty {
-                        Text("Post effects — stack these over any base")
-                            .font(.caption2).foregroundStyle(.tertiary)
+                        Text("Post effects")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
                             .listRowSeparator(.hidden)
+                            .padding(.top, 4)
                         ForEach(section.posts) { row($0) }
                     }
                 } header: {
-                    Label(section.title, systemImage: section.symbol)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(section.title, systemImage: section.symbol)
+                        Text(section.caption)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .textCase(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
@@ -726,30 +590,51 @@ public struct LabChips: View {
     }
 }
 
-/// A wrapping HStack, for chips. `Layout`, so it works on both platforms.
-struct LabWrap: Layout {
+/// A wrapping HStack, for chips and words. `Layout`, so it works on
+/// both platforms; rows can be centred.
+public struct LabWrap: Layout {
     var spacing: CGFloat = 6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 300
-        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
-        for v in subviews {
-            let s = v.sizeThatFits(.unspecified)
-            if x + s.width > width, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
-            x += s.width + spacing
-            rowH = max(rowH, s.height)
-        }
-        return CGSize(width: width, height: y + rowH)
+    var alignment: HorizontalAlignment = .leading
+    public init(spacing: CGFloat = 6, alignment: HorizontalAlignment = .leading) {
+        self.spacing = spacing
+        self.alignment = alignment
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowH: CGFloat = 0
-        for v in subviews {
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [[(Int, CGSize)]] {
+        var rows: [[(Int, CGSize)]] = [[]]
+        var x: CGFloat = 0
+        for (i, v) in subviews.enumerated() {
             let s = v.sizeThatFits(.unspecified)
-            if x + s.width > bounds.maxX, x > bounds.minX { x = bounds.minX; y += rowH + spacing; rowH = 0 }
-            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            if x + s.width > width, !rows[rows.count - 1].isEmpty { rows.append([]); x = 0 }
+            rows[rows.count - 1].append((i, s))
             x += s.width + spacing
-            rowH = max(rowH, s.height)
+        }
+        return rows
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 300
+        var y: CGFloat = 0
+        for (r, row) in rows(subviews, width: width).enumerated() {
+            let h = row.map(\.1.height).max() ?? 0
+            y += h + (r > 0 ? spacing : 0)
+        }
+        return CGSize(width: width, height: y)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            let h = row.map(\.1.height).max() ?? 0
+            let w = row.reduce(0) { $0 + $1.1.width } + spacing * CGFloat(max(0, row.count - 1))
+            var x: CGFloat = bounds.minX
+            if alignment == .center { x = bounds.minX + (bounds.width - w) / 2 }
+            else if alignment == .trailing { x = bounds.maxX - w }
+            for (i, s) in row {
+                subviews[i].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+                x += s.width + spacing
+            }
+            y += h + spacing
         }
     }
 }

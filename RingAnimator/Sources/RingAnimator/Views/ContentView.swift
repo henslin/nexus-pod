@@ -457,7 +457,7 @@ struct ContentView: View {
                 + MotionChoice.multiPhaseStyles.count + MotionChoice.firmwarePatterns.count
             return "Every style as a live thumbnail · \(n)"
         case .lab:
-            return "What each rendering technology can do · \(LabExperiment.allCases.count) experiments"
+            return "Designing the agent — orb, controls, surfaces, flows, Q Branch · \(LabExperiment.allCases.filter { !$0.isHidden }.count) experiments"
         case .cueLibrary:
             let tweaked = cueStore.overrides.count
             let base = "The hardware spec, cue by cue · \(LEDCueLibrary.all.count)"
