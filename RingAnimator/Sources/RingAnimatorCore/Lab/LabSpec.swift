@@ -244,6 +244,16 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
     /// The look a verb wears in play — assigned, or the pod's, or the ring.
     public func resolvedLook(for verb: LabAgentVerb) -> LabLook? { look(for: verb) ?? pod }
 
+    /// Whether a slot is filled.
+    public func has(_ target: LabSlotTarget) -> Bool {
+        switch target {
+        case .pod: return pod != nil
+        case .state(let v): return states[v.rawValue] != nil
+        case .action: return action != nil
+        case .ask: return ask != nil
+        }
+    }
+
     /// Slots filled, out of the slots the spec has.
     public var filled: Int {
         (pod == nil ? 0 : 1) + states.count + (ask == nil ? 0 : 1) + (action == nil ? 0 : 1) + items.filter { surfaces[$0.rawValue] != nil }.count
@@ -451,6 +461,17 @@ extension LabState {
     public func choose(for target: LabSlotTarget) {
         self.target = target
         experiment = lastBench.flatMap { target.accepts($0) ? $0 : nil } ?? target.startingExperiment
+    }
+    /// Click the thing to change it (Chris, 2026-09-16): a filled slot
+    /// opens on the bench as it is, with the errand set so Use puts it
+    /// back; an empty one goes choosing.
+    public func edit(_ look: LabLook?, for target: LabSlotTarget) {
+        if let look, look.experimentCase != nil {
+            open(look)
+            self.target = target
+        } else {
+            choose(for: target)
+        }
     }
     /// The current experiment into the target slot, and back to Q Branch.
     public func fulfilTarget() {

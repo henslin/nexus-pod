@@ -321,17 +321,34 @@ public struct LabSpecBoard: View {
                     .labelsHidden().pickerStyle(.segmented).controlSize(.small)
                 }
                 .help("What the Ask button is. In the pod, the pod is the button.")
-                Text("Items").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 4)
-                ForEach(LabActionItem.allCases) { item in
-                    HStack(spacing: 8) {
-                        Spacer().frame(width: LabRailMetrics.labelWidth)
-                        Toggle(isOn: Binding(get: { spec.items.contains(item) }, set: { _ in lab.toggleItem(item) })) {
-                            Label(item.label, systemImage: item.symbol).font(.callout)
+                // The menu's items: checked is in, in this order.
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Menu items").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(spec.items.count) in the menu").font(.caption).foregroundStyle(.tertiary)
+                    }
+                    .padding(.top, 4)
+                    ForEach(LabActionItem.allCases) { item in
+                        let on = spec.items.contains(item)
+                        HStack(spacing: 8) {
+                            Toggle("", isOn: Binding(get: { on }, set: { _ in lab.toggleItem(item) }))
+                                .labelsHidden()
+                            Image(systemName: item.symbol)
+                                .font(.callout)
+                                .frame(width: 20)
+                                .foregroundStyle(on ? .primary : .tertiary)
+                            Text(item.label)
+                                .font(.callout)
+                                .foregroundStyle(on ? .primary : .secondary)
+                            Spacer(minLength: 0)
+                            if on, let i = spec.items.firstIndex(of: item) {
+                                Text("\(i + 1)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+                            }
                         }
-                        Spacer(minLength: 0)
+                        .help(on ? "In the menu, position \((spec.items.firstIndex(of: item) ?? 0) + 1). Uncheck to leave it out." : "Not in the menu. Check to add it at the end.")
                     }
                 }
-                .help("What the menu offers, in this order.")
             }
             LabRailSection("q.containers", "Containers", summary: spec.items.map { "\($0.label) · \(spec.resolvedSurface(for: $0).kind.label)" }.joined(separator: ", ")) {
                 containerTable
@@ -430,18 +447,28 @@ public struct LabSpecBoard: View {
     /// (and the row's context menu) is every way to fill it.
     private func slotRow(title: String, symbol: String? = nil, look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void, menu: Bool = false) -> some View {
         HStack(spacing: 10) {
-            thumbnail(look, menu: menu)
-                .frame(width: Self.thumb, height: Self.thumb)
-            if let symbol {
-                Image(systemName: symbol).font(.caption).foregroundStyle(.secondary).frame(width: 14)
+            // The row is the thing: click it to change it.
+            Button {
+                lab.edit(look, for: target)
+            } label: {
+                HStack(spacing: 10) {
+                    thumbnail(look, menu: menu)
+                        .frame(width: Self.thumb, height: Self.thumb)
+                    if let symbol {
+                        Image(systemName: symbol).font(.caption).foregroundStyle(.secondary).frame(width: 14)
+                    }
+                    Text(title).font(.callout)
+                        .frame(width: symbol == nil ? LabRailMetrics.labelWidth : LabRailMetrics.labelWidth - 24, alignment: .leading)
+                    Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty — click to choose")
+                        .font(.callout)
+                        .foregroundStyle(look == nil ? .tertiary : .secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
-            Text(title).font(.callout)
-                .frame(width: symbol == nil ? LabRailMetrics.labelWidth : LabRailMetrics.labelWidth - 24, alignment: .leading)
-            Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty")
-                .font(.callout)
-                .foregroundStyle(look == nil ? .tertiary : .secondary)
-                .lineLimit(1)
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            .help(look == nil ? "Choose in the Lab" : "Open on the bench to change it; Use brings it back here")
             Menu {
                 slotActions(look: look, target: target, set: set)
             } label: { Image(systemName: "ellipsis.circle") }
@@ -450,16 +477,19 @@ public struct LabSpecBoard: View {
                 .fixedSize()
                 .font(.caption)
         }
-        .contentShape(Rectangle())
         .contextMenu { slotActions(look: look, target: target, set: set) }
-        .help(target.hint)
     }
 
     @ViewBuilder
     private func slotActions(look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void) -> some View {
+        if look != nil {
+            Button {
+                lab.edit(look, for: target)
+            } label: { Label("Edit on the Bench", systemImage: "slider.horizontal.3") }
+        }
         Button {
             lab.choose(for: target)
-        } label: { Label("Choose in the Lab…", systemImage: "flask") }
+        } label: { Label("Choose Another in the Lab…", systemImage: "flask") }
         if let bench = lab.lastBench, target.accepts(bench) {
             Button("Use the Bench · \(bench.name)") { set(LabLook(from: lab, experiment: bench)) }
         }
@@ -475,7 +505,6 @@ public struct LabSpecBoard: View {
         }
         if let look {
             Divider()
-            Button("Open in Lab") { lab.open(look) }
             Button("Clear", role: .destructive) { set(nil) }
         }
     }
