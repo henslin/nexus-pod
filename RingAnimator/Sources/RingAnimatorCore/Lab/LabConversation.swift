@@ -186,8 +186,12 @@ struct LabConversationView: View {
     @Namespace private var quidgetNS
 
     private var c: LabConversation { conversation }
-    /// The reply's quidget, once the answer has landed.
-    private var quidget: QuidgetKind? { c.verb == .done ? c.script.quidget : nil }
+    /// The reply's quidget, once the answer has landed — if the spec
+    /// lets the agent reply with that kind.
+    private var quidget: QuidgetKind? {
+        guard c.verb == .done, let q = c.script.quidget, frame.spec.quidgetKinds.contains(q) else { return nil }
+        return q
+    }
     private var primary: Color { frame.colors.first ?? .accentColor }
 
     var body: some View {
@@ -273,7 +277,7 @@ struct LabConversationView: View {
                         .padding(.leading, 4)
                 }
                 if let quidget {
-                    quidgetInline(quidget, medium: quidget == .clip)
+                    quidgetInline(quidget, medium: quidget == .clip || frame.spec.quidgetInlineSize == .medium)
                 }
                 if c.showsFollowUps { followUps(size: 13).padding(.leading, 4) }
                 Spacer(minLength: 0)
@@ -303,7 +307,7 @@ struct LabConversationView: View {
                         .frame(maxWidth: size.width - 56)
                 }
                 if let quidget {
-                    quidgetInline(quidget, medium: quidget == .clip)
+                    quidgetInline(quidget, medium: quidget == .clip || frame.spec.quidgetInlineSize == .medium)
                 }
                 if c.showsFollowUps { followUps(size: 14, centered: true) }
                 Spacer()

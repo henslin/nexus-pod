@@ -1304,7 +1304,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("textGlow", "Glow", 0...1, 0.4, "On each arriving word.", group: "Transcript"),
         ]
         case .system: return [
-            .init("script", "Conversation", 0...6, 0, "Which ask the play runs through the states.", "%.0f", group: "Play", choices: LabScript.all.map(\.title), kind: .popup),
+            .init("script", "Conversation", 0...6, 4, "Which ask the play runs through the states. The last three carry a quidget.", "%.0f", group: "Play", choices: LabScript.all.map(\.title), kind: .popup),
             .init("hold", "Hold", 0.5...8, 3, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
             .init("auto", "Auto-advance", 0...1, 1, "Steps on the clock; off, only a tap or the strip does.", "%.0f", group: "Play", choices: ["Off", "On"]),
             .init("spring", "Spring", 0.2...1.2, 0.55, "Response of the morph between surfaces.", group: "Play"),

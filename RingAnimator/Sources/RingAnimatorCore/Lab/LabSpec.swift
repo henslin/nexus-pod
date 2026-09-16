@@ -247,8 +247,15 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
     public var ask: LabLook?
     public var askPlacement: LabAskPlacement?
     public var askStyle: LabAskStyle?
+    /// Quidgets the agent may reply with, and how they sit in a reply.
+    /// `nil` is all of them, small.
+    public var quidgets: [QuidgetKind]?
+    public var quidgetSize: String?
 
     public init() {}
+
+    public var quidgetKinds: [QuidgetKind] { quidgets ?? QuidgetKind.allCases }
+    public var quidgetInlineSize: QuidgetSize { QuidgetSize(rawValue: quidgetSize ?? "small") ?? .small }
 
     public func look(for verb: LabAgentVerb) -> LabLook? { states[verb.rawValue] }
     public func surface(for item: LabActionItem) -> LabSurfaceSpec? { surfaces[item.rawValue] }

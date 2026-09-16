@@ -377,6 +377,36 @@ public struct LabSpecBoard: View {
             LabRailSection("q.containers", "Containers", summary: spec.items.map { "\($0.label) · \(spec.resolvedSurface(for: $0).kind.label)" }.joined(separator: ", ")) {
                 containerTable
             }
+            LabRailSection("q.quidgets", "Quidgets", summary: "\(spec.quidgetKinds.map(\.label).joined(separator: ", ")) · \(spec.quidgetInlineSize.label)") {
+                Text("Quick widgets a reply can carry — the thing you asked about, as a control. Play a conversation that has one: Dim the patio light, Arm the house, Packages today.")
+                    .font(.caption).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(QuidgetKind.allCases) { kind in
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: Binding(get: { spec.quidgetKinds.contains(kind) }, set: { on in
+                            var kinds = spec.quidgetKinds
+                            if on { if !kinds.contains(kind) { kinds.append(kind) } } else { kinds.removeAll { $0 == kind } }
+                            lab.spec.quidgets = kinds
+                        }))
+                        .labelsHidden()
+                        Image(systemName: kind == .light ? "lightbulb.fill" : kind == .security ? "house.fill" : "video.fill")
+                            .font(.callout).frame(width: 20).foregroundStyle(.secondary)
+                        Text(kind.label).font(.callout)
+                        Spacer(minLength: 0)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("In the reply").font(.callout).foregroundStyle(.secondary)
+                    Picker("", selection: Binding(get: { spec.quidgetInlineSize }, set: { lab.spec.quidgetSize = $0.rawValue })) {
+                        Text("Small").tag(QuidgetSize.small)
+                        Text("Medium").tag(QuidgetSize.medium)
+                    }
+                    .labelsHidden().pickerStyle(.segmented).controlSize(.small)
+                }
+                .help("How a quidget sits in the reply. Clips are always medium. Tap one to expand it.")
+                Button("Open the Quidgets Lab") { lab.experiment = .quidgets }
+                    .controlSize(.small)
+            }
             LabRailSection("q.gestures", "Gestures", summary: "Tap · \(spec.tap.label) · Hold · \(spec.longPress.label)") {
                 labelled("Tap") {
                     Picker("", selection: Binding(get: { lab.spec.tap }, set: { lab.spec.tap = $0 })) {
