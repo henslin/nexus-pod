@@ -1215,6 +1215,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("desat", "Desaturate", 0...1, 0, "Toward monochrome."),
         ]
         case .journey: return [
+            .init("script", "Conversation", 0...3, 0, "Which ask the chat shows.", "%.0f", group: "Chat", choices: LabScript.all.map(\.title)),
             .init("orbPod", "In the pod", 0...8, 7, "Their orb's verb in the tab bar.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("orbChat", "In chat", 0...8, 0, "Their orb's verb in the chat sheet.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("orbVoice", "In voice", 0...8, 3, "Their orb's verb full screen.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),

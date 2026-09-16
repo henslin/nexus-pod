@@ -376,22 +376,13 @@ struct LabPickerSheet: View {
             List {
                 ForEach(LabSection.allCases) { section in
                     Section {
-                        ForEach(section.bases) { e in
-                            Button {
-                                lab.experiment = e
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: e.symbol).frame(width: 24).foregroundStyle(.secondary)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(e.name)
-                                        Text(e.technology).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    if e == lab.experiment { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                                }
+                        if section == .orb {
+                            ForEach(section.families, id: \.family) { family, bases in
+                                Text(family.title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                ForEach(bases) { row($0) }
                             }
-                            .buttonStyle(.plain)
+                        } else {
+                            ForEach(section.bases) { row($0) }
                         }
                     } header: {
                         Label(section.title, systemImage: section.symbol)
@@ -403,5 +394,23 @@ struct LabPickerSheet: View {
             .navigationTitle("Experiments")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+    }
+
+    private func row(_ e: LabExperiment) -> some View {
+        Button {
+            lab.experiment = e
+            dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: e.symbol).frame(width: 24).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(e.name)
+                    Text(e.technology).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if e == lab.experiment { Image(systemName: "checkmark").foregroundStyle(.tint) }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }

@@ -158,6 +158,7 @@ struct LabJourneyView: View {
     private func glassPanel(stage: Stage, size: CGSize, panel: CGRect, spring: Animation) -> some View {
         let corner: CGFloat = stage == .pod ? 31 : stage == .chat ? 34 : size.width * 0.13
         let role = Int(frame.p("role", .journey))
+        let script = LabScript.named(Int(frame.p("script", .journey)))
         ZStack(alignment: .top) {
             if stage == .chat {
                 VStack(alignment: .leading, spacing: 12) {
@@ -169,11 +170,11 @@ struct LabJourneyView: View {
                     }
                     HStack {
                         Spacer(minLength: 40)
-                        bubble("Is anyone home?", mine: true)
+                        bubble(script.ask, mine: true)
                     }
                     HStack(alignment: .top, spacing: 10) {
                         if role == 1 { Spacer().frame(width: 48) }
-                        bubble("John arrived home at 5:42. The front door is locked and the living room lights are on.", mine: false)
+                        bubble(script.answer, mine: false)
                         Spacer(minLength: 20)
                     }
                     Spacer()

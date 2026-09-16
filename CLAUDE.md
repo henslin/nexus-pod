@@ -31,6 +31,53 @@ core library:
   screens/assets, exporters. Both platforms stay in sync by depending on
   this one target rather than duplicating code.
 
+### The Lab (`RingAnimator/Sources/RingAnimatorCore/Lab/`)
+
+The Lab is the discovery-design studio for the AI agent's UI — "Sketch
+or Figma for designing an AI agent" (Chris, overnight 2026-09-15/16).
+Five rooms, in the order a designer meets the parts of an agent
+(`LabSection`): **Orb** (presence: ~60 bases on six shelves —
+`LabFamily` — plus post effects that stack over any), **Controls** (what
+you tap: Ask Button, Gooey, Metal, Border Beam), **Surfaces** (what
+opens: Morph — pill/card/sheet/full screen with adornments), **Flows**
+(how it moves: Journey, Agent States, Hold, Bloom Field), and **Q
+Branch** (where it comes together).
+
+- `LabExperiment` is the catalogue; `LabParameter` its knobs; `LabState`
+  the bench (shared knobs, values keyed `experiment.param`, post stack,
+  hero, morph states, the working `spec`, a `target` slot); `LabFrame`
+  what a view is given each tick. `LabRailView` is the inspector: the
+  experiment's knobs first, then the post stack, then Stage / Colour /
+  Audio / Export as remembered disclosures.
+- **Q Branch** (`LabSpec.swift`, `LabSystemView.swift`): a `LabSpec`
+  assigns a `LabLook` (an experiment as tuned) to every slot the product
+  has — pod, a look per `LabAgentVerb`, the Ask button (`ask`,
+  `askPlacement`, `askStyle`), the menu and its `LabActionItem`s, a
+  `LabSurfaceSpec` per item, tap and long press. The board is the rail;
+  the stage plays the spec end to end (`LabPlayView`) with a step strip.
+  Slots fill from a menu (bench / preset / "Choose in the Lab…", which
+  sets `LabState.target` and puts a Use banner on the rail). Three
+  starters (`LabSpec.starters`); specs save by name (`LabSpecStore`) and
+  travel as JSON via the pasteboard to Nexus Lab's Paste Spec.
+- **Conversations** (`LabConversation.swift`): four `LabScript`s (quick
+  question, device help, onboarding & placement, battery life) run
+  through the states in text or voice — the ask typed/spoken, Thinking,
+  the named work, the answer streaming (`LabStreamWords`), follow-ups.
+  `LabConversationView` lays it out per surface kind; `LabMorphPanel`
+  takes a `conversation` in place of its sample copy. Journey's chat
+  uses the scripts too.
+- **Live transcript**: `AudioSpectrumMonitor.transcribing` runs
+  `SFSpeechRecognizer` on the mic tap (one tap per input node);
+  `LabFrame.transcript` carries words with ages. `LabTranscriptView`.
+- **Verification**: `ImageRenderer` runs shaders and Canvas but not
+  Liquid Glass — and drops what sits *inside* a glass effect. Harness
+  renders set `.environment(\.labNoGlass, true)` so panels draw flat.
+  Harness helpers: `LabRailView.harness`, `LabPlayView.stepCount`,
+  `LabFrame.withTaps/withParams`. `ScrollView` and `List` don't
+  rasterise on the Mac either — render the content, not the container.
+- Vendored Libraries.dev kits (`Vendor/`): Thinking Orbs and Border
+  Beam; see `Vendor/README.md`.
+
 ### Timeline (sequencing)
 
 `RingTimeline`/`TimelineSegment`/`TimelinePlayer` (Core) compose an
