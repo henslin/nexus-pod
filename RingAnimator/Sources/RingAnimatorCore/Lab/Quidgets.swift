@@ -84,7 +84,8 @@ enum QuidgetInk {
     static let modeWell = Color(hex: "#DCDCE0")        // the modes' well
     static let tileOff = Color(hex: "#636466")         // a dark tile (locked door, light off)
     static let tileLight = Color(hex: "#F0EAE0")       // the light's tile, lit
-    static let amber = Color(hex: "#D29D48")           // unlocked / the dimmer's fill
+    static let amber = Color(hex: "#D29D48")           // unlocked
+    static let dimmerFill = Color(hex: "#F8B541")      // the dimmer's fill (the tall card, 2:721)
     static let amberInk = Color(hex: "#634514")
     static let green = Color(hex: "#6CB189")           // locked
     static let greenInk = Color(hex: "#174A2C")
@@ -263,12 +264,13 @@ public struct QuidgetView: View {
     }
 
     /// The small container: the well in the glass, with the tile in it.
-    private func small<Tile: View>(_ tile: () -> Tile) -> some View {
+    /// The light's dimmer *is* the well, so it skips the well's fill.
+    private func small<Tile: View>(well: Bool = true, _ tile: () -> Tile) -> some View {
         tile()
             .frame(width: Self.tileSize.width, height: Self.tileSize.height)
             .padding(4)
             .frame(width: Self.wellSize.width, height: Self.wellSize.height)
-            .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.well))
+            .modifier(QuidgetInset(radius: 24, fill: well ? QuidgetInk.well : .clear))
             .padding(.top, 11).padding(.bottom, 9).padding(.horizontal, 10)
             .frame(width: Self.smallSize.width, height: Self.smallSize.height)
             .modifier(QuidgetGlass(radius: 34))
@@ -282,20 +284,23 @@ public struct QuidgetView: View {
     private var light: some View {
         switch size {
         case .small, .medium:
-            small {
-                QuidgetDimmer(level: $demo.lightLevel, track: Self.tileSize, knob: CGSize(width: 101, height: 44), radius: 20, icon: 16)
+            // The well is the track: 109 × 126, the fill inset 4.
+            small(well: false) {
+                QuidgetDimmer(level: $demo.lightLevel, track: Self.wellSize, inset: 4, knobHeight: 44, icon: 16)
+                    .padding(-4)
             }
         case .large:
+            // The file's tall card (2:721): 384 × 527, the title 38 down,
+            // the track 160 × 383 at 111, the fill inset 10, the knob 64.
             VStack(spacing: 0) {
-                Text("Patio Light").font(.system(size: 17, weight: .semibold)).foregroundStyle(.black).padding(.top, 34)
+                Text("Patio Light").font(.system(size: 17, weight: .semibold)).foregroundStyle(.black).padding(.top, 38)
                 Text("\(Int((demo.lightLevel * 100).rounded()))%").font(.system(size: 17)).foregroundStyle(.black)
                     .contentTransition(.numericText())
-                    .padding(.top, 2)
-                QuidgetDimmer(level: $demo.lightLevel, track: CGSize(width: 154, height: 378), knob: CGSize(width: 154, height: 60), radius: 24, icon: 22)
-                    .padding(.top, 26)
+                QuidgetDimmer(level: $demo.lightLevel, track: CGSize(width: 160, height: 383), inset: 10, knobHeight: 64, icon: 22)
+                    .padding(.top, 30)
                 Spacer(minLength: 0)
             }
-            .frame(width: Self.wideWidth, height: 528)
+            .frame(width: Self.wideWidth, height: 527)
             .modifier(QuidgetGlass(radius: 34, white: 0.8))
         }
     }
@@ -552,34 +557,39 @@ private extension View {
 /// soft shadows — carrying the bulb. Drag anywhere.
 struct QuidgetDimmer: View {
     @Binding var level: Double
+    /// The track is the well: #C8C8C8, radius 24, the well's inner
+    /// shadows. The fill sits inside it, inset, radius 20; the knob is
+    /// the fill's width and rides its top edge.
     let track: CGSize
-    let knob: CGSize
-    let radius: CGFloat
+    let inset: CGFloat
+    let knobHeight: CGFloat
     let icon: CGFloat
 
     var body: some View {
-        let fillH = max(knob.height / 2, CGFloat(level) * track.height)
+        let inner = CGSize(width: track.width - inset * 2, height: track.height - inset * 2)
+        let fillH = max(knobHeight * 0.6, CGFloat(level) * inner.height)
         ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(QuidgetInk.tileOff)
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(QuidgetInk.amber)
-                .frame(height: fillH)
-            QuidgetKnob(radius: radius) {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(QuidgetInk.dimmerFill)
+                .modifier(QuidgetInset(radius: 20, fill: .clear, strong: true))
+                .frame(width: inner.width, height: fillH)
+                .padding(.bottom, inset)
+            QuidgetKnob(radius: 20) {
                 Image(systemName: "lightbulb.fill")
                     .font(.system(size: icon, weight: .medium))
                     .foregroundStyle(Color.black.opacity(0.75))
             }
-            .frame(width: knob.width, height: knob.height)
-            .padding(.bottom, min(track.height - knob.height, max(0, fillH - knob.height / 2)))
+            .frame(width: inner.width, height: knobHeight)
+            // The knob's top sits 7 above the fill's top on the tall card
+            // (421 vs 428); the same proportion here.
+            .padding(.bottom, min(track.height - inset - knobHeight, max(inset, inset + fillH - knobHeight + knobHeight * 0.11)))
         }
         .frame(width: track.width, height: track.height)
-        .modifier(QuidgetInset(radius: radius, fill: .clear, strong: true))
-        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.well))
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { g in
-                let v = 1 - Double(g.location.y / track.height)
+                let v = 1 - Double((g.location.y - inset) / inner.height)
                 withAnimation(.interactiveSpring()) { level = min(1, max(0, v)) }
             })
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: level)
