@@ -52,13 +52,13 @@ struct LabAskButton: View {
     private var primary: Color { frame.colors.first ?? .accentColor }
     private var podHome: CGPoint {
         let pod = CGFloat(RingConfig.tabBarPodDiameter)
-        return CGPoint(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
+        return CGPoint(x: LabPhone.inset + (size.width - LabPhone.inset * 2) - pod / 2, y: size.height - LabPhone.bottom - pod / 2)
     }
     /// Where the button sits, by placement.
     private var home: CGPoint {
         let r = buttonSize / 2
         switch placement {
-        case .floating: return CGPoint(x: size.width - 16 - r, y: size.height - 24 - 62 - 14 - r)
+        case .floating: return CGPoint(x: size.width - 16 - r, y: size.height - LabPhone.bottom - 62 - 14 - r)
         case .navBar: return CGPoint(x: size.width - 16 - 22, y: 62)
         case .tabBar: return podHome
         }
@@ -105,7 +105,7 @@ struct LabAskButton: View {
             case .pill:
                 // A glass pill with the mark and a word; it opens into a
                 // panel of suggestions and a field, above itself.
-                let w: CGFloat = open ? size.width - 32 : buttonSize * 1.9
+                let w: CGFloat = open ? size.width - LabPhone.inset * 2 : buttonSize * 1.9
                 let h: CGFloat = open ? 206 : buttonSize * 0.85
                 let center = placement == .navBar
                     ? CGPoint(x: open ? size.width / 2 : home.x - w / 2 + 22, y: open ? 62 + h / 2 - 20 : home.y)
@@ -156,7 +156,7 @@ struct LabAskButton: View {
             case .bar:
                 // A field above the tab bar — "Ask about this screen…" —
                 // whose suggestions rise when it's focused.
-                let barY = size.height - 24 - 62 - 12 - 22
+                let barY = size.height - LabPhone.bottom - 62 - 12 - 22
                 VStack(spacing: 8) {
                     if open {
                         LabWrap(spacing: 6, alignment: .trailing) {
@@ -169,7 +169,7 @@ struct LabAskButton: View {
                                     .offset(y: CGFloat(1 - min(1, max(0, (since - Double(i) * 0.07) * 5))) * 10)
                             }
                         }
-                        .frame(width: size.width - 32)
+                        .frame(width: size.width - LabPhone.inset * 2)
                     }
                     HStack(spacing: 10) {
                         LabHeroView(frame: frame, config: config, diameter: 28)
@@ -181,7 +181,7 @@ struct LabAskButton: View {
                         Image(systemName: "mic.fill").foregroundStyle(.secondary).font(.subheadline)
                     }
                     .padding(.horizontal, 14)
-                    .frame(width: size.width - 32, height: 44)
+                    .frame(width: size.width - LabPhone.inset * 2, height: 44)
                     .modifier(LabGlassShape(cornerRadius: 22, glass: config.glass))
                     .shadow(color: primary.opacity(open ? glow * 0.4 : 0), radius: 14)
                 }
@@ -207,7 +207,7 @@ struct LabAskButton: View {
                     .offset(x: CGFloat(1 - a) * 12)
             }
         }
-        .frame(width: size.width - 32, alignment: .trailing)
+        .frame(width: size.width - LabPhone.inset * 2, alignment: .trailing)
         .position(x: size.width / 2, y: up ? anchor.y - buttonSize / 2 - 14 - CGFloat(suggestions.count) * 17 : anchor.y + 30 + CGFloat(suggestions.count) * 17)
         .allowsHitTesting(false)
     }
@@ -233,22 +233,19 @@ struct LabAskButtonView: View {
         let suggestions = context ? LabAskContext.devices : (style == .goo || style == .orb ? [] : LabAskContext.generic)
         LabPhoneCanvas(frame: frame) { size in
             ZStack {
-                DemoTab.devices.screenshotImage(dark: frame.darkStage)
-                    .resizable().scaledToFill()
-                    .frame(width: size.width, height: size.height)
-                    .clipped()
+                LabPhoneBackdrop(frame: frame, tab: .devices, size: size)
                 Color.black.opacity(open ? 0.25 : 0)
                     .animation(.easeOut(duration: 0.3), value: open)
                 VStack {
                     Spacer()
-                    TabBarPreview(config: config, selectedTab: .constant(.devices), width: size.width - 32, hidesPodContent: true)
+                    TabBarPreview(config: config, selectedTab: .constant(.devices), width: size.width - LabPhone.inset * 2, hidesPodContent: true)
                         .allowsHitTesting(false)
-                        .padding(.bottom, 24)
+                        .padding(.bottom, LabPhone.bottom)
                 }
                 // The pod keeps the hero; the button is the second way in.
                 let pod = CGFloat(RingConfig.tabBarPodDiameter)
                 LabHeroView(frame: frame, config: config, diameter: pod)
-                    .position(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
+                    .position(x: LabPhone.inset + (size.width - LabPhone.inset * 2) - pod / 2, y: size.height - LabPhone.bottom - pod / 2)
                     .opacity(placement == .tabBar && style != .orb && style != .goo ? 1 : (placement == .tabBar ? 0 : 1))
                 LabAskButton(frame: frame, config: config, size: size, placement: placement, style: style,
                              open: open, since: since, items: [.ask, .talk, .show],

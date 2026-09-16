@@ -40,7 +40,8 @@ struct LabMorphView: View {
 
     /// The phone the states live in. Real points: the panels are real
     /// iOS sizes, so the canvas is a real phone.
-    static let phone = CGSize(width: 393, height: 780)
+    /// The real screen — iPhone 17's, the frame the main preview wears.
+    static let phone = AnimationExporter.phoneScreenSize
 
     /// Where a kind of panel sits on the phone: the pod in the tab bar's
     /// trailing slot, the pill and card just above the bar, the sheet
@@ -50,8 +51,8 @@ struct LabMorphView: View {
         let size = LabMorphPanel.size(of: kind)
         let pod = CGFloat(RingConfig.tabBarPodDiameter)
         switch kind {
-        case .pod:        return CGPoint(x: 16 + (phone.width - 32) - pod / 2, y: phone.height - 24 - pod / 2)
-        case .pill, .card: return CGPoint(x: phone.width / 2, y: phone.height - 24 - 62 - 12 - size.height / 2)
+        case .pod:        return CGPoint(x: LabPhone.inset + (phone.width - LabPhone.inset * 2) - pod / 2, y: phone.height - LabPhone.bottom - pod / 2)
+        case .pill, .card: return CGPoint(x: phone.width / 2, y: phone.height - LabPhone.bottom - 62 - 12 - size.height / 2)
         case .sheet:      return CGPoint(x: phone.width / 2, y: phone.height - size.height / 2)
         case .fullScreen: return CGPoint(x: phone.width / 2, y: phone.height / 2)
         }
@@ -71,17 +72,14 @@ struct LabMorphView: View {
         // *out of* the pod rather than in place.
         let center = Self.home(of: state.kind)
         ZStack {
-            DemoTab.dashboard.screenshotImage(dark: frame.darkStage)
-                .resizable().scaledToFill()
-                .frame(width: phone.width, height: phone.height)
-                .clipped()
+            LabPhoneBackdrop(frame: frame, tab: .dashboard, size: phone)
             Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? 0.85 : 0)
                 .animation(spring, value: state.id)
             VStack {
                 Spacer()
-                TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: phone.width - 32, hidesPodContent: true)
+                TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: phone.width - LabPhone.inset * 2, hidesPodContent: true)
                     .allowsHitTesting(false)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, LabPhone.bottom)
                     .opacity(state.kind == .fullScreen ? 0 : 1)
                     .animation(spring, value: state.id)
             }
@@ -91,8 +89,8 @@ struct LabMorphView: View {
                 .animation(spring, value: state.id)
         }
         .frame(width: phone.width, height: phone.height)
-        .clipShape(RoundedRectangle(cornerRadius: 50, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 50, style: .continuous).strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: AnimationExporter.phoneScreenCornerRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: AnimationExporter.phoneScreenCornerRadius, style: .continuous).strokeBorder(Color.white.opacity(frame.screen == nil ? 0.15 : 0), lineWidth: 1))
     }
 }
 
@@ -159,9 +157,9 @@ public struct LabMorphPanel: View {
     public static func size(of kind: LabMorphKind) -> CGSize {
         switch kind {
         case .pod:        return CGSize(width: 62, height: 62)
-        case .pill:       return CGSize(width: 361, height: 62)
-        case .card:       return CGSize(width: 361, height: 176)
-        case .sheet:      return CGSize(width: 393, height: 560)
+        case .pill:       return CGSize(width: LabMorphView.phone.width - LabPhone.inset * 2, height: 62)
+        case .card:       return CGSize(width: LabMorphView.phone.width - LabPhone.inset * 2, height: 176)
+        case .sheet:      return CGSize(width: LabMorphView.phone.width, height: 600)
         case .fullScreen: return LabMorphView.phone
         }
     }

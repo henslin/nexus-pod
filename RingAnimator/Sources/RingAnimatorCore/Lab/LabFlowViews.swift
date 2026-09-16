@@ -7,6 +7,15 @@ import SwiftUI
 
 // MARK: - Phone canvas
 
+/// The tab bar's place on a phone, matching the main preview's mockup
+/// (`PhoneMockupView.screen`): 21 pt in from each side, 21 pt off the
+/// bottom. Every flow that draws the bar or puts something in the pod's
+/// slot measures from here.
+enum LabPhone {
+    static let inset: CGFloat = 21
+    static let bottom: CGFloat = 21
+}
+
 /// A phone-shaped canvas with the demo app's dashboard screenshot behind
 /// whatever the flow draws. Sized from the stage's diameter so the Size
 /// slider still means something.
@@ -14,26 +23,47 @@ struct LabPhoneCanvas<Content: View>: View {
     let frame: LabFrame
     @ViewBuilder let content: (CGSize) -> Content
 
+    /// On a device, the screen itself; otherwise a phone-shaped canvas
+    /// sized from the stage's diameter.
     static func size(for frame: LabFrame) -> CGSize {
+        if let screen = frame.screen { return screen }
         let w = max(200, frame.diameter * 0.85)
         return CGSize(width: w, height: w * 2.05)
     }
 
     var body: some View {
         let size = Self.size(for: frame)
-        let corner = size.width * 0.13
+        let onDevice = frame.screen != nil
+        let corner = onDevice ? AnimationExporter.phoneScreenCornerRadius : size.width * 0.13
         ZStack {
-            DemoTab.dashboard.screenshotImage(dark: frame.darkStage)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size.width, height: size.height)
-                .clipped()
+            LabPhoneBackdrop(frame: frame, tab: .dashboard, size: size)
             content(size)
         }
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: corner, style: .continuous)
-            .strokeBorder(Color.white.opacity(frame.darkStage ? 0.12 : 0.35), lineWidth: 1))
+            .strokeBorder(Color.white.opacity(onDevice ? 0 : (frame.darkStage ? 0.12 : 0.35)), lineWidth: 1))
+    }
+}
+
+/// What's behind a flow: the app's screenshot for a tab, or — with App
+/// UI off — the flat page the main preview shows.
+struct LabPhoneBackdrop: View {
+    let frame: LabFrame
+    let tab: DemoTab
+    let size: CGSize
+
+    var body: some View {
+        if frame.appUI {
+            tab.screenshotImage(dark: frame.darkStage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size.width, height: size.height)
+                .clipped()
+        } else {
+            (frame.darkStage ? Color.black : Color(white: 0.96))
+                .frame(width: size.width, height: size.height)
+        }
     }
 }
 
@@ -82,9 +112,9 @@ struct LabJourneyView: View {
                 // The tab bar, present until voice takes over.
                 VStack {
                     Spacer()
-                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32, hidesPodContent: true)
+                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - LabPhone.inset * 2, hidesPodContent: true)
                         .allowsHitTesting(false)
-                        .padding(.bottom, 24)
+                        .padding(.bottom, LabPhone.bottom)
                         .opacity(stage == .voice ? 0 : 1)
                         .offset(y: stage == .voice ? 80 : 0)
                         .animation(spring, value: stage)
@@ -111,10 +141,10 @@ struct LabJourneyView: View {
 
     private var podCenter: (CGSize) -> CGPoint {
         { size in
-            // Mirrors `TabBarPreview`: bar is `width - 32` wide, centred; the
+            // Mirrors `TabBarPreview`: bar is inset `LabPhone.inset` each side; the
             // pod is the trailing 62pt of it; 24pt above the bottom.
             let pod = CGFloat(RingConfig.tabBarPodDiameter)
-            return CGPoint(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
+            return CGPoint(x: LabPhone.inset + (size.width - LabPhone.inset * 2) - pod / 2, y: size.height - LabPhone.bottom - pod / 2)
         }
     }
 
@@ -730,15 +760,15 @@ struct LabHoldView: View {
                                   rotate: 0.3, inset: 0)
                 VStack {
                     Spacer()
-                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32, hidesPodContent: true)
+                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - LabPhone.inset * 2, hidesPodContent: true)
                         .allowsHitTesting(false)
-                        .padding(.bottom, 24)
+                        .padding(.bottom, LabPhone.bottom)
                         .opacity(1 - eased)
                         .offset(y: 80 * eased)
                 }
                 // The orb: from the pod to the hero, by the hold.
                 let pod = CGFloat(RingConfig.tabBarPodDiameter)
-                let podCenter = CGPoint(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
+                let podCenter = CGPoint(x: LabPhone.inset + (size.width - LabPhone.inset * 2) - pod / 2, y: size.height - LabPhone.bottom - pod / 2)
                 let heroD = size.width * frame.p("hero", .hold)
                 let heroCenter = CGPoint(x: size.width / 2, y: size.height * 0.42)
                 let d = pod + (heroD - pod) * eased
@@ -791,14 +821,14 @@ struct LabGooeyView: View {
         LabPhoneCanvas(frame: frame) { size in
             // The pod's centre, exactly where TabBarPreview puts it.
             let pod = CGFloat(RingConfig.tabBarPodDiameter)
-            let center = CGPoint(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
+            let center = CGPoint(x: LabPhone.inset + (size.width - LabPhone.inset * 2) - pod / 2, y: size.height - LabPhone.bottom - pod / 2)
             ZStack {
                 Color.black.opacity(frame.darkStage ? 0.5 : 0.1)
                 VStack {
                     Spacer()
-                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32, hidesPodContent: true)
+                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - LabPhone.inset * 2, hidesPodContent: true)
                         .allowsHitTesting(false)
-                        .padding(.bottom, 24)
+                        .padding(.bottom, LabPhone.bottom)
                 }
                 LabGooeyMenu(frame: frame, center: center, open: open, since: since,
                              icons: (0..<items).map { Self.icons[$0 % Self.icons.count] })

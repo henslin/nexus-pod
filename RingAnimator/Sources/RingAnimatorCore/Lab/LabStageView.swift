@@ -60,7 +60,126 @@ public struct LabStageView: View {
         lab.frame(at: date, since: appeared, diameter: diameter, config: config, audio: audio)
     }
 
+    /// Flows, controls on a phone, and Q Branch draw on a real device;
+    /// orbs on the disc stage.
+    private var onDevice: Bool { lab.experiment.usesPhoneCanvas || lab.experiment == .system }
+
+    @ViewBuilder
     private var stage: some View {
+        if onDevice {
+            #if os(macOS)
+            deviceStage
+            #else
+            discStage
+            #endif
+        } else {
+            discStage
+        }
+    }
+
+    #if os(macOS)
+    /// The main preview's stage, for the Lab: the iPhone frame on a
+    /// pinch-to-zoom canvas, a floating bar with Light/Dark, the finish
+    /// and App UI — the same controls as Nexus, so a flow is judged the
+    /// way the ring is (Chris, 2026-09-16: "re-use what we have going on
+    /// in the main Nexus area"). Q Branch adds its step strip below.
+    private var deviceStage: some View {
+        let screen = AnimationExporter.phoneScreenSize
+        return ZoomableCanvas(contentSize: AnimationExporter.phoneFrameSize, minMagnification: 0.25, maxMagnification: 4, restMagnification: 1) {
+            ZStack {
+                TimelineView(.animation) { timeline in
+                    let f = frame(at: timeline.date, diameter: 360).onScreen(screen)
+                    Group {
+                        if lab.experiment == .system {
+                            LabPlayView(frame: f, config: config)
+                        } else {
+                            LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.activePost)
+                        }
+                    }
+                    .id(lab.experiment)
+                }
+                .frame(width: screen.width, height: screen.height)
+                .clipShape(RoundedRectangle(cornerRadius: AnimationExporter.phoneScreenCornerRadius, style: .continuous))
+                .contentShape(Rectangle())
+                .onTapGesture { if lab.experiment.isTappable { lab.advance() } }
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { g in
+                        if lab.experiment.isHoldable { lab.beginHold() }
+                        if lab.experiment.usesPointer { lab.pointer = CGPoint(x: g.location.x - screen.width / 2, y: g.location.y - screen.height / 2) }
+                    }
+                    .onEnded { _ in lab.endHold() })
+                .onContinuousHover { phase in
+                    guard lab.experiment.usesPointer else { return }
+                    switch phase {
+                    case .active(let p): lab.pointer = CGPoint(x: p.x - screen.width / 2, y: p.y - screen.height / 2)
+                    case .ended: lab.pointer = nil
+                    }
+                }
+                lab.finish.image
+                    .resizable()
+                    .frame(width: AnimationExporter.phoneFrameSize.width, height: AnimationExporter.phoneFrameSize.height)
+                    .allowsHitTesting(false)
+            }
+            .frame(width: AnimationExporter.phoneFrameSize.width, height: AnimationExporter.phoneFrameSize.height)
+            .environment(\.colorScheme, lab.darkStage ? .dark : .light)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .overlay(alignment: .top) {
+            deviceControls
+                .padding(.top, 16)
+        }
+        .overlay(alignment: .bottom) {
+            if lab.experiment == .system {
+                TimelineView(.animation) { timeline in
+                    LabPlayStrip(lab: lab, frame: frame(at: timeline.date, diameter: 360))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .glassBackground(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding(.bottom, 16)
+            } else {
+                Text("Pinch to zoom · double-click to reset")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .glassBackground(in: Capsule())
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    /// The main preview's controls pill, verbatim in kind: Light/Dark,
+    /// the finish, App UI.
+    private var deviceControls: some View {
+        HStack(spacing: 28) {
+            Picker("Appearance", selection: $lab.darkStage) {
+                Text("Light").tag(false)
+                Text("Dark").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 180)
+            Picker("Finish", selection: $lab.finish) {
+                ForEach(AnimationExporter.DeviceFinish.allCases) { finish in
+                    Text(finish.rawValue).tag(finish)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(width: 150)
+            Toggle("App UI", isOn: $lab.appUI)
+                .toggleStyle(.switch)
+                .fixedSize()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .glassBackground(in: Capsule())
+    }
+    #endif
+
+    private var discStage: some View {
         ZStack(alignment: .bottomLeading) {
             (lab.darkStage ? Color(white: 0.06) : Color(white: 0.94))
             TimelineView(.animation) { timeline in
@@ -74,8 +193,6 @@ public struct LabStageView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     } else if lab.experiment == .system {
-                        // Play beside the board. Its own gestures, on the
-                        // phone only — the board's buttons mustn't step it.
                         ScrollView(.vertical) {
                             LabSystemStage(lab: lab, config: config, frame: f)
                                 .padding(.vertical, 24)

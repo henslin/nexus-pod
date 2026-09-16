@@ -22,7 +22,7 @@ import RingAnimatorCore
 /// have to be read back out of AppKit as they change and pushed back in
 /// when the view is rebuilt.
 @MainActor
-final class StageState: ObservableObject {
+final class StageState: ObservableObject, ZoomViewport {
     /// Not `@Published`. It's written continuously during a pinch or a
     /// scroll — publishing would invalidate the whole stage on every frame
     /// of a gesture, and nothing in SwiftUI needs to *react* to it. It's

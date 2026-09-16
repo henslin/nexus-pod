@@ -110,7 +110,7 @@ public struct LabPlayView: View {
         let placement = spec.askPlacement ?? .floating
         let askHome: CGPoint = {
             switch placement {
-            case .floating: return CGPoint(x: phone.width - 16 - 26, y: phone.height - 24 - 62 - 14 - 26)
+            case .floating: return CGPoint(x: phone.width - 16 - 26, y: phone.height - LabPhone.bottom - 62 - 14 - 26)
             case .navBar: return CGPoint(x: phone.width - 16 - 22, y: 62)
             case .tabBar: return podHome
             }
@@ -118,18 +118,15 @@ public struct LabPlayView: View {
         let showChrome = frame.p("chrome", .system) >= 0.5
 
         return ZStack {
-            (onAnotherScreen ? DemoTab.devices : DemoTab.dashboard).screenshotImage(dark: frame.darkStage)
-                .resizable().scaledToFill()
-                .frame(width: phone.width, height: phone.height)
-                .clipped()
+            LabPhoneBackdrop(frame: frame, tab: onAnotherScreen ? .devices : .dashboard, size: phone)
                 .animation(.easeInOut(duration: 0.25), value: onAnotherScreen)
             Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? 0.85 : state.kind == .pod ? 0 : 0.15)
                 .animation(spring, value: state.kind)
             VStack {
                 Spacer()
-                TabBarPreview(config: config, selectedTab: .constant(onAnotherScreen ? .devices : .dashboard), width: phone.width - 32, hidesPodContent: true)
+                TabBarPreview(config: config, selectedTab: .constant(onAnotherScreen ? .devices : .dashboard), width: phone.width - LabPhone.inset * 2, hidesPodContent: true)
                     .allowsHitTesting(false)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, LabPhone.bottom)
                     .opacity(state.kind == .fullScreen ? 0 : 1)
                     .animation(spring, value: state.kind)
             }
@@ -177,8 +174,8 @@ public struct LabPlayView: View {
             }
         }
         .frame(width: phone.width, height: phone.height)
-        .clipShape(RoundedRectangle(cornerRadius: 50, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 50, style: .continuous).strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: AnimationExporter.phoneScreenCornerRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: AnimationExporter.phoneScreenCornerRadius, style: .continuous).strokeBorder(Color.white.opacity(frame.screen == nil ? 0.15 : 0), lineWidth: 1))
     }
 }
 
@@ -254,7 +251,6 @@ struct LabPlayStrip: View {
                     .font(.caption2).foregroundStyle(.tertiary)
             }
         }
-        .foregroundStyle(frame.darkStage ? Color.white : Color.black)
     }
 }
 
@@ -430,52 +426,58 @@ public struct LabSpecBoard: View {
 
     // MARK: Slots
 
-    /// One slot as a row: thumbnail · name · what's in it · menu. The
-    /// row is the menu: click anywhere on it.
+    /// One slot as a row: thumbnail · name · what's in it · ⋯. The menu
+    /// (and the row's context menu) is every way to fill it.
     private func slotRow(title: String, symbol: String? = nil, look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void, menu: Bool = false) -> some View {
-        Menu {
-            Button {
-                lab.choose(for: target)
-            } label: { Label("Choose in the Lab…", systemImage: "flask") }
-            if let bench = lab.lastBench, target.accepts(bench) {
-                Button("Use the Bench · \(bench.name)") { set(LabLook(from: lab, experiment: bench)) }
+        HStack(spacing: 10) {
+            thumbnail(look, menu: menu)
+                .frame(width: Self.thumb, height: Self.thumb)
+            if let symbol {
+                Image(systemName: symbol).font(.caption).foregroundStyle(.secondary).frame(width: 14)
             }
-            let mine = presets.presets.filter { p in LabExperiment(rawValue: p.experiment).map(target.accepts) ?? false }
-            if !mine.isEmpty {
-                Menu("From a Preset") {
-                    ForEach(mine) { p in
-                        Button("\(LabExperiment(rawValue: p.experiment)?.name ?? p.experiment) · \(p.name)") {
-                            set(LabLook(experiment: p.experiment, values: p.values, post: p.post, palette: p.palette))
-                        }
+            Text(title).font(.callout)
+                .frame(width: symbol == nil ? LabRailMetrics.labelWidth : LabRailMetrics.labelWidth - 24, alignment: .leading)
+            Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty")
+                .font(.callout)
+                .foregroundStyle(look == nil ? .tertiary : .secondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Menu {
+                slotActions(look: look, target: target, set: set)
+            } label: { Image(systemName: "ellipsis.circle") }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .font(.caption)
+        }
+        .contentShape(Rectangle())
+        .contextMenu { slotActions(look: look, target: target, set: set) }
+        .help(target.hint)
+    }
+
+    @ViewBuilder
+    private func slotActions(look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void) -> some View {
+        Button {
+            lab.choose(for: target)
+        } label: { Label("Choose in the Lab…", systemImage: "flask") }
+        if let bench = lab.lastBench, target.accepts(bench) {
+            Button("Use the Bench · \(bench.name)") { set(LabLook(from: lab, experiment: bench)) }
+        }
+        let mine = presets.presets.filter { p in LabExperiment(rawValue: p.experiment).map(target.accepts) ?? false }
+        if !mine.isEmpty {
+            Menu("From a Preset") {
+                ForEach(mine) { p in
+                    Button("\(LabExperiment(rawValue: p.experiment)?.name ?? p.experiment) · \(p.name)") {
+                        set(LabLook(experiment: p.experiment, values: p.values, post: p.post, palette: p.palette))
                     }
                 }
             }
-            if let look {
-                Divider()
-                Button("Open in Lab") { lab.open(look) }
-                Button("Clear", role: .destructive) { set(nil) }
-            }
-        } label: {
-            HStack(spacing: 10) {
-                thumbnail(look, menu: menu)
-                    .frame(width: Self.thumb, height: Self.thumb)
-                if let symbol {
-                    Image(systemName: symbol).font(.caption).foregroundStyle(.secondary).frame(width: 14)
-                }
-                Text(title).font(.callout)
-                    .frame(width: symbol == nil ? LabRailMetrics.labelWidth : LabRailMetrics.labelWidth - 22, alignment: .leading)
-                Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty")
-                    .font(.callout)
-                    .foregroundStyle(look == nil ? .tertiary : .secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .help(target.hint)
+        if let look {
+            Divider()
+            Button("Open in Lab") { lab.open(look) }
+            Button("Clear", role: .destructive) { set(nil) }
+        }
     }
 
     @ViewBuilder

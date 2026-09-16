@@ -1724,6 +1724,10 @@ public final class LabState: ObservableObject {
     @Published public var audioRelease: Double = 0.25
     /// Run speech recognition on the mic, for the transcript flows.
     @Published public var transcribe: Bool = false
+    /// The main preview's switches, shared by the Lab's device stage:
+    /// the app's screenshots behind the flows, and which iPhone.
+    @Published public var appUI: Bool = true
+    @Published public var finish: AnimationExporter.DeviceFinish = .silver
     @Published public var palette: LabPalette = .nexus
     /// Post effects, in the order they are applied.
     @Published public var post: [LabPostEffect] = []
@@ -1901,6 +1905,12 @@ public struct LabFrame {
     /// last. Empty when the transcript is off or nothing has been said.
     public var transcript: [(text: String, age: Double)] = []
     public var transcribing: Bool = false
+    /// When the stage is a real device: the screen's size in points. The
+    /// phone canvases draw at exactly this, with no outline of their own.
+    public var screen: CGSize? = nil
+    /// Draw the app's screenshots behind the flows, or a flat page — the
+    /// main preview's "App UI" switch.
+    public var appUI: Bool = true
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
                 params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
@@ -1933,6 +1943,18 @@ public struct LabFrame {
     /// without one (a harness, a thumbnail).
     public func p(_ id: String, _ experiment: LabExperiment) -> Double {
         params["\(experiment.id).\(id)"] ?? experiment.parameters.first { $0.id == id }?.defaultValue ?? 0
+    }
+
+    func withAppUI(_ on: Bool) -> LabFrame {
+        var f = self
+        f.appUI = on
+        return f
+    }
+    /// This frame on a real device's screen.
+    public func onScreen(_ size: CGSize) -> LabFrame {
+        var f = self
+        f.screen = size
+        return f
     }
 
     func withTranscript(_ words: [(text: String, age: Double)], on: Bool) -> LabFrame {
@@ -2007,6 +2029,7 @@ extension LabState {
                         pointer: pointer,
                         spec: spec)
             .withTranscript(audio.words.map { ($0.text, date.timeIntervalSince($0.at)) }, on: audioReactive && transcribe)
+            .withAppUI(appUI)
     }
 
     private static func hueShifted(_ color: Color, by turns: Double) -> Color {

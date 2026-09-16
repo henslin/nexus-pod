@@ -1,6 +1,14 @@
+#if os(macOS)
 import SwiftUI
 import AppKit
-import RingAnimatorCore
+
+/// What `ZoomableCanvas` reads its pan and zoom back from and writes them
+/// to — see `StageState` in the app for why that lives outside SwiftUI.
+@MainActor
+public protocol ZoomViewport: AnyObject {
+    var magnification: CGFloat? { get set }
+    var scrollOrigin: CGPoint? { get set }
+}
 
 /// Hosts SwiftUI `content` inside a real `NSScrollView` with
 /// `allowsMagnification` turned on — the correct, Apple-supported
@@ -27,7 +35,7 @@ import RingAnimatorCore
 /// quirks. Routing the zoom percentage out through the `Coordinator` to
 /// plain SwiftUI `@State` and rendering the badge as a SwiftUI overlay
 /// sidesteps all of that and lets ordinary SwiftUI layout size it.
-struct ZoomableCanvas<Content: View>: View {
+public struct ZoomableCanvas<Content: View>: View {
     let contentSize: CGSize
     let minMagnification: CGFloat
     let maxMagnification: CGFloat
@@ -36,7 +44,7 @@ struct ZoomableCanvas<Content: View>: View {
     /// where to report it back to. Optional so a canvas that doesn't need
     /// to survive being rebuilt can leave it out — see `StageState` for why
     /// the one in `RingStage` does.
-    var viewport: StageState?
+    var viewport: (any ZoomViewport)?
     @ViewBuilder var content: () -> Content
 
     @State private var zoomPercent: Int = 100
@@ -47,12 +55,12 @@ struct ZoomableCanvas<Content: View>: View {
     /// memberwise init) so the trailing-closure call site in
     /// `PhoneMockupView` unambiguously binds to `content` regardless of
     /// the `@State` properties declared after it.
-    init(
+    public init(
         contentSize: CGSize,
         minMagnification: CGFloat,
         maxMagnification: CGFloat,
         restMagnification: CGFloat,
-        viewport: StageState? = nil,
+        viewport: (any ZoomViewport)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.contentSize = contentSize
@@ -63,7 +71,7 @@ struct ZoomableCanvas<Content: View>: View {
         self.content = content
     }
 
-    var body: some View {
+    public var body: some View {
         ZoomableScrollRepresentable(
             contentSize: contentSize,
             minMagnification: minMagnification,
@@ -113,7 +121,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
     let minMagnification: CGFloat
     let maxMagnification: CGFloat
     let restMagnification: CGFloat
-    let viewport: StageState?
+    let viewport: (any ZoomViewport)?
     let onPercentChange: (Int) -> Void
     let onMagnifyBegin: () -> Void
     let onMagnifyEnd: () -> Void
@@ -289,7 +297,7 @@ private struct ZoomableScrollRepresentable<Content: View>: NSViewRepresentable {
 
         weak var hostingView: NSHostingView<SizedCanvasContent<Content>>?
         weak var scrollView: NSScrollView?
-        var viewport: StageState?
+        var viewport: (any ZoomViewport)?
         var restMagnification: CGFloat = 1
         var onPercentChange: (Int) -> Void = { _ in }
         var onMagnifyBegin: () -> Void = {}
@@ -425,3 +433,4 @@ struct SizedCanvasContent<Content: View>: View {
         content.frame(width: size.width, height: size.height)
     }
 }
+#endif
