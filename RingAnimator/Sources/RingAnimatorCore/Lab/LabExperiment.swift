@@ -1400,6 +1400,13 @@ public struct LabMorphState: Identifiable, Equatable, Sendable {
     public var adornments: Set<LabMorphAdornment> = []
     public var enter: LabMorphTransition = .fade
     public var exit: LabMorphTransition = .fade
+    /// What fills the container behind the conversation — Bloom Field,
+    /// or any orb scaled to fill — or nothing but the dim.
+    public var backdrop: LabLook? = nil
+    /// The hero's size in a full-screen container, as a fraction of the
+    /// width; and how much the screen behind is dimmed.
+    public var heroScale: Double = 0.42
+    public var dim: Double = 0.85
     public init(_ kind: LabMorphKind, _ adornments: Set<LabMorphAdornment> = []) {
         self.kind = kind
         self.adornments = adornments

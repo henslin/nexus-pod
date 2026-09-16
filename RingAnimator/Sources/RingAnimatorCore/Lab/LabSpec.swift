@@ -195,6 +195,13 @@ public struct LabSurfaceSpec: Codable, Equatable, Sendable {
     public var enter: LabMorphTransition = .fade
     public var exit: LabMorphTransition = .fade
     public var values: [String: Double] = [:]
+    /// What fills the container behind the conversation — Bloom Field,
+    /// or any orb scaled to fill. `nil` is the dim alone.
+    public var backdrop: LabLook?
+    /// Full screen: the hero's size as a fraction of the width, and the
+    /// dim behind. Optional so older specs decode; see `morphState`.
+    public var heroScale: Double?
+    public var dim: Double?
 
     public init(kind: LabMorphKind) { self.kind = kind }
 
@@ -211,6 +218,9 @@ public struct LabSurfaceSpec: Codable, Equatable, Sendable {
         var s = LabMorphState(kind, Set(adornments))
         s.enter = enter
         s.exit = exit
+        s.backdrop = backdrop
+        if let heroScale { s.heroScale = heroScale }
+        if let dim { s.dim = dim }
         return s
     }
 }
@@ -345,7 +355,11 @@ extension LabSpec {
         s.askStyle = .bar
         s.items = [.ask, .talk]
         s.surfaces["ask"] = surface(.sheet, [.edgeGlow, .transcript])
-        s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .waveform, .caption])
+        var talk = surface(.fullScreen, [.edgeGlow, .waveform])
+        talk.backdrop = look(.sunflower)
+        talk.heroScale = 0.34
+        talk.dim = 0.7
+        s.surfaces["talk"] = talk
         return s
     }
 }

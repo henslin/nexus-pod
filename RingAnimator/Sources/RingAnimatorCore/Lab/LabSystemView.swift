@@ -120,7 +120,7 @@ public struct LabPlayView: View {
         return ZStack {
             LabPhoneBackdrop(frame: frame, tab: onAnotherScreen ? .devices : .dashboard, size: phone)
                 .animation(.easeInOut(duration: 0.25), value: onAnotherScreen)
-            Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? 0.85 : state.kind == .pod ? 0 : 0.15)
+            Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? state.dim : state.kind == .pod ? 0 : 0.15)
                 .animation(spring, value: state.kind)
             VStack {
                 Spacer()
@@ -484,6 +484,7 @@ public struct LabSpecBoard: View {
                 Text("Carries").frame(minWidth: 96, maxWidth: .infinity, alignment: .leading)
                 Text("In").frame(width: 58, alignment: .leading)
                 Text("Out").frame(width: 58, alignment: .leading)
+                Spacer().frame(width: 20)
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
@@ -495,20 +496,35 @@ public struct LabSpecBoard: View {
     }
 
     private func containerRow(_ item: LabActionItem) -> some View {
-        let assigned = spec.surface(for: item)
-        let surface = spec.resolvedSurface(for: item)
-        func update(_ change: (inout LabSurfaceSpec) -> Void) {
-            var s = surface
-            change(&s)
-            lab.spec.surfaces[item.rawValue] = s
-        }
-        return HStack(spacing: 8) {
+        LabContainerRow(lab: lab, config: config, frameAt: frameAt, item: item)
+    }
+}
+
+/// One row of the containers table: item · kind · carries · in · out ·
+/// sliders. The sliders open the container's editor — backdrop, hero
+/// size, dim, the morph's knobs.
+struct LabContainerRow: View {
+    @ObservedObject var lab: LabState
+    @ObservedObject var config: RingConfig
+    let frameAt: (Date) -> LabFrame
+    let item: LabActionItem
+    @State private var editing = false
+
+    private var assigned: LabSurfaceSpec? { lab.spec.surface(for: item) }
+    private var surface: LabSurfaceSpec { lab.spec.resolvedSurface(for: item) }
+    private var binding: Binding<LabSurfaceSpec> {
+        Binding(get: { lab.spec.resolvedSurface(for: item) }, set: { lab.spec.surfaces[item.rawValue] = $0 })
+    }
+
+    var body: some View {
+        let surface = surface
+        HStack(spacing: 8) {
             Label(item.label, systemImage: item.symbol)
                 .font(.callout)
                 .lineLimit(1)
                 .frame(width: 66, alignment: .leading)
                 .foregroundStyle(assigned == nil ? .secondary : .primary)
-            Picker("", selection: Binding(get: { surface.kind }, set: { v in update { $0.kind = v } })) {
+            Picker("", selection: Binding(get: { surface.kind }, set: { v in binding.wrappedValue.kind = v })) {
                 ForEach(LabMorphKind.offered) { Text($0.label).tag($0) }
             }
             .labelsHidden().pickerStyle(.menu).controlSize(.small)
@@ -517,7 +533,9 @@ public struct LabSpecBoard: View {
                 ForEach(LabMorphAdornment.allCases) { a in
                     let on = surface.adornments.contains(a)
                     Button {
-                        update { s in if on { s.adornments.removeAll { $0 == a } } else { s.adornments.append(a) } }
+                        var s = surface
+                        if on { s.adornments.removeAll { $0 == a } } else { s.adornments.append(a) }
+                        lab.spec.surfaces[item.rawValue] = s
                     } label: {
                         Label(a.label, systemImage: on ? "checkmark" : a.symbol)
                     }
@@ -541,16 +559,23 @@ public struct LabSpecBoard: View {
             .menuStyle(.borderlessButton).menuIndicator(.hidden)
             .controlSize(.small)
             .frame(minWidth: 96, maxWidth: .infinity, alignment: .leading)
-            Picker("", selection: Binding(get: { surface.enter }, set: { v in update { $0.enter = v } })) {
+            Picker("", selection: Binding(get: { surface.enter }, set: { v in binding.wrappedValue.enter = v })) {
                 ForEach(LabMorphTransition.allCases) { Text($0.label).tag($0) }
             }
             .labelsHidden().pickerStyle(.menu).controlSize(.small)
             .frame(width: 58, alignment: .leading)
-            Picker("", selection: Binding(get: { surface.exit }, set: { v in update { $0.exit = v } })) {
+            Picker("", selection: Binding(get: { surface.exit }, set: { v in binding.wrappedValue.exit = v })) {
                 ForEach(LabMorphTransition.allCases.filter { $0 != .flare }) { Text($0.label).tag($0) }
             }
             .labelsHidden().pickerStyle(.menu).controlSize(.small)
             .frame(width: 58, alignment: .leading)
+            Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .help("Backdrop, hero size, dim, the morph's knobs")
+                .popover(isPresented: $editing, arrowEdge: .leading) {
+                    LabContainerEditor(item: item, surface: binding, frameAt: frameAt, config: config)
+                }
         }
         .help(assigned == nil ? "The default for \(item.label). Change anything to make it this spec's own." : "\(item.label) opens a \(surface.kind.label).")
     }

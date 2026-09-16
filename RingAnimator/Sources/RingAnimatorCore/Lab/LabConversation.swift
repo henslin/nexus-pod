@@ -163,6 +163,7 @@ struct LabConversationView: View {
     let frame: LabFrame
     @ObservedObject var config: RingConfig
     let size: CGSize
+    var heroScale: Double = 0.42
 
     private var c: LabConversation { conversation }
     private var primary: Color { frame.colors.first ?? .accentColor }
@@ -257,7 +258,7 @@ struct LabConversationView: View {
         case .fullScreen:
             VStack(spacing: 16) {
                 Spacer(minLength: 30)
-                LabHeroView(frame: frame, config: config, diameter: size.width * 0.42)
+                LabHeroView(frame: frame, config: config, diameter: size.width * heroScale)
                 Text(c.status ?? (c.composing ? (c.mode == .voice ? "Listening…" : "Typing…") : c.verb == .speaking ? "Speaking" : c.verb == .done ? "Done" : ""))
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)

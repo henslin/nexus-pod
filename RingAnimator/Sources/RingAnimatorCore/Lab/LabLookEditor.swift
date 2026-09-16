@@ -19,14 +19,17 @@ public struct LabOrbGallery: View {
     let frameAt: (Date) -> LabFrame
     @ObservedObject var config: RingConfig
     let current: LabLook?
+    /// Offer the whole-screen flows too (Bloom Field) — for a backdrop.
+    var includesScreens = false
     let onPick: (LabLook) -> Void
     @StateObject private var presets = LabPresetStore()
     @Environment(\.dismiss) private var dismiss
 
-    public init(frameAt: @escaping (Date) -> LabFrame, config: RingConfig, current: LabLook?, onPick: @escaping (LabLook) -> Void) {
+    public init(frameAt: @escaping (Date) -> LabFrame, config: RingConfig, current: LabLook?, includesScreens: Bool = false, onPick: @escaping (LabLook) -> Void) {
         self.frameAt = frameAt
         self.config = config
         self.current = current
+        self.includesScreens = includesScreens
         self.onPick = onPick
     }
 
@@ -50,6 +53,11 @@ public struct LabOrbGallery: View {
                             let look = LabLook(experiment: p.experiment, values: p.values, post: p.post, palette: p.palette)
                             cell(look, name: "\(look.name) · \(p.name)")
                         }
+                    }
+                }
+                if includesScreens {
+                    group("Full screen", "Whole-screen flows, as the container's own screen.") {
+                        cell(LabLook(experiment: LabExperiment.sunflower.id), name: LabExperiment.sunflower.name)
                     }
                 }
                 ForEach(LabSection.orb.families, id: \.family) { family, bases in
@@ -271,6 +279,161 @@ struct LabLookEditor: View {
                 }
             } label: { Label("Add Effect", systemImage: "plus") }
                 .menuStyle(.borderlessButton).fixedSize().font(.caption)
+        }
+    }
+}
+
+
+// MARK: - The container editor
+
+/// A container's settings, in place: its shape, what fills it behind the
+/// conversation, the hero's size and the dim, what it carries, how it
+/// comes and goes, and the morph's own knobs (spring, edge glow…) —
+/// bound straight into the spec.
+struct LabContainerEditor: View {
+    let item: LabActionItem
+    @Binding var surface: LabSurfaceSpec
+    let frameAt: (Date) -> LabFrame
+    @ObservedObject var config: RingConfig
+    @State private var choosingBackdrop = false
+    @State private var backdropKnobsOpen = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: item.symbol).foregroundStyle(.secondary)
+                Text("\(item.label) · \(surface.kind.label)").font(.headline)
+                Spacer()
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    labelled("Kind") {
+                        Picker("", selection: $surface.kind) {
+                            ForEach(LabMorphKind.offered) { Text($0.label).tag($0) }
+                        }
+                        .labelsHidden().pickerStyle(.menu).controlSize(.small)
+                    }
+
+                    Text("Backdrop").font(.subheadline.weight(.semibold)).padding(.top, 8)
+                    HStack(spacing: 10) {
+                        backdropThumb.frame(width: 36, height: 36)
+                        Text(surface.backdrop?.title ?? "The dim alone")
+                            .font(.callout).foregroundStyle(surface.backdrop == nil ? .tertiary : .primary)
+                        Spacer()
+                        Button("Choose…") { choosingBackdrop = true }
+                            .controlSize(.small)
+                            .popover(isPresented: $choosingBackdrop, arrowEdge: .leading) {
+                                LabOrbGallery(frameAt: frameAt, config: config, current: surface.backdrop, includesScreens: true) { surface.backdrop = $0 }
+                            }
+                        if surface.backdrop != nil {
+                            Button("None") { surface.backdrop = nil }.controlSize(.small)
+                        }
+                    }
+                    .help("What fills the container behind the conversation — Bloom Field, or any orb scaled to fill.")
+                    if let backdrop = surface.backdrop, let e = backdrop.experimentCase, !e.parameters.isEmpty {
+                        DisclosureGroup(isExpanded: $backdropKnobsOpen) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(e.parameters) { p in
+                                    LabKnob(parameter: p, value: Binding(
+                                        get: { surface.backdrop?.values["\(e.id).\(p.id)"] ?? p.defaultValue },
+                                        set: { surface.backdrop?.values["\(e.id).\(p.id)"] = $0 }))
+                                }
+                            }
+                            .padding(.top, 6)
+                        } label: {
+                            Text("\(e.name) knobs").font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                    if surface.kind == .fullScreen || surface.kind == .sheet {
+                        LabSlider(title: "Dim", value: Binding(get: { surface.dim ?? (surface.kind == .sheet ? 0.4 : 0.85) }, set: { surface.dim = $0 }), range: 0...1, help: "How much the screen behind is darkened.")
+                    }
+                    if surface.kind == .fullScreen {
+                        LabSlider(title: "Hero size", value: Binding(get: { surface.heroScale ?? 0.42 }, set: { surface.heroScale = $0 }), range: 0.2...0.8, help: "The orb's size, as a fraction of the width.")
+                    }
+
+                    Text("Carries").font(.subheadline.weight(.semibold)).padding(.top, 8)
+                    ForEach(LabMorphAdornment.allCases) { a in
+                        HStack(spacing: 8) {
+                            Spacer().frame(width: LabRailMetrics.labelWidth)
+                            Toggle(isOn: Binding(get: { surface.adornments.contains(a) }, set: { on in
+                                if on { surface.adornments.append(a) } else { surface.adornments.removeAll { $0 == a } }
+                            })) { Label(a.label, systemImage: a.symbol).font(.callout) }
+                            Spacer(minLength: 0)
+                        }
+                    }
+
+                    Text("Comes and goes").font(.subheadline.weight(.semibold)).padding(.top, 8)
+                    labelled("Enters") {
+                        Picker("", selection: $surface.enter) {
+                            ForEach(LabMorphTransition.allCases) { Text($0.label).tag($0) }
+                        }
+                        .labelsHidden().pickerStyle(.menu).controlSize(.small)
+                    }
+                    labelled("Leaves") {
+                        Picker("", selection: $surface.exit) {
+                            ForEach(LabMorphTransition.allCases.filter { $0 != .flare }) { Text($0.label).tag($0) }
+                        }
+                        .labelsHidden().pickerStyle(.menu).controlSize(.small)
+                    }
+
+                    Text("Morph").font(.subheadline.weight(.semibold)).padding(.top, 8)
+                    let params = LabExperiment.morph.parameters.filter { !["hold", "pingpong"].contains($0.id) }
+                    ForEach(Array(params.enumerated()), id: \.element.id) { i, p in
+                        if let g = p.group, i == 0 || params[i - 1].group != g {
+                            Text(g).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, i == 0 ? 0 : 6)
+                        }
+                        LabKnob(parameter: p, value: Binding(
+                            get: { surface.values["morph.\(p.id)"] ?? p.defaultValue },
+                            set: { surface.values["morph.\(p.id)"] = $0 }))
+                    }
+                }
+                .padding(14)
+            }
+            Divider()
+            HStack {
+                Button("Reset") {
+                    surface = LabSurfaceSpec(kind: item.defaultSurface)
+                }
+                .help("Back to the item's default container")
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+            .controlSize(.small)
+            .padding(10)
+        }
+        .frame(width: 380, height: 560)
+    }
+
+    @ViewBuilder
+    private var backdropThumb: some View {
+        if let look = surface.backdrop, let e = look.experimentCase {
+            TimelineView(.periodic(from: .now, by: 1 / 30)) { timeline in
+                let f = frameAt(timeline.date)
+                if e.usesPhoneCanvas {
+                    LabBackdropView(look: look, frame: f, config: config, size: CGSize(width: 36, height: 36))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                } else {
+                    LabPodGlass(config: config, dark: f.darkStage, flat: true) {
+                        LabHeroView(frame: f.applying(look, config: config), config: config, diameter: 62)
+                    }
+                    .scaleEffect(36 / 62)
+                }
+            }
+        } else {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func labelled<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(.callout).foregroundStyle(.secondary).frame(width: LabRailMetrics.labelWidth, alignment: .leading)
+            content()
+            Spacer(minLength: 0)
         }
     }
 }

@@ -73,7 +73,7 @@ struct LabMorphView: View {
         let center = Self.home(of: state.kind)
         ZStack {
             LabPhoneBackdrop(frame: frame, tab: .dashboard, size: phone)
-            Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? 0.85 : 0)
+            Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? state.dim : 0)
                 .animation(spring, value: state.id)
             VStack {
                 Spacer()
@@ -178,6 +178,10 @@ public struct LabMorphPanel: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let env = envelope
         ZStack {
+            if let backdrop = state.backdrop {
+                LabBackdropView(look: backdrop, frame: frame, config: config, size: size)
+                    .opacity(state.enter == .none && state.exit == .none ? 1 : env)
+            }
             content
                 .opacity(state.enter == .none && state.exit == .none ? 1 : env)
                 .scaleEffect(contentScale)
@@ -206,7 +210,7 @@ public struct LabMorphPanel: View {
     @ViewBuilder
     private var content: some View {
         if let conversation {
-            LabConversationView(kind: state.kind, conversation: conversation, frame: frame, config: config, size: size)
+            LabConversationView(kind: state.kind, conversation: conversation, frame: frame, config: config, size: size, heroScale: state.heroScale)
         } else {
             sample
         }
@@ -293,7 +297,7 @@ public struct LabMorphPanel: View {
         case .fullScreen:
             VStack(spacing: 14) {
                 Spacer()
-                LabHeroView(frame: frame, config: config, diameter: size.width * 0.5)
+                LabHeroView(frame: frame, config: config, diameter: size.width * state.heroScale)
                 Text(caption ?? "Listening…")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -467,6 +471,36 @@ struct LabMorphStage: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+}
+
+/// What fills a container behind its conversation: Bloom Field on the
+/// container's own screen, or an orb scaled past the edges. Under the
+/// glass, inside the clip.
+struct LabBackdropView: View {
+    let look: LabLook
+    let frame: LabFrame
+    @ObservedObject var config: RingConfig
+    let size: CGSize
+
+    var body: some View {
+        if let e = look.experimentCase {
+            let f = frame.applying(look, config: config)
+            if e.usesPhoneCanvas {
+                // A whole-screen flow, drawn as this container's screen,
+                // with the tab bar and its hint off.
+                LabExperimentView(experiment: e, frame: f.onScreen(size).withParams(["sunflower.transcript": 0, "sunflower.hero": 0, "sunflower.ground": 2]), config: config, post: look.posts)
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+            } else {
+                let d = max(size.width, size.height) * 1.15
+                LabExperimentView(experiment: e, frame: f.resized(d), config: config, post: look.posts)
+                    .frame(width: d, height: d)
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+                    .opacity(0.85)
+            }
+        }
     }
 }
 
