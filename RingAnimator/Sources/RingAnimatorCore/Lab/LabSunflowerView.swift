@@ -68,7 +68,7 @@ struct LabSunflowerView: View {
 
     /// Every knob, read once per frame.
     private struct Knobs {
-        var spacing, dot, growth, cx, cy, breathe: Double
+        var spacing, dot, growth, cx, cy, breathe, glow: Double
         var dark: Bool
         var rate, life, radius, grow, tint, core, wave, waveSpeed: Double
         var spawn: Bool
@@ -82,6 +82,7 @@ struct LabSunflowerView: View {
             cx = f.p("centerX", .sunflower); cy = f.p("centerY", .sunflower); breathe = f.p("breathe", .sunflower)
             let ground = Int(f.p("ground", .sunflower))
             dark = ground == 0 ? f.darkStage : ground == 2
+            glow = f.p("glow", .sunflower)
             rate = f.p("rate", .sunflower); life = max(f.p("life", .sunflower), 0.5)
             radius = f.p("radius", .sunflower); grow = f.p("grow", .sunflower)
             tint = f.p("tint", .sunflower); core = f.p("core", .sunflower)
@@ -127,14 +128,43 @@ struct LabSunflowerView: View {
         let corner = max(hypot(center.x, center.y), hypot(size.width - center.x, center.y),
                          hypot(center.x, size.height - center.y), hypot(size.width - center.x, size.height - center.y))
         let count = Int((corner / k.spacing) * (corner / k.spacing)) + 1
-        let baseGrey = k.dark ? Color(white: 0.32) : Color(white: 0.78)
+        // Dark mode is not the light one inverted: the dots sit dim and
+        // the blooms *light* them — a halo under the field, and dots
+        // near a bloom's core going past the colour toward white.
+        let baseGrey = k.dark ? Color(white: 0.2) : Color(white: 0.78)
+        let halo = k.dark ? k.glow : 0
         let heroD = size.width * k.heroSize
         let ringR = (t * k.waveSpeed).truncatingRemainder(dividingBy: corner + 60)
         let breath = 1 + k.breathe * 0.08 * sin(t * 1.1)
 
         return ZStack {
-            (k.dark ? Color(white: 0.05) : Color.white)
+            (k.dark ? Color(white: 0.04) : Color.white)
             Canvas { ctx, _ in
+                // The halos, under the dots.
+                if halo > 0 {
+                    for b in blooms {
+                        let c = CGPoint(x: CGFloat(b.x) * size.width, y: CGFloat(b.y) * size.height)
+                        let rr = CGFloat(b.r) * 1.25
+                        let g = Gradient(stops: [.init(color: b.color.opacity(0.5 * b.strength * halo), location: 0),
+                                                 .init(color: b.color.opacity(0.12 * b.strength * halo), location: 0.45),
+                                                 .init(color: b.color.opacity(0), location: 1)])
+                        ctx.fill(Path(ellipseIn: CGRect(x: c.x - rr, y: c.y - rr, width: rr * 2, height: rr * 2)),
+                                 with: .radialGradient(g, center: c, startRadius: 0, endRadius: rr))
+                    }
+                    // The voice's ripple casts a faint ring too.
+                    if k.wave > 0, voice > 0.05, ringR > 1, let c0 = colors.first {
+                        // A soft annulus: clear at the ring's inner and
+                        // outer edge, the colour at the ring itself.
+                        let band = 30 * k.wave
+                        let outer = ringR + band
+                        let mid = ringR / outer, inner = max(0, ringR - band) / outer
+                        let g = Gradient(stops: [.init(color: c0.opacity(0), location: inner),
+                                                 .init(color: c0.opacity(0.3 * voice * halo), location: mid),
+                                                 .init(color: c0.opacity(0), location: 1)])
+                        ctx.fill(Path(ellipseIn: CGRect(x: center.x - outer, y: center.y - outer, width: outer * 2, height: outer * 2)),
+                                 with: .radialGradient(g, center: center, startRadius: 0, endRadius: outer))
+                    }
+                }
                 for n in 0..<count {
                     let r = k.spacing * Double(n).squareRoot()
                     let a = Double(n) * Self.goldenAngle
@@ -162,6 +192,8 @@ struct LabSunflowerView: View {
                     }
                     if let bloomColor, mixed > 0.01 {
                         color = Self.mix(baseGrey, bloomColor, min(1, mixed) * k.tint)
+                        // Lit: past the colour, toward white, at the core.
+                        if k.dark { color = Self.mix(color, .white, min(1, max(0, mixed - 0.5)) * 0.7 * k.glow) }
                     }
                     // Under the hero, the field clears.
                     if k.heroOn {
