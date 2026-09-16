@@ -506,6 +506,8 @@ public struct LabExperimentView: View {
             LabCaptionView(frame: frame, config: config)
         case .system:
             LabPlayView(frame: frame, config: config)
+        case .askButton:
+            LabAskButtonView(frame: frame, config: config)
         case .sunflower:
             LabSunflowerView(frame: frame, config: config)
         }

@@ -145,19 +145,10 @@ public struct LabPlayView: View {
             // agent's mark on it, where the spec places it; the menu
             // comes out of it.
             if onAnotherScreen {
-                let askFrame = frame.applying(spec.ask ?? spec.action, config: config)
-                LabGooeyMenu(frame: askFrame, center: askHome, open: step == .askMenu,
-                             since: sinceChange, icons: spec.items.map(\.symbol), drawsButton: placement != .tabBar)
-                if placement != .tabBar {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Int(askFrame.p("fill", .gooey)) == 0 ? .white : Color(white: 0.1))
-                        .rotationEffect(.degrees(step == .askMenu ? 90 : 0))
-                        .animation(spring, value: step)
-                        .position(askHome)
-                        // Under the +, which the menu draws.
-                        .opacity(step == .askMenu ? 0 : 1)
-                }
+                let askFrame = frame.applying(spec.ask ?? spec.action, config: config).applying(spec.resolvedLook(for: .idle), config: config)
+                LabAskButton(frame: askFrame, config: config, size: phone, placement: placement, style: spec.askStyle ?? .goo,
+                             open: step == .askMenu, since: sinceChange, items: spec.items,
+                             suggestions: LabAskContext.devices)
             }
             LabMorphPanel(state: state, frame: panelFrame, config: config,
                           sinceChange: state.kind == .pod ? .infinity : surfaceAge,
@@ -325,6 +316,10 @@ public struct LabSpecBoard: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
+                        Text("Style").font(.caption.weight(.semibold))
+                        LabChips(choices: LabAskStyle.allCases.map(\.label),
+                                 selection: Binding(get: { LabAskStyle.allCases.firstIndex(of: lab.spec.askStyle ?? .goo) ?? 0 },
+                                                    set: { lab.spec.askStyle = LabAskStyle.allCases[$0] }))
                     }
                 }
                 Text("Items").font(.caption.weight(.semibold))
@@ -403,6 +398,9 @@ public struct LabSpecBoard: View {
                 Menu("Delete") {
                     ForEach(specs.specs) { s in Button(s.name, role: .destructive) { specs.delete(s) } }
                 }
+            }
+            Section("Starters") {
+                ForEach(LabSpec.starters) { s in Button(s.name) { lab.spec = s } }
             }
             Divider()
             Button("Save “\(spec.name)”") { specs.save(spec) }
@@ -617,6 +615,10 @@ struct LabUseAsMenu: View {
             }
             if e == .gooey {
                 Button { lab.useCurrentGooeyAsAction() } label: { Label("Pod Menu", systemImage: "plus.circle.fill") }
+                Button { lab.useCurrentAskButton() } label: { Label("Ask Button", systemImage: "sparkles") }
+            }
+            if e == .askButton {
+                Button { lab.useCurrentAskButton() } label: { Label("Ask Button", systemImage: "sparkles") }
             }
             if e == .morph {
                 Text("Use a state's own menu, on its card below.")

@@ -232,6 +232,7 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
     /// aren't the Nexus tab.
     public var ask: LabLook?
     public var askPlacement: LabAskPlacement?
+    public var askStyle: LabAskStyle?
 
     public init() {}
 
@@ -251,6 +252,90 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
     public var total: Int { 1 + LabAgentVerb.allCases.count + 2 + items.count }
 }
 
+// MARK: - Starters
+
+extension LabSpec {
+    /// Three whole agents to start from, so Q Branch is never a blank
+    /// board: their kit; glass and light; water. Each is a real answer
+    /// to the question, not a demo of a slot.
+    public static let starters: [LabSpec] = [theirKit, glassAndLight, water]
+
+    private static func look(_ e: LabExperiment, _ values: [String: Double] = [:], post: [LabPostEffect] = [], palette: LabPalette = .nexus) -> LabLook {
+        var l = LabLook(experiment: e.id, values: values, post: post.map(\.rawValue), palette: palette.rawValue)
+        l.fill = 1
+        return l
+    }
+    private static func orb(_ verb: LabAgentVerb) -> LabLook { look(.orbKit, ["orbKit.state": Double(verb.orbKitVerb)]) }
+    private static func surface(_ kind: LabMorphKind, _ adornments: [LabMorphAdornment], enter: LabMorphTransition = .fade) -> LabSurfaceSpec {
+        var s = LabSurfaceSpec(kind: kind)
+        s.adornments = adornments
+        s.enter = enter
+        return s
+    }
+
+    public static var theirKit: LabSpec {
+        var s = LabSpec()
+        s.id = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        s.name = "Their Kit"
+        s.pod = orb(.idle)
+        for v in LabAgentVerb.allCases { s.states[v.rawValue] = orb(v) }
+        s.action = look(.gooey, ["gooey.effect": 1, "gooey.fill": 0])
+        s.ask = look(.gooey, ["gooey.effect": 1, "gooey.fill": 0])
+        s.askPlacement = .floating
+        s.askStyle = .goo
+        s.items = [.ask, .talk, .show]
+        s.surfaces["ask"] = surface(.sheet, [.edgeGlow])
+        s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .waveform], enter: .flare)
+        s.surfaces["show"] = surface(.fullScreen, [.edgeGlow])
+        return s
+    }
+
+    public static var glassAndLight: LabSpec {
+        var s = LabSpec()
+        s.id = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        s.name = "Glass & Light"
+        s.pod = look(.aurora)
+        s.states["idle"] = look(.aurora)
+        s.states["listening"] = look(.liquidRing)
+        s.states["thinking"] = look(.sphere, post: [.bloom])
+        s.states["searching"] = look(.constellation)
+        s.states["speaking"] = look(.orb, post: [.bloom])
+        s.states["done"] = look(.frostOrb)
+        s.states["error"] = look(.aurora, palette: .ember)
+        s.action = look(.gooey, ["gooey.effect": 0, "gooey.fill": 1])
+        s.ask = look(.gooey, ["gooey.effect": 0, "gooey.fill": 1])
+        s.askPlacement = .navBar
+        s.askStyle = .pill
+        s.items = [.ask, .talk, .show]
+        s.surfaces["ask"] = surface(.sheet, [.borderBeam])
+        s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .transcript], enter: .flare)
+        s.surfaces["show"] = surface(.card, [.edgeGlow])
+        return s
+    }
+
+    public static var water: LabSpec {
+        var s = LabSpec()
+        s.id = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+        s.name = "Water"
+        s.pod = look(.tide)
+        s.states["idle"] = look(.tide)
+        s.states["listening"] = look(.droplet)
+        s.states["thinking"] = look(.pool)
+        s.states["searching"] = look(.caustics)
+        s.states["speaking"] = look(.jelly)
+        s.states["done"] = look(.globe)
+        s.states["error"] = look(.lava)
+        s.action = look(.gooey, ["gooey.effect": 3, "gooey.fill": 2])
+        s.ask = look(.gooey, ["gooey.effect": 3, "gooey.fill": 2])
+        s.askPlacement = .floating
+        s.askStyle = .bar
+        s.items = [.ask, .talk]
+        s.surfaces["ask"] = surface(.sheet, [.edgeGlow, .transcript])
+        s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .waveform, .caption])
+        return s
+    }
+}
+
 // MARK: - Store
 
 /// Named specs in UserDefaults, and the working spec autosaved so the
@@ -267,10 +352,12 @@ public final class LabSpecStore: ObservableObject {
            let decoded = try? JSONDecoder().decode([LabSpec].self, from: data) { specs = decoded }
     }
 
+    /// The working spec — or, first time, a starter, so the board and
+    /// the play have something to show.
     public static func loadCurrent() -> LabSpec {
         guard let data = UserDefaults.standard.data(forKey: currentKey),
-              let spec = try? JSONDecoder().decode(LabSpec.self, from: data) else { return LabSpec() }
-        return spec
+              let spec = try? JSONDecoder().decode(LabSpec.self, from: data) else { return LabSpec.theirKit }
+        return spec.filled == 0 && spec.name == "Untitled" ? LabSpec.theirKit : spec
     }
     public static func autosave(_ spec: LabSpec) {
         if let data = try? JSONEncoder().encode(spec) { UserDefaults.standard.set(data, forKey: currentKey) }
@@ -339,20 +426,23 @@ public enum LabSlotTarget: Equatable, Sendable {
     public var hint: String {
         switch self {
         case .pod, .state: return "Tune any orb, then Use. The knobs, post stack and palette come with it."
-        case .action, .ask: return "Tune Gooey, then Use."
+        case .action: return "Tune Gooey, then Use."
+        case .ask: return "Tune the Ask Button — placement, style, and the goo — then Use."
         }
     }
     public func accepts(_ e: LabExperiment) -> Bool {
         switch self {
         case .pod, .state: return e.canBeHero
-        case .action, .ask: return e == .gooey
+        case .action: return e == .gooey
+        case .ask: return e == .gooey || e == .askButton
         }
     }
     /// Where to start looking.
     public var startingExperiment: LabExperiment {
         switch self {
         case .pod, .state: return .orbKit
-        case .action, .ask: return .gooey
+        case .action: return .gooey
+        case .ask: return .askButton
         }
     }
 }
@@ -370,7 +460,7 @@ extension LabState {
         case .pod: useCurrentLookAsPod()
         case .state(let v): useCurrentLook(for: v)
         case .action: useCurrentGooeyAsAction()
-        case .ask: spec.ask = LabLook(from: self, experiment: .gooey)
+        case .ask: useCurrentAskButton()
         }
         self.target = nil
         experiment = .system
@@ -396,6 +486,15 @@ extension LabState {
         var pod = LabLook(from: self, experiment: .orbKit)
         pod.values["orbKit.state"] = Double(LabAgentVerb.idle.orbKitVerb)
         spec.pod = pod
+    }
+    /// The Ask Button lab's placement and style, with Gooey as tuned, as
+    /// the app-wide Ask button.
+    public func useCurrentAskButton() {
+        spec.ask = LabLook(from: self, experiment: .gooey)
+        if experiment == .askButton {
+            spec.askPlacement = LabAskPlacement.allCases[min(2, Int(value(LabExperiment.askButton.parameters[0], of: .askButton)))]
+            spec.askStyle = LabAskStyle.allCases[min(3, Int(value(LabExperiment.askButton.parameters[1], of: .askButton)))]
+        }
     }
     /// Gooey, as tuned, as the pod's menu.
     public func useCurrentGooeyAsAction() { spec.action = LabLook(from: self, experiment: .gooey) }
@@ -462,6 +561,15 @@ extension LabFrame {
         var f = self
         f.taps = taps
         f.sinceTap = since
+        return f
+    }
+}
+
+extension LabFrame {
+    /// For harnesses: knob values over the frame's.
+    public func withParams(_ values: [String: Double]) -> LabFrame {
+        var f = self
+        for (k, v) in values { f.params[k] = v }
         return f
     }
 }

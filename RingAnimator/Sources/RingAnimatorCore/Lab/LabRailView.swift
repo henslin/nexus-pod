@@ -66,7 +66,7 @@ struct LabRailSection<Content: View, Trailing: View>: View {
 }
 
 /// The rail for one experiment.
-struct LabRailView: View {
+public struct LabRailView: View {
     @ObservedObject var lab: LabState
     @ObservedObject var config: RingConfig
     @ObservedObject var audio: AudioSpectrumMonitor
@@ -80,7 +80,31 @@ struct LabRailView: View {
     /// Which post effect's knobs are open.
     @State private var openPost: LabPostEffect?
 
-    var body: some View {
+    /// For harnesses: the rail's content without its scroll view, which
+    /// `ImageRenderer` can't rasterise on the Mac.
+    public static func harness(lab: LabState, config: RingConfig) -> some View {
+        LabRailView(lab: lab, config: config, audio: AudioSpectrumMonitor(), presets: LabPresetStore(), bands: LabAudioBands(), onSaveFrame: {}, savedFrameMessage: nil)
+            .content
+    }
+
+    var content: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Divider()
+            if let target = lab.target {
+                targetBanner(target)
+                Divider()
+            }
+            experimentSection
+            postSection
+            stageSection
+            colourSection
+            audioSection
+            exportSection
+        }
+    }
+
+    public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
@@ -326,7 +350,11 @@ struct LabKnobList: View {
     var body: some View {
         let params = experiment.parameters
         ForEach(Array(params.enumerated()), id: \.element.id) { i, parameter in
-            if let g = parameter.group, i == 0 || params[i - 1].group != g {
+            // A heading wherever the group changes — unless the group is
+            // one knob wearing the group's own name, which would say it
+            // twice.
+            if let g = parameter.group, i == 0 || params[i - 1].group != g,
+               !(g == parameter.name && (i + 1 >= params.count || params[i + 1].group != g)) {
                 Text(g)
                     .font(.subheadline.weight(.semibold))
                     .padding(.top, i == 0 ? 0 : 6)

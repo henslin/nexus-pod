@@ -100,6 +100,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case caption
     case system
     case sunflower
+    case askButton
 
     public var id: String { rawValue }
 
@@ -185,6 +186,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .caption:    return "Caption"
         case .system:     return "The Agent"
         case .sunflower:  return "Bloom Field"
+        case .askButton:  return "Ask Button"
         }
     }
 
@@ -260,6 +262,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .caption:    return "SwiftUI · text transitions"
         case .system:     return "Assembly · every slot, played"
         case .sunflower:  return "SwiftUI · Canvas + Speech"
+        case .askButton:  return "SwiftUI · Liquid Glass + Canvas filters"
         }
     }
 
@@ -345,6 +348,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .caption:    return "text.bubble"
         case .system:     return "square.grid.2x2"
         case .sunflower:  return "sun.max.fill"
+        case .askButton:  return "sparkles"
         }
     }
 
@@ -506,6 +510,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "The iOS 18 Siri signature: a glow that runs round the screen’s edge in the palette, breathing with the voice. The full-screen voice interface probably wants this with the ring in the middle, and it’s a blurred stroke — cheap."
         case .caption:
             return "The transcript: words arriving as the agent speaks — fading, blurring in, or typed — with a glow in the palette. The voice interface’s text, to go with Edge Glow and the hero ring."
+        case .askButton:
+            return "Ask Nexus, everywhere — the agent on a screen that isn’t its tab. Placement (floating, in the navigation bar, or the pod itself), style (the goo, a glass pill, the orb, a bar above the tab bar), and what it offers when tapped: with Context on, the first suggestions are about the screen you’re on. Tap to open."
         case .sunflower:
             return "The Bloom app, brought in: a sunflower’s seed spiral filling the screen, and blooms of colour opening across it — on the clock, on a tap, and on your voice. A full-screen, ethereal way to talk to the agent: the field is the agent. A live transcript, natively animated, sits at the bottom when Audio Reactive is on."
         case .system:
@@ -572,13 +578,13 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// which are about the whole screen.
     public var usesPhoneCanvas: Bool {
         switch self {
-        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system, .sunflower: return true
+        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system, .sunflower, .askButton: return true
         default: return false
         }
     }
 
     /// Advances through stages on tap — see `LabState.advance()`.
-    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols || self == .gooey || self == .system || self == .sunflower }
+    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols || self == .gooey || self == .system || self == .sunflower || self == .askButton }
 
     /// Reads the pointer — hover on the Mac, touch on the phone.
     public var usesPointer: Bool { self == .metal || self == .sunflower }
@@ -606,7 +612,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     public var section: LabSection {
         switch self {
         case .journey, .agentStates, .hold, .sunflower: return .flows
-        case .beamKit, .gooey, .metal, .buttonGlow: return .controls
+        case .askButton, .beamKit, .gooey, .metal, .buttonGlow: return .controls
         case .waveform, .edgeGlow, .caption, .morph, .sheet: return .surfaces
         case .system: return .qBranch
         default: return .orb
@@ -1251,6 +1257,15 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("rotate", "Rotate", -1...1, 0.3, "The palette runs round the edge."),
             .init("inset", "Inset", 0...40, 0, "Distance in from the edge.", "%.0f pt"),
             .init("ringSize", "Hero Ring", 0...0.9, 0.5, "A ring in the middle, as a fraction of width. 0 hides it."),
+        ]
+        case .askButton: return [
+            .init("placement", "Placement", 0...2, 0, "Where it sits on screens that aren’t the Nexus tab.", "%.0f", group: "Placement", choices: ["Floating", "Nav bar", "The pod"]),
+            .init("style", "Style", 0...3, 0, "What it is.", "%.0f", group: "Style", choices: ["Goo", "Pill", "Orb", "Bar"]),
+            .init("label", "Label", 0...2, 0, "The word on the pill.", "%.0f", group: "Style", choices: ["Ask", "Ask Nexus", "Nexus"]),
+            .init("size", "Size", 36...64, 52, "Points.", "%.0f pt", group: "Style"),
+            .init("glow", "Glow", 0...1, 0.6, "The palette’s glow under it.", group: "Style"),
+            .init("context", "Context", 0...1, 1, "Suggestions about the screen you’re on, first. Off: the generic verbs.", "%.0f", group: "What it offers", choices: ["Off", "On"]),
+            .init("auto", "Advance", 0...1, 1, "Opens and closes on the clock, or only on tap.", "%.0f", group: "What it offers", choices: ["Tap", "Auto"]),
         ]
         case .sunflower: return [
             .init("spacing", "Density", 6...24, 10, "Seed spacing, points — the spiral’s scale.", "%.0f pt", group: "Field"),
