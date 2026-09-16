@@ -98,6 +98,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case waveform
     case edgeGlow
     case caption
+    case system
 
     public var id: String { rawValue }
 
@@ -181,6 +182,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "Waveform"
         case .edgeGlow:   return "Edge Glow"
         case .caption:    return "Caption"
+        case .system:     return "Nexus System"
         }
     }
 
@@ -254,6 +256,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "SwiftUI · Canvas"
         case .edgeGlow:   return "SwiftUI · blur + gradient"
         case .caption:    return "SwiftUI · text transitions"
+        case .system:     return "Spec · every slot, played"
         }
     }
 
@@ -337,6 +340,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "waveform"
         case .edgeGlow:   return "iphone.gen3.radiowaves.left.and.right"
         case .caption:    return "text.bubble"
+        case .system:     return "square.grid.2x2"
         }
     }
 
@@ -498,6 +502,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "The iOS 18 Siri signature: a glow that runs round the screen’s edge in the palette, breathing with the voice. The full-screen voice interface probably wants this with the ring in the middle, and it’s a blurred stroke — cheap."
         case .caption:
             return "The transcript: words arriving as the agent speaks — fading, blurring in, or typed — with a glow in the palette. The voice interface’s text, to go with Edge Glow and the hero ring."
+        case .system:
+            return "The product, assembled. Every slot the Nexus surface needs — the pod, a look per agent state, the menu a tap reveals, the surface each action opens, what tap and long press do — filled from the Lab and played end to end. Tap to step; hold to talk."
         }
     }
 
@@ -560,19 +566,19 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// which are about the whole screen.
     public var usesPhoneCanvas: Bool {
         switch self {
-        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold: return true
+        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system: return true
         default: return false
         }
     }
 
     /// Advances through stages on tap — see `LabState.advance()`.
-    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols || self == .gooey }
+    public var isTappable: Bool { self == .journey || self == .agentStates || self == .symbols || self == .gooey || self == .system }
 
     /// Reads the pointer — hover on the Mac, touch on the phone.
     public var usesPointer: Bool { self == .metal }
 
     /// Responds to press-and-hold — see `LabState.hold`.
-    public var isHoldable: Bool { self == .hold }
+    public var isHoldable: Bool { self == .hold || self == .system }
 
     /// Libraries.dev's nine orb verbs, for the flows' per-state chips.
     public static let orbVerbs = ["Working", "Searching", "Solving", "Listening", "Connecting", "Weaving", "Composing", "Breathing", "Shaping"]
@@ -594,6 +600,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     public var section: LabSection {
         switch self {
         case .journey, .agentStates, .hold: return .flows
+        case .system: return .system
         case .waveform, .edgeGlow, .caption, .morph, .buttonGlow, .sheet, .beamKit, .gooey, .metal: return .ui
         default: return .orb
         }
@@ -1225,6 +1232,14 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("inset", "Inset", 0...40, 0, "Distance in from the edge.", "%.0f pt"),
             .init("ringSize", "Hero Ring", 0...0.9, 0.5, "A ring in the middle, as a fraction of width. 0 hides it."),
         ]
+        case .system: return [
+            .init("hold", "Hold", 0.5...8, 2.5, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
+            .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", group: "Play", choices: ["Tap", "Auto"]),
+            .init("spring", "Spring", 0.2...1.2, 0.55, "Response of the morph between surfaces.", group: "Play"),
+            .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Play"),
+            .init("talk", "Talk Time", 1...8, 3, "Seconds it speaks after a hold is released.", "%.1f s", group: "Play"),
+            .init("chrome", "Labels", 0...1, 1, "The step name and hint over the phone.", "%.0f", group: "Play", choices: ["Off", "On"]),
+        ]
         case .caption: return [
             .init("style", "Style", 0...2, 1, "How words arrive.", "%.0f", choices: ["Fade", "Blur in", "Typed"]),
             .init("rate", "Words / s", 1...12, 4, "Arrival rate.", "%.0f"),
@@ -1327,13 +1342,14 @@ public struct LabMorphState: Identifiable, Equatable, Sendable {
 /// The Lab's three rooms (Chris, 2026-09-15): what the thing is, what
 /// it sits in, and what a touch does.
 public enum LabSection: String, CaseIterable, Identifiable, Sendable {
-    case orb, ui, flows
+    case orb, ui, flows, system
     public var id: String { rawValue }
     public var title: String {
         switch self {
         case .orb: return "Orb"
         case .ui: return "UI"
         case .flows: return "Flows"
+        case .system: return "System"
         }
     }
     public var caption: String {
@@ -1341,6 +1357,7 @@ public enum LabSection: String, CaseIterable, Identifiable, Sendable {
         case .orb: return "What lives in the circle. Bases, and post effects that stack over any of them."
         case .ui: return "The surfaces it sits in — buttons, the sheet, the screen’s edge."
         case .flows: return "What a touch does — tap, hold, listen, talk."
+        case .system: return "The product, assembled: a look for every slot, played end to end."
         }
     }
     public var symbol: String {
@@ -1348,6 +1365,7 @@ public enum LabSection: String, CaseIterable, Identifiable, Sendable {
         case .orb: return "circle.fill"
         case .ui: return "rectangle.on.rectangle"
         case .flows: return "hand.tap"
+        case .system: return "square.grid.2x2"
         }
     }
     public var experiments: [LabExperiment] { LabExperiment.allCases.filter { $0.section == self && !$0.isHidden } }
@@ -1629,6 +1647,13 @@ public final class LabState: ObservableObject {
     /// phone. For Metal's bend and reflection.
     @Published public var pointer: CGPoint? = nil
 
+    /// The System's working spec — every slot's assignment. Autosaved,
+    /// so the board survives a relaunch; named copies live in
+    /// `LabSpecStore`.
+    @Published public var spec: LabSpec = LabSpecStore.loadCurrent() {
+        didSet { LabSpecStore.autosave(spec) }
+    }
+
     /// Press-and-hold, for the Hold flow: when the press began, or nil.
     @Published public var holdStart: Date? = nil
     /// When the last hold ended — the flow's "talking" runs from here.
@@ -1712,12 +1737,15 @@ public struct LabFrame {
     public var morphStates: [LabMorphState] = []
     /// See `LabState.pointer`.
     public var pointer: CGPoint? = nil
+    /// See `LabState.spec`.
+    public var spec: LabSpec = LabSpec()
 
     public init(time: Double, intensity: Double, audio: Double, colors: [Color], diameter: CGFloat, darkStage: Bool,
                 params: [String: Double] = [:], bands: LabAudioBands = LabAudioBands(), glyph: String? = nil,
                 taps: Int = 0, sinceTap: Double = .infinity,
                 hero: LabExperiment? = nil, heroPost: [LabPostEffect] = [], fill: Double = 1,
-                holding: Double = 0, sinceHold: Double = .infinity, morphStates: [LabMorphState] = [], pointer: CGPoint? = nil) {
+                holding: Double = 0, sinceHold: Double = .infinity, morphStates: [LabMorphState] = [], pointer: CGPoint? = nil,
+                spec: LabSpec = LabSpec()) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -1736,6 +1764,7 @@ public struct LabFrame {
         self.sinceHold = sinceHold
         self.morphStates = morphStates
         self.pointer = pointer
+        self.spec = spec
     }
 
     /// A knob's value, or its declared default when the frame was built
@@ -1806,7 +1835,8 @@ extension LabState {
                         holding: holdStart.map { date.timeIntervalSince($0) } ?? 0,
                         sinceHold: date.timeIntervalSince(holdEnd),
                         morphStates: morphStates,
-                        pointer: pointer)
+                        pointer: pointer,
+                        spec: spec)
     }
 
     private static func hueShifted(_ color: Color, by turns: Double) -> Color {

@@ -22,6 +22,7 @@ public struct LabViewerView: View {
     @State private var showingKnobs = false
     @State private var showingReviews = false
     @State private var showingList = false
+    @State private var pasteMessage: String?
 
     /// The experiments in viewing order: the pod-shaped ones first, then
     /// the flows. Post-only experiments are reached through the stack.
@@ -137,6 +138,9 @@ public struct LabViewerView: View {
 
     private var footer: some View {
         VStack(spacing: 10) {
+            if let pasteMessage, lab.experiment == .system {
+                Text(pasteMessage).font(.caption2).foregroundStyle(.secondary)
+            }
             LabStarRating(stars: reviews.binding(for: lab.experiment).stars)
             HStack(spacing: 12) {
                 Button { lab.audioReactive.toggle() } label: {
@@ -150,6 +154,17 @@ public struct LabViewerView: View {
                 }
                 Button { lab.darkStage.toggle() } label: {
                     Image(systemName: lab.darkStage ? "moon.fill" : "sun.max.fill").frame(width: 22)
+                }
+                // The System plays what the Mac assembled: its spec
+                // arrives as JSON on the pasteboard.
+                if lab.experiment == .system {
+                    Button {
+                        if let s = LabSpecStore.paste() { lab.spec = s; pasteMessage = "Loaded “\(s.name)”" } else { pasteMessage = "No spec on the pasteboard" }
+                    } label: {
+                        Label(lab.spec.filled == 0 ? "Paste Spec" : lab.spec.name, systemImage: "doc.on.clipboard")
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                    }
                 }
                 Spacer()
                 Button { showingKnobs = true } label: { Image(systemName: "slider.horizontal.3").frame(width: 22) }

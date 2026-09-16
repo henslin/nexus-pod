@@ -83,6 +83,14 @@ public struct LabStageView: View {
                                 .padding(.vertical, 24)
                                 .frame(maxWidth: .infinity)
                         }
+                    } else if lab.experiment == .system {
+                        // Play beside the board. Its own gestures, on the
+                        // phone only — the board's buttons mustn't step it.
+                        ScrollView(.vertical) {
+                            LabSystemStage(lab: lab, config: config, frame: f)
+                                .padding(.vertical, 24)
+                                .frame(maxWidth: .infinity)
+                        }
                     } else {
                         LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.post)
                     }
@@ -93,14 +101,14 @@ public struct LabStageView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .onTapGesture {
-                if lab.experiment.isTappable { lab.advance() }
+                if lab.experiment.isTappable, lab.experiment != .system { lab.advance() }
             }
             // Press and hold, for the Hold flow: begins on touch-down,
             // ends on release — `DragGesture(minimumDistance: 0)` is the
             // one gesture that reports both.
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { g in
-                    if lab.experiment.isHoldable { lab.beginHold() }
+                    if lab.experiment.isHoldable, lab.experiment != .system { lab.beginHold() }
                     if lab.experiment.usesPointer { lab.pointer = pointerLocal(g.location) }
                 }
                 .onEnded { _ in lab.endHold() })
@@ -158,6 +166,10 @@ public struct LabStageView: View {
                     Text(lab.experiment.technology)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
+                }
+                // Into the System: this, as tuned, for a slot.
+                if lab.experiment.canBeHero || lab.experiment == .gooey {
+                    LabUseAsMenu(lab: lab)
                 }
                 Text(lab.experiment.summary)
                     .font(.callout)
@@ -623,6 +635,8 @@ public struct LabExperimentView: View {
             LabEdgeGlowView(frame: frame, config: config)
         case .caption:
             LabCaptionView(frame: frame, config: config)
+        case .system:
+            LabPlayView(frame: frame, config: config)
         }
     }
 

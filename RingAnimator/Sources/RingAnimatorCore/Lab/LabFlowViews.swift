@@ -764,8 +764,55 @@ struct LabGooeyView: View {
     private static let icons = ["camera.fill", "photo.fill", "mic.fill", "paperclip", "location.fill", "face.smiling"]
 
     var body: some View {
-        let effect = Int(frame.p("effect", .gooey))
+        let auto = frame.p("auto", .gooey) >= 0.5
+        // Open or closed: taps toggle; auto flips every 3 s.
+        let autoOpen = auto && Int(frame.time / 3) % 2 == 1
+        let open = (frame.taps % 2 == 1) != autoOpen
+        // Time since the last toggle: the tap, or the auto flip.
+        let since = min(frame.sinceTap, auto ? frame.time.truncatingRemainder(dividingBy: 3) : .infinity)
         let items = Int(frame.p("items", .gooey))
+        LabPhoneCanvas(frame: frame) { size in
+            // The pod's centre, exactly where TabBarPreview puts it.
+            let pod = CGFloat(RingConfig.tabBarPodDiameter)
+            let center = CGPoint(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
+            ZStack {
+                Color.black.opacity(frame.darkStage ? 0.5 : 0.1)
+                VStack {
+                    Spacer()
+                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32, hidesPodContent: true)
+                        .allowsHitTesting(false)
+                        .padding(.bottom, 24)
+                }
+                LabGooeyMenu(frame: frame, center: center, open: open, since: since,
+                             icons: (0..<items).map { Self.icons[$0 % Self.icons.count] })
+                VStack {
+                    Spacer()
+                    Text("Tap to open")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.bottom, 100)
+                }
+            }
+        }
+    }
+}
+
+/// The goo itself: the + at `center`, the items coming out of it, drawn
+/// from the Gooey knobs in `frame`. Shared by the Gooey lab and the
+/// System's play, where the items are the agent's actions.
+struct LabGooeyMenu: View {
+    let frame: LabFrame
+    let center: CGPoint
+    let open: Bool
+    /// Seconds since it last opened or closed.
+    let since: Double
+    let icons: [String]
+    /// The + itself, or the pod's own look sitting there.
+    var drawsButton: Bool = true
+
+    var body: some View {
+        let effect = Int(frame.p("effect", .gooey))
+        let items = icons.count
         let blur = frame.p("blur", .gooey)
         let contrast = frame.p("contrast", .gooey)
         let waviness = frame.p("waviness", .gooey)
@@ -774,12 +821,6 @@ struct LabGooeyView: View {
         let openS = frame.p("openStagger", .gooey) / 1000, closeS = frame.p("closeStagger", .gooey) / 1000
         let antic = frame.p("anticipation", .gooey), anticD = frame.p("anticipationDuration", .gooey) / 1000
         let iconFade = frame.p("iconFade", .gooey) / 1000, iconDelay = frame.p("iconDelay", .gooey) / 1000
-        let auto = frame.p("auto", .gooey) >= 0.5
-        // Open or closed: taps toggle; auto flips every 3 s.
-        let autoOpen = auto && Int(frame.time / 3) % 2 == 1
-        let open = (frame.taps % 2 == 1) != autoOpen
-        // Time since the last toggle: the tap, or the auto flip.
-        let since = min(frame.sinceTap, auto ? frame.time.truncatingRemainder(dividingBy: 3) : .infinity)
         let fill: Color = {
             switch Int(frame.p("fill", .gooey)) {
             case 1: return Color(white: 0.92)
@@ -813,7 +854,7 @@ struct LabGooeyView: View {
         // The + lives in the Nexus tab's slot, so everything comes out to
         // the left along the bar, or up and to the left — never off the
         // screen (Chris, 2026-09-15).
-        func position(_ i: Int, _ p: Double, center: CGPoint) -> (CGPoint, CGSize) {
+        func position(_ i: Int, _ p: Double) -> (CGPoint, CGSize) {
             let dist = travel * p + anticipationOffset(i)
             let n = Double(i + 1)
             switch effect {
@@ -833,19 +874,11 @@ struct LabGooeyView: View {
                         CGSize(width: R * 2 * (0.3 + 0.7 * p), height: R * 2 * (0.3 + 0.7 * p)))
             }
         }
-
-        return LabPhoneCanvas(frame: frame) { size in
-            // The pod's centre, exactly where TabBarPreview puts it.
-            let pod = CGFloat(RingConfig.tabBarPodDiameter)
-            let center = CGPoint(x: 16 + (size.width - 32) - pod / 2, y: size.height - 24 - pod / 2)
-            ZStack {
-                Color.black.opacity(frame.darkStage ? 0.5 : 0.1)
-                VStack {
-                    Spacer()
-                    TabBarPreview(config: config, selectedTab: .constant(.dashboard), width: size.width - 32, hidesPodContent: true)
-                        .allowsHitTesting(false)
-                        .padding(.bottom, 24)
-                }
+        // Nothing to draw once it has fully closed — so a pod look under
+        // it isn't covered by the goo's own disc.
+        let settled = !open && since > closeD + Double(items) * closeS + 0.1
+        return ZStack {
+            if drawsButton || !settled {
                 Canvas { ctx, _ in
                     // The goo: everything drawn in this layer is blurred, then
                     // thresholded, so nearby shapes bridge.
@@ -857,36 +890,31 @@ struct LabGooeyView: View {
                         for i in 0..<items {
                             let p = progress(i)
                             guard p > 0.001 else { continue }
-                            let (pt, sz) = position(i, p, center: center)
+                            let (pt, sz) = position(i, p)
                             layer.fill(Path(ellipseIn: CGRect(x: pt.x - sz.width / 2, y: pt.y - sz.height / 2, width: sz.width, height: sz.height)), with: .color(fill))
                         }
                     }
                 }
-                // Icons, crisp, on top: the + rotates to × as it opens.
+            }
+            // Icons, crisp, on top: the + rotates to × as it opens.
+            if drawsButton {
                 let mainP = progress(0)
                 Image(systemName: "plus")
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(iconColor)
                     .rotationEffect(.degrees(45 * mainP))
                     .position(center)
-                ForEach(0..<items, id: \.self) { i in
-                    let p = progress(i)
-                    let (pt, _) = position(i, p, center: center)
-                    let t = max(0, since - Double(i) * openS - iconDelay)
-                    let iconAlpha = open ? min(1, t / max(iconFade, 0.01)) : max(0, 1 - since / max(iconFade, 0.01))
-                    Image(systemName: Self.icons[i % Self.icons.count])
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(iconColor)
-                        .opacity(iconAlpha * (p > 0.6 ? 1 : 0))
-                        .position(pt)
-                }
-                VStack {
-                    Spacer()
-                    Text("Tap to open")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.5))
-                        .padding(.bottom, 100)
-                }
+            }
+            ForEach(0..<items, id: \.self) { i in
+                let p = progress(i)
+                let (pt, _) = position(i, p)
+                let t = max(0, since - Double(i) * openS - iconDelay)
+                let iconAlpha = open ? min(1, t / max(iconFade, 0.01)) : max(0, 1 - since / max(iconFade, 0.01))
+                Image(systemName: icons[i])
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .opacity(iconAlpha * (p > 0.6 ? 1 : 0))
+                    .position(pt)
             }
         }
     }

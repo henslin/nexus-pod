@@ -1,0 +1,378 @@
+import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#else
+import UIKit
+#endif
+
+// The System: the Lab's experiments assigned to the product's slots.
+//
+// Chris, 2026-09-15: "make this exploration into a system … make the orbs
+// for the different states then be able to select them for the UI. Same
+// with gooey buttons. Same with the interactions/sheets/fullscreen/long
+// press." The Lab is the catalogue of ingredients; a `LabSpec` is the
+// recipe — one look per slot the Nexus surface needs, a menu of actions,
+// a surface per action, and what the two gestures do. `LabPlayView`
+// plays the whole spec end to end; the board beside it shows every slot
+// and its gaps. Specs save by name and travel as JSON, so the phone
+// viewer can play what the Mac assembled.
+
+// MARK: - The product's vocabulary
+
+/// The states the agent moves through — the product's verbs, as opposed
+/// to Libraries.dev's nine orb verbs (which are *looks* an orb can wear).
+public enum LabAgentVerb: String, CaseIterable, Identifiable, Codable, Sendable {
+    case idle, listening, thinking, searching, speaking, done, error
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .idle: return "Idle"
+        case .listening: return "Listening"
+        case .thinking: return "Thinking"
+        case .searching: return "Searching"
+        case .speaking: return "Speaking"
+        case .done: return "Done"
+        case .error: return "Error"
+        }
+    }
+    /// What the surface says while in this state.
+    public var caption: String {
+        switch self {
+        case .idle: return "Nexus"
+        case .listening: return "Listening…"
+        case .thinking: return "Thinking…"
+        case .searching: return "Searching…"
+        case .speaking: return "Speaking"
+        case .done: return "Done"
+        case .error: return "Something went wrong"
+        }
+    }
+    public var symbol: String {
+        switch self {
+        case .idle: return "circle"
+        case .listening: return "ear"
+        case .thinking: return "brain"
+        case .searching: return "magnifyingglass"
+        case .speaking: return "waveform"
+        case .done: return "checkmark.circle"
+        case .error: return "exclamationmark.triangle"
+        }
+    }
+    /// The nearest of Libraries.dev's nine orb verbs — see
+    /// `LabExperiment.orbVerbs` — for "use their orb for every state".
+    public var orbKitVerb: Int {
+        switch self {
+        case .idle: return 7        // Breathing
+        case .listening: return 3   // Listening
+        case .thinking: return 0    // Working
+        case .searching: return 1   // Searching
+        case .speaking: return 6    // Composing
+        case .done: return 8        // Shaping
+        case .error: return 5       // Weaving
+        }
+    }
+}
+
+/// What a tap on the pod can reveal — the agent's actions, as menu items.
+public enum LabActionItem: String, CaseIterable, Identifiable, Codable, Sendable {
+    case ask, talk, show, remind, photo
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .ask: return "Ask"
+        case .talk: return "Talk"
+        case .show: return "Show me"
+        case .remind: return "Remind"
+        case .photo: return "Photo"
+        }
+    }
+    public var symbol: String {
+        switch self {
+        case .ask: return "text.bubble.fill"
+        case .talk: return "mic.fill"
+        case .show: return "camera.viewfinder"
+        case .remind: return "bell.fill"
+        case .photo: return "photo.fill"
+        }
+    }
+    /// The surface this action opens when none has been assigned.
+    public var defaultSurface: LabMorphKind {
+        switch self {
+        case .ask: return .sheet
+        case .talk: return .fullScreen
+        case .show: return .fullScreen
+        case .remind, .photo: return .card
+        }
+    }
+}
+
+/// What a gesture on the pod does.
+public enum LabGestureResult: String, CaseIterable, Identifiable, Codable, Sendable {
+    case nothing, menu, ask, talk, show, remind, photo
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .nothing: return "Nothing"
+        case .menu: return "Open the menu"
+        default: return item.map { "Open \($0.label)" } ?? rawValue
+        }
+    }
+    public var item: LabActionItem? { LabActionItem(rawValue: rawValue) }
+}
+
+// MARK: - A look, a surface, a spec
+
+/// One experiment as tuned: its knobs, post stack, palette and the shared
+/// knobs that change how it reads. What an orb slot holds. Captured from
+/// the Lab's current state — "use this, as it is now, for Listening".
+public struct LabLook: Codable, Equatable, Sendable {
+    public var experiment: String
+    public var values: [String: Double]
+    public var post: [String]
+    public var palette: String
+    public var intensity: Double = 0.5
+    public var speed: Double = 1
+    public var fill: Double = 1
+    public var glyph: String = ""
+
+    public init(experiment: String, values: [String: Double] = [:], post: [String] = [], palette: String = LabPalette.nexus.rawValue) {
+        self.experiment = experiment
+        self.values = values
+        self.post = post
+        self.palette = palette
+    }
+
+    /// The Lab as it stands: the current experiment, its knobs, the post
+    /// stack's knobs, the palette and the shared knobs.
+    @MainActor
+    public init(from lab: LabState, experiment e: LabExperiment? = nil) {
+        let e = e ?? lab.experiment
+        var values = lab.values.filter { $0.key.hasPrefix(e.id + ".") }
+        for post in lab.post { for (k, v) in lab.values where k.hasPrefix(post.experiment.id + ".") { values[k] = v } }
+        self.init(experiment: e.id, values: values, post: lab.post.map(\.rawValue), palette: lab.palette.rawValue)
+        intensity = lab.intensity
+        speed = lab.speed
+        fill = lab.fill
+        glyph = lab.glyph
+    }
+
+    public var experimentCase: LabExperiment? { LabExperiment(rawValue: experiment) }
+    public var posts: [LabPostEffect] { post.compactMap(LabPostEffect.init(rawValue:)) }
+    public var paletteCase: LabPalette { LabPalette(rawValue: palette) ?? .nexus }
+    public var name: String { experimentCase?.name ?? experiment }
+    /// "Thinking Orbs · Searching" — the orb's verb, when it is theirs.
+    public var title: String {
+        if experimentCase == .orbKit, let v = values["orbKit.state"], Int(v) < LabExperiment.orbVerbs.count {
+            return "\(name) · \(LabExperiment.orbVerbs[Int(v)])"
+        }
+        return name
+    }
+}
+
+/// A surface: the Morph state an action opens, with the Morph knobs it
+/// was tuned with (spring, edge glow…).
+public struct LabSurfaceSpec: Codable, Equatable, Sendable {
+    public var kind: LabMorphKind
+    public var adornments: [LabMorphAdornment] = []
+    public var enter: LabMorphTransition = .fade
+    public var exit: LabMorphTransition = .fade
+    public var values: [String: Double] = [:]
+
+    public init(kind: LabMorphKind) { self.kind = kind }
+
+    @MainActor
+    public init(_ state: LabMorphState, from lab: LabState) {
+        kind = state.kind
+        adornments = Array(state.adornments).sorted { $0.rawValue < $1.rawValue }
+        enter = state.enter
+        exit = state.exit
+        values = lab.values.filter { $0.key.hasPrefix("morph.") }
+    }
+
+    public var morphState: LabMorphState {
+        var s = LabMorphState(kind, Set(adornments))
+        s.enter = enter
+        s.exit = exit
+        return s
+    }
+}
+
+/// One assignment across every slot. The product, specified.
+public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
+    public var id = UUID()
+    public var name = "Untitled"
+    /// What lives in the tab bar at rest.
+    public var pod: LabLook?
+    /// A look per agent verb, keyed by `LabAgentVerb.rawValue`.
+    public var states: [String: LabLook] = [:]
+    /// The menu a tap reveals — Gooey, as tuned.
+    public var action: LabLook?
+    /// The items in it, in order.
+    public var items: [LabActionItem] = [.ask, .talk, .show]
+    /// The surface each item opens, keyed by `LabActionItem.rawValue`.
+    public var surfaces: [String: LabSurfaceSpec] = [:]
+    public var tap: LabGestureResult = .menu
+    public var longPress: LabGestureResult = .talk
+
+    public init() {}
+
+    public func look(for verb: LabAgentVerb) -> LabLook? { states[verb.rawValue] }
+    public func surface(for item: LabActionItem) -> LabSurfaceSpec? { surfaces[item.rawValue] }
+    /// The surface an item opens — assigned, or the item's default.
+    public func resolvedSurface(for item: LabActionItem) -> LabSurfaceSpec {
+        surface(for: item) ?? LabSurfaceSpec(kind: item.defaultSurface)
+    }
+    /// The look a verb wears in play — assigned, or the pod's, or the ring.
+    public func resolvedLook(for verb: LabAgentVerb) -> LabLook? { look(for: verb) ?? pod }
+
+    /// Slots filled, out of the slots the spec has.
+    public var filled: Int {
+        (pod == nil ? 0 : 1) + states.count + (action == nil ? 0 : 1) + items.filter { surfaces[$0.rawValue] != nil }.count
+    }
+    public var total: Int { 1 + LabAgentVerb.allCases.count + 1 + items.count }
+}
+
+// MARK: - Store
+
+/// Named specs in UserDefaults, and the working spec autosaved so the
+/// board survives a relaunch. JSON in and out through the pasteboard is
+/// how a spec reaches the phone viewer.
+@MainActor
+public final class LabSpecStore: ObservableObject {
+    @Published public private(set) var specs: [LabSpec] = []
+    private static let key = "nexus.lab.specs"
+    private static let currentKey = "nexus.lab.spec.current"
+
+    public init() {
+        if let data = UserDefaults.standard.data(forKey: Self.key),
+           let decoded = try? JSONDecoder().decode([LabSpec].self, from: data) { specs = decoded }
+    }
+
+    public static func loadCurrent() -> LabSpec {
+        guard let data = UserDefaults.standard.data(forKey: currentKey),
+              let spec = try? JSONDecoder().decode(LabSpec.self, from: data) else { return LabSpec() }
+        return spec
+    }
+    public static func autosave(_ spec: LabSpec) {
+        if let data = try? JSONEncoder().encode(spec) { UserDefaults.standard.set(data, forKey: currentKey) }
+    }
+
+    /// Save the working spec under its name, replacing a same-named one.
+    public func save(_ spec: LabSpec) {
+        specs.removeAll { $0.id == spec.id || $0.name == spec.name }
+        specs.append(spec)
+        persist()
+    }
+    public func delete(_ spec: LabSpec) {
+        specs.removeAll { $0.id == spec.id }
+        persist()
+    }
+    private func persist() {
+        if let data = try? JSONEncoder().encode(specs) { UserDefaults.standard.set(data, forKey: Self.key) }
+    }
+
+    public static func json(_ spec: LabSpec) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return (try? encoder.encode(spec)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+    }
+    public static func spec(fromJSON text: String) -> LabSpec? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(LabSpec.self, from: data)
+    }
+
+    /// The system pasteboard, both ways.
+    public static func copy(_ spec: LabSpec) {
+        #if canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(json(spec), forType: .string)
+        #else
+        UIPasteboard.general.string = json(spec)
+        #endif
+    }
+    public static func paste() -> LabSpec? {
+        #if canImport(AppKit)
+        return NSPasteboard.general.string(forType: .string).flatMap(spec(fromJSON:))
+        #else
+        return UIPasteboard.general.string.flatMap(spec(fromJSON:))
+        #endif
+    }
+}
+
+// MARK: - Assigning, from the Lab
+
+extension LabState {
+    /// The current experiment, as tuned, into a state slot.
+    public func useCurrentLook(for verb: LabAgentVerb) {
+        spec.states[verb.rawValue] = LabLook(from: self)
+    }
+    public func useCurrentLookAsPod() { spec.pod = LabLook(from: self) }
+    /// Libraries.dev's orb in every state, each wearing the nearest of
+    /// its nine verbs — and in the pod, breathing.
+    public func useOrbKitForEveryState() {
+        for verb in LabAgentVerb.allCases {
+            var look = LabLook(from: self, experiment: .orbKit)
+            look.values["orbKit.state"] = Double(verb.orbKitVerb)
+            spec.states[verb.rawValue] = look
+        }
+        var pod = LabLook(from: self, experiment: .orbKit)
+        pod.values["orbKit.state"] = Double(LabAgentVerb.idle.orbKitVerb)
+        spec.pod = pod
+    }
+    /// Gooey, as tuned, as the pod's menu.
+    public func useCurrentGooeyAsAction() { spec.action = LabLook(from: self, experiment: .gooey) }
+    /// A Morph state, with the Morph knobs, as an action's surface.
+    public func useMorphState(_ state: LabMorphState, for item: LabActionItem) {
+        spec.surfaces[item.rawValue] = LabSurfaceSpec(state, from: self)
+        if !spec.items.contains(item) { spec.items.append(item) }
+    }
+    public func toggleItem(_ item: LabActionItem) {
+        if let i = spec.items.firstIndex(of: item) { spec.items.remove(at: i) } else { spec.items.append(item) }
+    }
+
+    /// Bring a look back to the bench: select its experiment and restore
+    /// its knobs, so a slot can be re-tuned and re-assigned.
+    public func open(_ look: LabLook) {
+        guard let e = look.experimentCase else { return }
+        experiment = e
+        resetParameters(of: e)
+        for (k, v) in look.values { values[k] = v }
+        post = look.posts
+        palette = look.paletteCase
+        intensity = look.intensity
+        speed = look.speed
+        fill = look.fill
+        glyph = look.glyph
+    }
+    public func open(_ surface: LabSurfaceSpec) {
+        experiment = .morph
+        for (k, v) in surface.values { values[k] = v }
+        if !morphStates.contains(where: { $0.kind == surface.kind }) { morphStates.append(surface.morphState) }
+    }
+}
+
+extension LabFrame {
+    /// This frame wearing a look: the look's experiment as hero with its
+    /// post stack, its knobs over the frame's, its palette, its shared
+    /// knobs. The look's speed scales the clock.
+    public func applying(_ look: LabLook?, config: RingConfig) -> LabFrame {
+        guard let look else { return self }
+        var f = self
+        f.hero = look.experimentCase
+        f.heroPost = look.posts
+        for (k, v) in look.values { f.params[k] = v }
+        if let colors = look.paletteCase.colors { f.colors = colors }
+        else { f.colors = [config.primaryColor, config.secondaryColor] + config.additionalColors }
+        f.intensity = look.intensity
+        f.fill = look.fill
+        f.glyph = look.glyph.isEmpty ? nil : look.glyph
+        f.time = time * look.speed
+        return f
+    }
+    /// The Morph knobs a surface was tuned with, over the frame's.
+    public func applying(_ surface: LabSurfaceSpec) -> LabFrame {
+        var f = self
+        for (k, v) in surface.values { f.params[k] = v }
+        return f
+    }
+}

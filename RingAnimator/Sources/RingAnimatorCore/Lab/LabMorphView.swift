@@ -42,6 +42,21 @@ struct LabMorphView: View {
     /// iOS sizes, so the canvas is a real phone.
     static let phone = CGSize(width: 393, height: 780)
 
+    /// Where a kind of panel sits on the phone: the pod in the tab bar's
+    /// trailing slot, the pill and card just above the bar, the sheet
+    /// and full screen from the bottom.
+    static func home(of kind: LabMorphKind) -> CGPoint {
+        let phone = Self.phone
+        let size = LabMorphPanel.size(of: kind)
+        let pod = CGFloat(RingConfig.tabBarPodDiameter)
+        switch kind {
+        case .pod:        return CGPoint(x: 16 + (phone.width - 32) - pod / 2, y: phone.height - 24 - pod / 2)
+        case .pill, .card: return CGPoint(x: phone.width / 2, y: phone.height - 24 - 62 - 12 - size.height / 2)
+        case .sheet:      return CGPoint(x: phone.width / 2, y: phone.height - size.height / 2)
+        case .fullScreen: return CGPoint(x: phone.width / 2, y: phone.height / 2)
+        }
+    }
+
     var body: some View {
         let states = frame.morphStates
         let state = states.isEmpty ? LabMorphState(.pod) : states[min(index, states.count - 1)]
@@ -52,20 +67,9 @@ struct LabMorphView: View {
         let hold = max(frame.p("hold", .morph), 0.2)
         let sinceChange = frame.time.truncatingRemainder(dividingBy: hold)
         let phone = Self.phone
-        let size = LabMorphPanel.size(of: state.kind)
-        // Each state's home: the pod in the tab bar's trailing slot, the
-        // pill and card just above the bar, the sheet and full screen
-        // from the bottom. The panel animates between homes as it
-        // morphs, so it grows *out of* the pod rather than in place.
-        let center: CGPoint = {
-            let pod = CGFloat(RingConfig.tabBarPodDiameter)
-            switch state.kind {
-            case .pod:        return CGPoint(x: 16 + (phone.width - 32) - pod / 2, y: phone.height - 24 - pod / 2)
-            case .pill, .card: return CGPoint(x: phone.width / 2, y: phone.height - 24 - 62 - 12 - size.height / 2)
-            case .sheet:      return CGPoint(x: phone.width / 2, y: phone.height - size.height / 2)
-            case .fullScreen: return CGPoint(x: phone.width / 2, y: phone.height / 2)
-            }
-        }()
+        // The panel animates between homes as it morphs, so it grows
+        // *out of* the pod rather than in place.
+        let center = Self.home(of: state.kind)
         ZStack {
             DemoTab.dashboard.screenshotImage(dark: frame.darkStage)
                 .resizable().scaledToFill()
@@ -103,6 +107,9 @@ struct LabMorphPanel: View {
     /// being — the transitions' clock. Infinity for a still card.
     var sinceChange: Double = .infinity
     var untilChange: Double = .infinity
+    /// What the surface says — the agent's state, in play. `nil` shows
+    /// the workbench's sample copy.
+    var caption: String? = nil
 
     /// 0 → 1 as the content arrives, 1 → 0 as it leaves.
     private var envelope: Double {
@@ -198,7 +205,7 @@ struct LabMorphPanel: View {
                 if hasWave {
                     LabWaveformBars(frame: frame, bars: 20, height: 22).frame(height: 44)
                 } else {
-                    Text(hasCaption ? "Listening…" : "John arrived home.")
+                    Text(caption ?? (hasCaption ? "Listening…" : "John arrived home."))
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -210,7 +217,7 @@ struct LabMorphPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
                     LabHeroView(frame: frame, config: config, diameter: 44)
-                    Text("John arrived home.")
+                    Text(caption ?? "John arrived home.")
                         .font(.headline)
                     Spacer(minLength: 0)
                 }
@@ -231,7 +238,7 @@ struct LabMorphPanel: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
                     LabHeroView(frame: frame, config: config, diameter: 56)
-                    Text("Nexus")
+                    Text(caption ?? "Nexus")
                         .font(.title2.bold())
                     Spacer(minLength: 0)
                 }
@@ -263,9 +270,10 @@ struct LabMorphPanel: View {
             VStack(spacing: 14) {
                 Spacer()
                 LabHeroView(frame: frame, config: config, diameter: size.width * 0.5)
-                Text("Listening…")
+                Text(caption ?? "Listening…")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
                 if hasCaption {
                     LabCaptionWords(frame: frame, width: size.width - 48, size: 20, style: 1, rate: 4, glow: 0.4, hold: 4)
                         .frame(height: 120)
@@ -378,6 +386,15 @@ struct LabMorphStage: View {
                         ForEach(LabMorphKind.allCases) { kind in
                             Button(kind.label) {
                                 if let i = lab.morphStates.firstIndex(where: { $0.id == state.id }) { lab.morphStates[i].kind = kind }
+                            }
+                        }
+                    }
+                    // Into the System: this state, with the Morph knobs,
+                    // as what an action opens.
+                    Section("Use as surface for") {
+                        ForEach(LabActionItem.allCases) { item in
+                            Button { lab.useMorphState(state, for: item) } label: {
+                                Label(item.label, systemImage: lab.spec.surface(for: item)?.kind == state.kind ? "checkmark" : item.symbol)
                             }
                         }
                     }
