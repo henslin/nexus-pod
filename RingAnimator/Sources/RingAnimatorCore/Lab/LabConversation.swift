@@ -284,6 +284,7 @@ struct LabConversationView: View {
                 inputBar(height: 44)
             }
             .padding(20)
+            .blur(radius: quidgets.expanded == nil ? 0 : 16)
             .overlay { QuidgetOverlay(demo: quidgets, namespace: quidgetNS, screen: size) }
         case .fullScreen:
             VStack(spacing: 16) {
@@ -320,6 +321,8 @@ struct LabConversationView: View {
                 }
                 Spacer().frame(height: 34)
             }
+            .blur(radius: quidgets.expanded == nil ? 0 : 16)
+            .overlay { QuidgetOverlay(demo: quidgets, namespace: quidgetNS, screen: size) }
         }
     }
 

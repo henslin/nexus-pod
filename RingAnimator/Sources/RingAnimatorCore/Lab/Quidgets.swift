@@ -91,6 +91,8 @@ enum QuidgetInk {
 struct QuidgetGlass: ViewModifier {
     let radius: CGFloat
     var tint: Color? = nil
+    var rim: Double = 0.9
+    var shadow = true
     @Environment(\.labNoGlass) private var noGlass
 
     func body(content: Content) -> some View {
@@ -104,8 +106,8 @@ struct QuidgetGlass: ViewModifier {
                 content.background(.regularMaterial, in: shape)
             }
         }
-        .overlay(shape.strokeBorder(Color.white.opacity(0.9), lineWidth: 2))
-        .shadow(color: .black.opacity(0.10), radius: 14, y: 6)
+        .overlay(shape.strokeBorder(Color.white.opacity(rim), lineWidth: rim > 0.5 ? 2 : 1))
+        .shadow(color: .black.opacity(shadow ? 0.10 : 0), radius: 14, y: 6)
     }
 }
 
@@ -312,8 +314,7 @@ public struct QuidgetView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.black.opacity(0.28)))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+                .modifier(QuidgetGlass(radius: 12, tint: Color.black.opacity(0.18), rim: 0.35, shadow: false))
                 .padding(10)
             }
         }
@@ -353,14 +354,14 @@ struct QuidgetDimmer: View {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(QuidgetInk.amber)
                 .frame(height: fillH)
-            // The knob rides the fill's top edge.
-            RoundedRectangle(cornerRadius: min(radius, knob.height / 2 - 2), style: .continuous)
-                .fill(QuidgetInk.amberKnob)
-                .overlay(RoundedRectangle(cornerRadius: min(radius, knob.height / 2 - 2), style: .continuous).strokeBorder(QuidgetInk.amberEdge, lineWidth: 1))
-                .overlay(Image(systemName: "lightbulb.fill").font(.system(size: icon, weight: .semibold)).foregroundStyle(QuidgetInk.amberInk))
-                .frame(width: knob.width, height: knob.height)
-                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
-                .padding(.bottom, min(track.height - knob.height, max(0, fillH - knob.height / 2)))
+            // The knob rides the fill's top edge: a Liquid Glass squircle
+            // carrying the bulb (Chris: "the slider grabbers are liquid
+            // glass squircles with SF Symbols within").
+            QuidgetKnob(radius: min(radius, knob.height / 2 - 2), tint: QuidgetInk.amberKnob) {
+                Image(systemName: "lightbulb.fill").font(.system(size: icon, weight: .semibold)).foregroundStyle(QuidgetInk.amberInk)
+            }
+            .frame(width: knob.width, height: knob.height)
+            .padding(.bottom, min(track.height - knob.height, max(0, fillH - knob.height / 2)))
         }
         .frame(width: track.width, height: track.height)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
@@ -371,6 +372,29 @@ struct QuidgetDimmer: View {
                 withAnimation(.interactiveSpring()) { level = min(1, max(0, v)) }
             })
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: level)
+    }
+}
+
+/// A slider's grabber: a glass squircle with a glyph in it.
+struct QuidgetKnob<Glyph: View>: View {
+    let radius: CGFloat
+    let tint: Color
+    @ViewBuilder let glyph: () -> Glyph
+    @Environment(\.labNoGlass) private var noGlass
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        Group {
+            if noGlass {
+                glyph().frame(maxWidth: .infinity, maxHeight: .infinity).background(shape.fill(tint))
+            } else if #available(iOS 26.0, macOS 26.0, *) {
+                glyph().frame(maxWidth: .infinity, maxHeight: .infinity).glassEffect(.regular.tint(tint.opacity(0.7)).interactive(), in: shape)
+            } else {
+                glyph().frame(maxWidth: .infinity, maxHeight: .infinity).background(.thinMaterial, in: shape)
+            }
+        }
+        .overlay(shape.strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
+        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
     }
 }
 
@@ -420,6 +444,9 @@ public struct QuidgetChatView: View {
             .padding(.top, 132)
             .padding(.horizontal, 16)
             .frame(width: screen.width, height: screen.height, alignment: .top)
+            // Full-screen modal: the chat blurs behind the expanded quidget.
+            .blur(radius: demo.expanded == nil ? 0 : 16)
+            .animation(.easeInOut(duration: 0.3), value: demo.expanded == nil)
             QuidgetOverlay(demo: demo, namespace: ns, screen: screen)
         }
         .frame(width: screen.width, height: screen.height)
@@ -490,7 +517,7 @@ public struct QuidgetOverlay: View {
     public var body: some View {
         ZStack(alignment: .top) {
             if let kind = demo.expanded {
-                Color.black.opacity(0.4)
+                Color.black.opacity(0.32)
                     .frame(width: screen.width, height: screen.height)
                     .contentShape(Rectangle())
                     .onTapGesture {
