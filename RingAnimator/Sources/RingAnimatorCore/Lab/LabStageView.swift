@@ -123,7 +123,12 @@ public struct LabStageView: View {
             .frame(width: AnimationExporter.phoneFrameSize.width, height: AnimationExporter.phoneFrameSize.height)
             .environment(\.colorScheme, lab.darkStage ? .dark : .light)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The scroll view would otherwise ask for the phone's full width
+        // as its minimum and shove the rail off the edge in a narrow
+        // window; the canvas can be smaller than the phone — that's what
+        // the zoom is for.
+        .frame(minWidth: 240, maxWidth: .infinity, minHeight: 240, maxHeight: .infinity)
+        .clipped()
         .background(Color(nsColor: .underPageBackgroundColor))
         .overlay(alignment: .top) {
             deviceControls
