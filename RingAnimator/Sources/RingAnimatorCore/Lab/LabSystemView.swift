@@ -339,7 +339,7 @@ public struct LabSpecBoard: View {
                     }
                 }
             }
-            group("Surfaces", "What each item opens. Edit in place, or send a Morph state here from its card.") {
+            group("Containers", "What each item opens. Edit in place, or send a Morph state here from its card.") {
                 ForEach(spec.items) { item in
                     surfaceEditor(item)
                 }
@@ -533,9 +533,9 @@ public struct LabSpecBoard: View {
                         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                     }
                 }
-                LabChips(choices: LabMorphKind.allCases.map(\.label),
-                         selection: Binding(get: { LabMorphKind.allCases.firstIndex(of: surface.kind) ?? 0 },
-                                            set: { i in update { $0.kind = LabMorphKind.allCases[i] } }))
+                LabChips(choices: LabMorphKind.offered.map(\.label),
+                         selection: Binding(get: { LabMorphKind.offered.firstIndex(of: surface.kind) ?? 3 },
+                                            set: { i in update { $0.kind = LabMorphKind.offered[i] } }))
                     .controlSize(.small)
                 LabWrap(spacing: 4) {
                     ForEach(LabMorphAdornment.allCases) { a in

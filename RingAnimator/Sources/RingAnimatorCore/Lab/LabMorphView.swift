@@ -414,7 +414,7 @@ struct LabMorphStage: View {
                         }
                     }
                     Section("Shape") {
-                        ForEach(LabMorphKind.allCases) { kind in
+                        ForEach(LabMorphKind.offered) { kind in
                             Button(kind.label) {
                                 if let i = lab.morphStates.firstIndex(where: { $0.id == state.id }) { lab.morphStates[i].kind = kind }
                             }
@@ -456,7 +456,7 @@ struct LabMorphStage: View {
 
     private var addCard: some View {
         Menu {
-            ForEach(LabMorphKind.allCases) { kind in
+            ForEach(LabMorphKind.offered) { kind in
                 Button(kind.label) { lab.addMorphState(kind) }
             }
         } label: {
