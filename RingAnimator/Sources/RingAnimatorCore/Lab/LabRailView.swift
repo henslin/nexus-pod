@@ -2,29 +2,33 @@ import SwiftUI
 
 // The Lab's inspector — the rail beside the stage.
 //
-// Rebuilt overnight 2026-09-15/16 (Chris: "spacing etc is a bit off").
-// The old rail was one long list: stage knobs, colour, audio, twenty-two
-// post-effect toggles, and only then the experiment's own knobs. The
-// order is now the order of use — the thing you are tuning first, what
-// is stacked on it second, the room it is judged in after — and every
-// section is a disclosure that remembers whether you left it open.
-// Post effects are a stack you add to, not a wall of switches.
+// Rebuilt 2026-09-16 in the inspector idiom (Chris: "more like Sketch …
+// they do a great job of balancing what should be exposed and
+// collapsing the rest"). Every knob is drawn as the control its kind
+// calls for (`LabParameter.control`); numbers are label · slider · field
+// on one row; help is a tooltip, never a caption; a collapsed section
+// still shows its values in its header; post effects are a list of
+// applied things with a checkbox each, a "+" to add, and their own
+// disclosure — Sketch's Fills. Only the sections that apply are drawn.
 
-/// One collapsible section of the rail, with its open state kept
-/// across launches by id.
+/// One collapsible section of the rail. Its open state is kept across
+/// launches by id, and the header carries a summary of what's inside
+/// while it's closed.
 struct LabRailSection<Content: View, Trailing: View>: View {
     let id: String
     let title: String
+    var summary: String? = nil
     var defaultOpen = true
     @ViewBuilder let content: () -> Content
     @ViewBuilder let trailing: () -> Trailing
     @AppStorage private var open: Bool
 
-    init(_ id: String, _ title: String, defaultOpen: Bool = true,
+    init(_ id: String, _ title: String, summary: String? = nil, defaultOpen: Bool = true,
          @ViewBuilder content: @escaping () -> Content,
          @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }) {
         self.id = id
         self.title = title
+        self.summary = summary
         self.defaultOpen = defaultOpen
         self.content = content
         self.trailing = trailing
@@ -43,7 +47,14 @@ struct LabRailSection<Content: View, Trailing: View>: View {
                             .rotationEffect(.degrees(open ? 90 : 0))
                             .foregroundStyle(.secondary)
                             .frame(width: 10)
-                        Text(title).font(.headline)
+                        Text(title).font(.subheadline.weight(.semibold))
+                        if !open, let summary, !summary.isEmpty {
+                            Text(summary)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
                     .contentShape(Rectangle())
                 }
@@ -51,14 +62,14 @@ struct LabRailSection<Content: View, Trailing: View>: View {
                 Spacer(minLength: 0)
                 trailing()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
             if open {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     content()
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 14)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
             }
             Divider()
         }
@@ -95,8 +106,11 @@ public struct LabRailView: View {
                 targetBanner(target)
                 Divider()
             }
+            aboutSection
             experimentSection
-            postSection
+            if !lab.experiment.usesPhoneCanvas {
+                postSection
+            }
             stageSection
             colourSection
             audioSection
@@ -106,20 +120,7 @@ public struct LabRailView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                Divider()
-                if let target = lab.target {
-                    targetBanner(target)
-                    Divider()
-                }
-                experimentSection
-                postSection
-                stageSection
-                colourSection
-                audioSection
-                exportSection
-            }
+            content
         }
         .alert("Save Preset", isPresented: $savingPreset) {
             TextField("Name", text: $presetName)
@@ -135,36 +136,38 @@ public struct LabRailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(lab.experiment.name).font(.title3.weight(.semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(lab.experiment.name).font(.headline)
+                    Text("\(lab.experiment.section.title) · \(lab.experiment.technology)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
-                if lab.experiment.canBeHero || lab.experiment == .gooey {
+                if lab.experiment.canBeHero || lab.experiment == .gooey || lab.experiment == .askButton {
                     LabUseAsMenu(lab: lab)
                 }
             }
-            Text(lab.experiment.technology)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(lab.experiment.summary)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            // The hero is the first decision on a flow or a control, so
-            // it sits up here rather than in the Stage disclosure.
+            // The hero is the first decision on a flow or a control.
             if lab.experiment.drawsHero {
-                Picker("Hero", selection: $lab.hero) {
-                    Text("Ring").tag(LabExperiment?.none)
-                    ForEach(LabExperiment.allCases.filter(\.canBeHero)) { e in
-                        Text(e.name).tag(LabExperiment?.some(e))
+                HStack(spacing: 8) {
+                    Text("Hero")
+                        .font(.callout).foregroundStyle(.secondary)
+                        .frame(width: LabRailMetrics.labelWidth, alignment: .leading)
+                    Picker("", selection: $lab.hero) {
+                        Text("Ring").tag(LabExperiment?.none)
+                        ForEach(LabExperiment.allCases.filter(\.canBeHero)) { e in
+                            Text(e.name).tag(LabExperiment?.some(e))
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    Spacer(minLength: 0)
                 }
-                .pickerStyle(.menu)
-                .padding(.top, 4)
-                Text("What this draws where the ring goes — any orb, with the post stack.")
-                    .font(.caption2).foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .help("What this draws where the ring goes — any orb, with the post stack.")
             }
         }
-        .padding(16)
+        .padding(14)
     }
 
     /// Q Branch sent you here to choose for a slot: say so, and offer
@@ -173,9 +176,6 @@ public struct LabRailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Choosing for \(target.label)", systemImage: "wrench.and.screwdriver")
                 .font(.subheadline.weight(.semibold))
-            Text(target.hint)
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button {
                     lab.fulfilTarget()
@@ -185,18 +185,28 @@ public struct LabRailView: View {
                 }
                 .ringGlassButtonStyle()
                 .disabled(!target.accepts(lab.experiment))
+                .help(target.hint)
                 Button("Cancel") { lab.target = nil; lab.experiment = .system }
                     .buttonStyle(.borderless)
             }
             if !target.accepts(lab.experiment) {
-                Text("Pick an orb base for this slot.").font(.caption2).foregroundStyle(.tertiary)
+                Text("Pick an orb for this slot.").font(.caption).foregroundStyle(.tertiary)
             }
         }
-        .padding(16)
+        .padding(14)
         .background(Color.accentColor.opacity(0.08))
     }
 
     // MARK: Sections
+
+    private var aboutSection: some View {
+        LabRailSection("about", "About", defaultOpen: false) {
+            Text(lab.experiment.summary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 
     @ViewBuilder
     private var experimentSection: some View {
@@ -205,51 +215,27 @@ public struct LabRailView: View {
                 LabKnobList(lab: lab, experiment: lab.experiment)
             } trailing: {
                 LabPresetsMenu(presets: presets, lab: lab, saving: $savingPreset, name: $presetName)
-                Button("Reset") { lab.resetParameters(of: lab.experiment) }
+                Button {
+                    lab.resetParameters(of: lab.experiment)
+                } label: { Image(systemName: "arrow.counterclockwise") }
                     .buttonStyle(.borderless)
                     .font(.caption)
+                    .help("Reset the knobs")
             }
         }
     }
 
     private var postSection: some View {
-        LabRailSection("post", "Post Effects") {
+        let summary = lab.post.isEmpty ? "None" : lab.post.map { $0.experiment.name + (lab.disabledPost.contains($0) ? " (off)" : "") }.joined(separator: " · ")
+        return LabRailSection("post", "Post Effects", summary: summary) {
             if lab.post.isEmpty {
                 Text("Nothing stacked. Effects apply over the base, in order.")
                     .font(.caption).foregroundStyle(.tertiary)
             }
             ForEach(lab.post) { effect in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Button {
-                            withAnimation(.easeOut(duration: 0.15)) { openPost = openPost == effect ? nil : effect }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2.weight(.semibold))
-                                    .rotationEffect(.degrees(openPost == effect ? 90 : 0))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 10)
-                                Text(effect.experiment.name).font(.subheadline.weight(.medium))
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        Spacer()
-                        Button { lab.movePost(effect, by: -1) } label: { Image(systemName: "chevron.up") }
-                            .buttonStyle(.borderless).disabled(lab.post.first == effect)
-                        Button { lab.movePost(effect, by: 1) } label: { Image(systemName: "chevron.down") }
-                            .buttonStyle(.borderless).disabled(lab.post.last == effect)
-                        Button { lab.togglePost(effect); if openPost == effect { openPost = nil } } label: { Image(systemName: "xmark") }
-                            .buttonStyle(.borderless)
-                    }
-                    .font(.caption)
-                    if openPost == effect {
-                        LabKnobList(lab: lab, experiment: effect.experiment)
-                            .padding(.leading, 16)
-                    }
-                }
+                postRow(effect)
             }
+        } trailing: {
             Menu {
                 ForEach(LabPostEffect.allCases.filter { !lab.post.contains($0) }) { effect in
                     Button {
@@ -260,68 +246,143 @@ public struct LabRailView: View {
                     }
                 }
             } label: {
-                Label("Add Effect", systemImage: "plus")
+                Image(systemName: "plus")
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
+            .help("Add an effect over the base")
         }
     }
 
+    /// Sketch's fill row: a checkbox to apply it, its name, a disclosure
+    /// to its knobs, and a menu to move or remove it.
+    private func postRow(_ effect: LabPostEffect) -> some View {
+        let on = !lab.disabledPost.contains(effect)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Toggle("", isOn: Binding(get: { on }, set: { v in
+                    if v { lab.disabledPost.remove(effect) } else { lab.disabledPost.insert(effect) }
+                }))
+                .labelsHidden()
+                .help(on ? "Applied" : "Kept, not applied")
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { openPost = openPost == effect ? nil : effect }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(effect.experiment.name)
+                            .font(.callout)
+                            .foregroundStyle(on ? .primary : .secondary)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .rotationEffect(.degrees(openPost == effect ? 90 : 0))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Menu {
+                    Button("Move Up") { lab.movePost(effect, by: -1) }.disabled(lab.post.first == effect)
+                    Button("Move Down") { lab.movePost(effect, by: 1) }.disabled(lab.post.last == effect)
+                    Button("Reset Knobs") { lab.resetParameters(of: effect.experiment) }
+                    Divider()
+                    Button("Remove", role: .destructive) {
+                        lab.togglePost(effect)
+                        lab.disabledPost.remove(effect)
+                        if openPost == effect { openPost = nil }
+                    }
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .font(.caption)
+            }
+            if openPost == effect {
+                LabKnobList(lab: lab, experiment: effect.experiment)
+                    .padding(.leading, 22)
+            }
+        }
+    }
+
+    private var stageSummary: String {
+        var parts = ["\(Int(lab.diameter)) pt", lab.darkStage ? "Dark" : "Light"]
+        if lab.intensity != 0.5 { parts.append("Intensity \(String(format: "%.2f", lab.intensity))") }
+        if lab.speed != 1 { parts.append(String(format: "%.1f×", lab.speed)) }
+        if lab.fill != 1 { parts.append(String(format: "Fill %.2f", lab.fill)) }
+        return parts.joined(separator: " · ")
+    }
+
     private var stageSection: some View {
-        LabRailSection("stage", "Stage", defaultOpen: false) {
-            LabSlider(title: "Intensity", value: $lab.intensity, range: 0...1)
-            LabSlider(title: "Speed", value: $lab.speed, range: 0.1...3, format: "%.1f×")
-            LabSlider(title: "Size", value: $lab.diameter, range: 62...600, format: "%.0f pt")
-            LabSlider(title: "Fill", value: $lab.fill, range: 0...1.3,
-                      help: "Scales the experiment to fill the circle. 1 is edge to edge; past it crops.")
-            Toggle("Dark Stage", isOn: $lab.darkStage)
+        LabRailSection("stage", "Stage", summary: stageSummary, defaultOpen: false) {
+            LabSlider(title: "Intensity", value: $lab.intensity, range: 0...1, help: "What “more” means is per experiment — warp, glow, radius — but it always means more.")
+            LabSlider(title: "Speed", value: $lab.speed, range: 0.1...3, format: "%.1f×", help: "Time multiplier. 1 is the experiment's designed pace.")
+            LabSlider(title: "Size", value: $lab.diameter, range: 62...600, format: "%.0f pt", help: "Stage diameter.")
+            LabSlider(title: "Fill", value: $lab.fill, range: 0...1.3, help: "Scales the experiment to fill the circle. 1 is edge to edge; past it crops.")
+            checkboxRow("Dark stage", $lab.darkStage, help: "Dark is where these look best; light is where the tab bar usually is.")
             if !lab.experiment.usesPhoneCanvas {
-                Toggle("Pod Preview", isOn: $lab.showPod)
+                checkboxRow("Pod preview", $lab.showPod, help: "The experiment at 62 pt in the pod's glass, in the corner.")
                 if lab.showPod {
-                    Toggle("Fill Pod", isOn: $lab.podFill)
-                        .padding(.leading, 12)
+                    checkboxRow("Fill the pod", $lab.podFill, help: "Edge to edge, rather than the ring's proportion inside the pod.")
                 }
             }
         }
     }
 
     private var colourSection: some View {
-        LabRailSection("colour", "Colour", defaultOpen: false) {
-            Picker("Palette", selection: $lab.palette) {
-                ForEach(LabPalette.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.menu)
-            HStack(spacing: 4) {
-                ForEach(Array(lab.colors(config: config, at: 0).enumerated()), id: \.offset) { _, c in
-                    RoundedRectangle(cornerRadius: 4).fill(c).frame(height: 14)
+        LabRailSection("colour", "Colour", summary: lab.palette.label + (lab.hueDrift != 0 ? String(format: " · %.0f°/s", lab.hueDrift) : "") + (lab.glyph.isEmpty ? "" : " · \(lab.glyph)"), defaultOpen: false) {
+            HStack(spacing: 8) {
+                Text("Palette").font(.callout).foregroundStyle(.secondary).frame(width: LabRailMetrics.labelWidth, alignment: .leading)
+                Picker("", selection: $lab.palette) {
+                    ForEach(LabPalette.allCases) { Text($0.label).tag($0) }
                 }
+                .labelsHidden().pickerStyle(.menu).controlSize(.small)
+                HStack(spacing: 3) {
+                    ForEach(Array(lab.colors(config: config, at: 0).enumerated()), id: \.offset) { _, c in
+                        RoundedRectangle(cornerRadius: 3).fill(c).frame(width: 14, height: 14)
+                    }
+                }
+                Spacer(minLength: 0)
             }
-            LabSlider(title: "Hue Drift", value: $lab.hueDrift, range: -90...90, format: "%.0f°/s",
-                      help: "Rotates every colour's hue over time. The palette's relationships hold.")
-            TextField("Glyph (SF Symbol)", text: $lab.glyph)
-            Text("Drawn inside. Orb, Refraction, Liquid and Sphere are the ones built for it.")
-                .font(.caption2).foregroundStyle(.tertiary)
+            .help("The Nexus animation's own colours, or a curated set — to judge an experiment in colours it wasn't designed around.")
+            LabSlider(title: "Hue drift", value: $lab.hueDrift, range: -90...90, format: "%.0f°/s", help: "Rotates every colour's hue over time. The palette's relationships hold.")
+            HStack(spacing: 8) {
+                Text("Glyph").font(.callout).foregroundStyle(.secondary).frame(width: LabRailMetrics.labelWidth, alignment: .leading)
+                TextField("SF Symbol", text: $lab.glyph)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
+            }
+            .help("An SF Symbol drawn inside. Orb, Refraction, Liquid and Sphere are built for it.")
         }
     }
 
+    private var audioSummary: String {
+        guard lab.audioReactive else { return "Off" }
+        var parts = [lab.audioSource.label, String(format: "%.1f×", lab.audioSensitivity)]
+        if lab.transcribe { parts.append("Transcript") }
+        return parts.joined(separator: " · ")
+    }
+
     private var audioSection: some View {
-        LabRailSection("audio", "Audio", defaultOpen: false) {
-            Toggle("Audio Reactive", isOn: $lab.audioReactive)
+        LabRailSection("audio", "Audio", summary: audioSummary, defaultOpen: false) {
+            checkboxRow("Audio reactive", $lab.audioReactive, help: "Feed the microphone into the experiment.")
             if lab.audioReactive {
-                Picker("Drives", selection: $lab.audioSource) {
-                    ForEach(LabAudioSource.allCases) { Text($0.label).tag($0) }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Drives").font(.callout).foregroundStyle(.secondary)
+                    Picker("", selection: $lab.audioSource) {
+                        ForEach(LabAudioSource.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.segmented).controlSize(.small)
                 }
-                .pickerStyle(.segmented)
+                .help("Which signal the experiment's audio input carries.")
                 LabSlider(title: "Sensitivity", value: $lab.audioSensitivity, range: 0.5...5, format: "%.1f×")
-                LabSlider(title: "Attack", value: $lab.audioAttack, range: 0.005...0.3, format: "%.3f s",
-                          help: "How fast a rise is followed.")
-                LabSlider(title: "Release", value: $lab.audioRelease, range: 0.05...2, format: "%.2f s",
-                          help: "How slowly a fall is followed. Long release is the ‘breathing’ look.")
+                LabSlider(title: "Attack", value: $lab.audioAttack, range: 0.005...0.3, format: "%.3f s", help: "How fast a rise is followed.")
+                LabSlider(title: "Release", value: $lab.audioRelease, range: 0.05...2, format: "%.2f s", help: "How slowly a fall is followed. Long release is the ‘breathing’ look.")
                 LabBandMeters(bands: bands)
-                Toggle("Live Transcript", isOn: $lab.transcribe)
-                Text(audio.transcriptError ?? (lab.transcribe ? "Speech recognition on the mic — Bloom Field and the Transcript adornment show your words as you say them." : "Off: the transcript surfaces show sample copy."))
-                    .font(.caption2).foregroundStyle(audio.transcriptError == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.red))
-                    .fixedSize(horizontal: false, vertical: true)
+                checkboxRow("Live transcript", $lab.transcribe, help: "Speech recognition on the mic — Bloom Field, the Transcript adornment and the Talk container show your words as you say them.")
+                if let error = audio.transcriptError {
+                    Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -335,13 +396,22 @@ public struct LabRailView: View {
                     .frame(maxWidth: .infinity)
             }
             .ringGlassButtonStyle()
+            .help("A still of the stage at 2×, to the Desktop. Liquid Glass and RealityKit don't rasterise.")
             if let savedFrameMessage {
-                Text(savedFrameMessage).font(.caption2).foregroundStyle(.tertiary)
+                Text(savedFrameMessage).font(.caption).foregroundStyle(.tertiary)
             }
-            Text("A still of the stage at 2×, to the Desktop. Liquid Glass and RealityKit don't rasterise — Morph and Volumetric save empty.")
-                .font(.caption2).foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// A checkbox on the rail's grid: indented past the label column, so
+    /// it lines up with the sliders' controls.
+    private func checkboxRow(_ title: String, _ isOn: Binding<Bool>, help: String) -> some View {
+        HStack(spacing: 8) {
+            Spacer().frame(width: LabRailMetrics.labelWidth)
+            Toggle(title, isOn: isOn).font(.callout)
+            Spacer(minLength: 0)
+        }
+        .help(help)
     }
 }
 
@@ -359,7 +429,8 @@ struct LabKnobList: View {
             if let g = parameter.group, i == 0 || params[i - 1].group != g,
                !(g == parameter.name && (i + 1 >= params.count || params[i + 1].group != g)) {
                 Text(g)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                     .padding(.top, i == 0 ? 0 : 6)
             }
             LabKnob(parameter: parameter, value: lab.binding(parameter, of: experiment))

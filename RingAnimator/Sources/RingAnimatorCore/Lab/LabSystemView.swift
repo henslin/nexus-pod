@@ -260,10 +260,11 @@ struct LabPlayStrip: View {
 
 // MARK: - The board
 
-/// Every slot the product has, with what is in it — Q Branch's rail.
-/// A slot's menu is where it gets filled: from the bench as it stands,
-/// from a saved preset, or by going to the Lab to choose (the rail there
-/// shows the errand and a Use button). Surfaces are edited in place.
+/// Every slot the product has, with what is in it — Q Branch's rail,
+/// read down like an inspector: rows in tables, a menu per slot to fill
+/// it (from the bench as it stands, a saved preset, or the Lab — the
+/// rail there shows the errand and a Use button), containers edited in
+/// place, sections that fold and still say what they hold.
 public struct LabSpecBoard: View {
     @ObservedObject var lab: LabState
     @ObservedObject var config: RingConfig
@@ -280,15 +281,20 @@ public struct LabSpecBoard: View {
     }
 
     private var spec: LabSpec { lab.spec }
+    private static let thumb: CGFloat = 36
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider().padding(.vertical, 12)
-            group("Pod", "At rest, in the tab bar.") {
-                slot(title: "Pod", look: spec.pod, target: .pod, set: { lab.spec.pod = $0 })
+            Divider()
+            LabRailSection("q.pod", "Pod", summary: spec.pod?.title ?? "Empty") {
+                slotRow(title: "At rest", look: spec.pod, target: .pod, set: { lab.spec.pod = $0 })
             }
-            group("Agent States", "One look per verb. Their orb wears its nearest verb; any orb can take any state.", trailing: {
+            LabRailSection("q.states", "Agent States", summary: "\(spec.states.count) of \(LabAgentVerb.allCases.count)") {
+                ForEach(LabAgentVerb.allCases) { verb in
+                    slotRow(title: verb.label, symbol: verb.symbol, look: spec.look(for: verb), target: .state(verb), set: { lab.spec.states[verb.rawValue] = $0 })
+                }
+            } trailing: {
                 Menu {
                     Button("Their Orb, Their Verbs") { lab.useOrbKitForEveryState() }
                     if let bench = lab.lastBench, bench.canBeHero {
@@ -300,59 +306,55 @@ public struct LabSpecBoard: View {
                     Button("Clear All", role: .destructive) { lab.spec.states = [:] }
                 } label: { Image(systemName: "ellipsis.circle") }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            }) {
-                LabWrap(spacing: 8) {
-                    ForEach(LabAgentVerb.allCases) { verb in
-                        slot(title: verb.label, look: spec.look(for: verb), target: .state(verb), set: { lab.spec.states[verb.rawValue] = $0 })
-                    }
-                }
             }
-            group("Ask", "The Ask button — everywhere in the app, not only the tab. What it looks like, where it sits, what it reveals.") {
-                HStack(alignment: .top, spacing: 14) {
-                    slot(title: "Button", look: spec.ask, target: .ask, set: { lab.spec.ask = $0 }, menu: true)
-                    slot(title: "Menu", look: spec.action, target: .action, set: { lab.spec.action = $0 }, menu: true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Placement").font(.caption.weight(.semibold))
-                        Picker("", selection: Binding(get: { lab.spec.askPlacement ?? .floating }, set: { lab.spec.askPlacement = $0 })) {
-                            ForEach(LabAskPlacement.allCases) { Text($0.label).tag($0) }
+            LabRailSection("q.ask", "Ask", summary: "\((spec.askStyle ?? .goo).label) · \((spec.askPlacement ?? .floating).label) · \(spec.items.count) items") {
+                slotRow(title: "Button", symbol: "sparkles", look: spec.ask, target: .ask, set: { lab.spec.ask = $0 }, menu: true)
+                slotRow(title: "Menu", symbol: "plus.circle", look: spec.action, target: .action, set: { lab.spec.action = $0 }, menu: true)
+                labelled("Placement") {
+                    Picker("", selection: Binding(get: { lab.spec.askPlacement ?? .floating }, set: { lab.spec.askPlacement = $0 })) {
+                        ForEach(LabAskPlacement.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.menu).controlSize(.small)
+                }
+                .help("Where the Ask button sits on screens that aren't the Nexus tab.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Style").font(.callout).foregroundStyle(.secondary)
+                    Picker("", selection: Binding(get: { lab.spec.askStyle ?? .goo }, set: { lab.spec.askStyle = $0 })) {
+                        ForEach(LabAskStyle.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.segmented).controlSize(.small)
+                }
+                .help("What the Ask button is. In the pod, the pod is the button.")
+                Text("Items").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 4)
+                ForEach(LabActionItem.allCases) { item in
+                    HStack(spacing: 8) {
+                        Spacer().frame(width: LabRailMetrics.labelWidth)
+                        Toggle(isOn: Binding(get: { spec.items.contains(item) }, set: { _ in lab.toggleItem(item) })) {
+                            Label(item.label, systemImage: item.symbol).font(.callout)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        Text("Style").font(.caption.weight(.semibold))
-                        LabChips(choices: LabAskStyle.allCases.map(\.label),
-                                 selection: Binding(get: { LabAskStyle.allCases.firstIndex(of: lab.spec.askStyle ?? .goo) ?? 0 },
-                                                    set: { lab.spec.askStyle = LabAskStyle.allCases[$0] }))
+                        Spacer(minLength: 0)
                     }
                 }
-                Text("Items").font(.caption.weight(.semibold))
-                LabWrap(spacing: 6) {
-                    ForEach(LabActionItem.allCases) { item in
-                        let on = spec.items.contains(item)
-                        Button { lab.toggleItem(item) } label: {
-                            Label(item.label, systemImage: item.symbol)
-                                .font(.caption)
-                                .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(Capsule().fill(on ? Color.accentColor.opacity(0.25) : Color.clear))
-                                .overlay(Capsule().strokeBorder(on ? Color.accentColor : Color.secondary.opacity(0.4)))
-                        }
-                        .buttonStyle(.plain)
+                .help("What the menu offers, in this order.")
+            }
+            LabRailSection("q.containers", "Containers", summary: spec.items.map { "\($0.label) · \(spec.resolvedSurface(for: $0).kind.label)" }.joined(separator: ", ")) {
+                containerTable
+            }
+            LabRailSection("q.gestures", "Gestures", summary: "Tap · \(spec.tap.label) · Hold · \(spec.longPress.label)") {
+                labelled("Tap") {
+                    Picker("", selection: Binding(get: { lab.spec.tap }, set: { lab.spec.tap = $0 })) {
+                        ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
                     }
+                    .labelsHidden().pickerStyle(.menu).controlSize(.small)
+                }
+                labelled("Long press") {
+                    Picker("", selection: Binding(get: { lab.spec.longPress }, set: { lab.spec.longPress = $0 })) {
+                        ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.menu).controlSize(.small)
                 }
             }
-            group("Containers", "What each item opens. Edit in place, or send a Morph state here from its card.") {
-                ForEach(spec.items) { item in
-                    surfaceEditor(item)
-                }
-            }
-            group("Gestures", "The two touches on the pod.") {
-                Picker("Tap", selection: Binding(get: { lab.spec.tap }, set: { lab.spec.tap = $0 })) {
-                    ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
-                }
-                Picker("Long press", selection: Binding(get: { lab.spec.longPress }, set: { lab.spec.longPress = $0 })) {
-                    ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
-                }
-            }
-            group("Play", "How the stage steps through it.") {
+            LabRailSection("q.play", "Play", defaultOpen: false) {
                 LabKnobList(lab: lab, experiment: .system)
             }
         }
@@ -362,31 +364,30 @@ public struct LabSpecBoard: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 TextField("Spec name", text: Binding(get: { lab.spec.name }, set: { lab.spec.name = $0 }))
                     .textFieldStyle(.roundedBorder)
-                    .font(.title3.weight(.semibold))
+                    .font(.headline)
                 specsMenu
             }
-            HStack {
-                Text("\(spec.filled) of \(spec.total) slots filled")
+            HStack(spacing: 10) {
+                Text("\(spec.filled) of \(spec.total) slots")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Copy JSON") { LabSpecStore.copy(spec) }
-                    .font(.caption)
+                    .help("The spec as JSON, for Nexus Lab's Paste Spec on the phone.")
                 Button("Paste") {
                     if let s = LabSpecStore.paste() { lab.spec = s; pasteFailed = false } else { pasteFailed = true }
                 }
-                .font(.caption)
+                .help("A spec from the pasteboard.")
             }
+            .font(.caption)
             .buttonStyle(.borderless)
             if pasteFailed {
-                Text("The pasteboard doesn't hold a spec.").font(.caption2).foregroundStyle(.red)
+                Text("The pasteboard doesn't hold a spec.").font(.caption).foregroundStyle(.red)
             }
-            Text("Click a slot to fill it — from the bench, a preset, or the Lab. Copy JSON, then Paste Spec in Nexus Lab to play it on the phone.")
-                .font(.caption2).foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(14)
     }
 
     private var specsMenu: some View {
@@ -409,90 +410,93 @@ public struct LabSpecBoard: View {
             Button("Save a Copy") { var s = spec; s.id = UUID(); s.name += " copy"; specs.save(s); lab.spec = s }
             Button("New Spec", role: .destructive) { lab.spec = LabSpec() }
         } label: {
-            Label("Specs", systemImage: "square.stack")
+            Image(systemName: "square.stack")
         }
         .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .fixedSize()
+        .help("Saved specs and starters")
     }
 
-    private func group<Content: View, Trailing: View>(_ title: String, _ caption: String,
-                                                      @ViewBuilder trailing: () -> Trailing = { EmptyView() },
-                                                      @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title).font(.headline)
-                Spacer()
-                trailing()
-            }
-            Text(caption).font(.caption2).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+    /// Label · control, on the rail's grid.
+    private func labelled<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(.callout).foregroundStyle(.secondary)
+                .frame(width: LabRailMetrics.labelWidth, alignment: .leading)
             content()
+            Spacer(minLength: 0)
         }
-        .padding(.bottom, 20)
     }
 
     // MARK: Slots
 
-    /// One orb slot: the look at pod size in the pod's glass, or a gap —
-    /// and, as its menu, every way to fill it.
-    private func slot(title: String, look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void, menu: Bool = false) -> some View {
-        VStack(spacing: 6) {
-            Menu {
-                Button {
-                    lab.choose(for: target)
-                } label: { Label("Choose in the Lab…", systemImage: "flask") }
-                if let bench = lab.lastBench, target.accepts(bench) {
-                    Button("Use the Bench · \(bench.name)") { set(LabLook(from: lab, experiment: bench)) }
-                }
-                let mine = presets.presets.filter { p in LabExperiment(rawValue: p.experiment).map(target.accepts) ?? false }
-                if !mine.isEmpty {
-                    Menu("From a Preset") {
-                        ForEach(mine) { p in
-                            Button("\(LabExperiment(rawValue: p.experiment)?.name ?? p.experiment) · \(p.name)") {
-                                set(LabLook(experiment: p.experiment, values: p.values, post: p.post, palette: p.palette))
-                            }
-                        }
-                    }
-                }
-                if let look {
-                    Divider()
-                    Button("Open in Lab") { lab.open(look) }
-                    Button("Clear", role: .destructive) { set(nil) }
-                }
-            } label: {
-                ZStack {
-                    if let look, menu {
-                        // The menu's button, in the goo's fill.
-                        let fillChoice = Int(look.values["gooey.fill"] ?? 1)
-                        let fill: Color = [Color(white: 0.13), Color(white: 0.92), Color(hex: "#5AC8FA"), Color(hex: "#FFCF9E"), frame.colors.first ?? .white][min(max(fillChoice, 0), 4)]
-                        Circle().fill(fill).frame(width: 52, height: 52)
-                        Image(systemName: "plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(fillChoice == 0 ? .white : Color(white: 0.1))
-                    } else if let look {
-                        LabPodGlass(config: config, dark: frame.darkStage) {
-                            LabHeroView(frame: frame.applying(look, config: config), config: config, diameter: 62)
-                        }
-                    } else {
-                        Circle()
-                            .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                            .foregroundStyle(.tertiary)
-                            .frame(width: 62, height: 62)
-                        Image(systemName: "plus").font(.caption).foregroundStyle(.tertiary)
-                    }
-                }
-                .frame(width: 62, height: 62)
-                .contentShape(Circle())
+    /// One slot as a row: thumbnail · name · what's in it · menu. The
+    /// row is the menu: click anywhere on it.
+    private func slotRow(title: String, symbol: String? = nil, look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void, menu: Bool = false) -> some View {
+        Menu {
+            Button {
+                lab.choose(for: target)
+            } label: { Label("Choose in the Lab…", systemImage: "flask") }
+            if let bench = lab.lastBench, target.accepts(bench) {
+                Button("Use the Bench · \(bench.name)") { set(LabLook(from: lab, experiment: bench)) }
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            Text(title).font(.caption.weight(.semibold))
-            Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty")
-                .font(.caption2)
-                .foregroundStyle(look == nil ? .tertiary : .secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(width: 92)
+            let mine = presets.presets.filter { p in LabExperiment(rawValue: p.experiment).map(target.accepts) ?? false }
+            if !mine.isEmpty {
+                Menu("From a Preset") {
+                    ForEach(mine) { p in
+                        Button("\(LabExperiment(rawValue: p.experiment)?.name ?? p.experiment) · \(p.name)") {
+                            set(LabLook(experiment: p.experiment, values: p.values, post: p.post, palette: p.palette))
+                        }
+                    }
+                }
+            }
+            if let look {
+                Divider()
+                Button("Open in Lab") { lab.open(look) }
+                Button("Clear", role: .destructive) { set(nil) }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                thumbnail(look, menu: menu)
+                    .frame(width: Self.thumb, height: Self.thumb)
+                if let symbol {
+                    Image(systemName: symbol).font(.caption).foregroundStyle(.secondary).frame(width: 14)
+                }
+                Text(title).font(.callout)
+                    .frame(width: symbol == nil ? LabRailMetrics.labelWidth : LabRailMetrics.labelWidth - 22, alignment: .leading)
+                Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty")
+                    .font(.callout)
+                    .foregroundStyle(look == nil ? .tertiary : .secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
         }
-        .frame(width: 96)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .help(target.hint)
+    }
+
+    @ViewBuilder
+    private func thumbnail(_ look: LabLook?, menu: Bool) -> some View {
+        if let look, menu {
+            let fillChoice = Int(look.values["gooey.fill"] ?? 1)
+            let fill: Color = [Color(white: 0.13), Color(white: 0.92), Color(hex: "#5AC8FA"), Color(hex: "#FFCF9E"), frame.colors.first ?? .white][min(max(fillChoice, 0), 4)]
+            ZStack {
+                Circle().fill(fill)
+                Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(fillChoice == 0 ? .white : Color(white: 0.1))
+            }
+        } else if let look {
+            LabPodGlass(config: config, dark: frame.darkStage) {
+                LabHeroView(frame: frame.applying(look, config: config), config: config, diameter: 62)
+            }
+            .scaleEffect(Self.thumb / 62)
+        } else {
+            Circle()
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                .foregroundStyle(.tertiary)
+        }
     }
 
     private func gooeyEffectName(_ look: LabLook) -> String {
@@ -501,70 +505,87 @@ public struct LabSpecBoard: View {
         return choices.indices.contains(i) ? "Gooey · \(choices[i])" : "Gooey"
     }
 
-    /// One surface, edited in place: its shape, what it carries, how it
-    /// comes and goes — with the panel beside, small.
-    private func surfaceEditor(_ item: LabActionItem) -> some View {
+    // MARK: Containers
+
+    /// One table: item · kind · carries · in · out, a row per item in
+    /// the menu. Edited in place.
+    private var containerTable: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("Item").frame(width: 66, alignment: .leading)
+                Text("Kind").frame(width: 88, alignment: .leading)
+                Text("Carries").frame(minWidth: 96, maxWidth: .infinity, alignment: .leading)
+                Text("In").frame(width: 58, alignment: .leading)
+                Text("Out").frame(width: 58, alignment: .leading)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            Divider()
+            ForEach(spec.items) { item in
+                containerRow(item)
+            }
+        }
+    }
+
+    private func containerRow(_ item: LabActionItem) -> some View {
         let assigned = spec.surface(for: item)
         let surface = spec.resolvedSurface(for: item)
-        let real = LabMorphPanel.size(of: surface.kind)
-        let box: CGFloat = 96
-        let scale = min(box / real.width, box / real.height, 1)
-        let look = spec.resolvedLook(for: .listening)
         func update(_ change: (inout LabSurfaceSpec) -> Void) {
             var s = surface
             change(&s)
             lab.spec.surfaces[item.rawValue] = s
         }
-        return HStack(alignment: .top, spacing: 12) {
-            LabMorphPanel(state: surface.morphState, frame: frame.applying(look, config: config).applying(surface), config: config, caption: LabAgentVerb.listening.caption)
-                .scaleEffect(scale)
-                .frame(width: box, height: box)
-                .opacity(assigned == nil ? 0.5 : 1)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Label(item.label, systemImage: item.symbol).font(.caption.weight(.semibold))
-                    if assigned == nil { Text("default").font(.caption2).foregroundStyle(.tertiary) }
-                    Spacer()
-                    if assigned != nil {
-                        Menu {
-                            Button("Open in Morph") { lab.open(surface) }
-                            Button("Reset to Default", role: .destructive) { lab.spec.surfaces[item.rawValue] = nil }
-                        } label: { Image(systemName: "ellipsis.circle") }
-                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    }
-                }
-                LabChips(choices: LabMorphKind.offered.map(\.label),
-                         selection: Binding(get: { LabMorphKind.offered.firstIndex(of: surface.kind) ?? 3 },
-                                            set: { i in update { $0.kind = LabMorphKind.offered[i] } }))
-                    .controlSize(.small)
-                LabWrap(spacing: 4) {
-                    ForEach(LabMorphAdornment.allCases) { a in
-                        let on = surface.adornments.contains(a)
-                        Button {
-                            update { s in if on { s.adornments.removeAll { $0 == a } } else { s.adornments.append(a) } }
-                        } label: {
-                            Label(a.label, systemImage: a.symbol)
-                                .font(.caption2)
-                                .padding(.horizontal, 6).padding(.vertical, 3)
-                                .background(Capsule().fill(on ? Color.accentColor.opacity(0.25) : Color.clear))
-                                .overlay(Capsule().strokeBorder(on ? Color.accentColor : Color.secondary.opacity(0.4)))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                HStack(spacing: 8) {
-                    Picker("In", selection: Binding(get: { surface.enter }, set: { v in update { $0.enter = v } })) {
-                        ForEach(LabMorphTransition.allCases) { Text($0.label).tag($0) }
-                    }
-                    Picker("Out", selection: Binding(get: { surface.exit }, set: { v in update { $0.exit = v } })) {
-                        ForEach(LabMorphTransition.allCases.filter { $0 != .flare }) { Text($0.label).tag($0) }
-                    }
-                }
-                .font(.caption)
-                .controlSize(.small)
+        return HStack(spacing: 8) {
+            Label(item.label, systemImage: item.symbol)
+                .font(.callout)
+                .lineLimit(1)
+                .frame(width: 66, alignment: .leading)
+                .foregroundStyle(assigned == nil ? .secondary : .primary)
+            Picker("", selection: Binding(get: { surface.kind }, set: { v in update { $0.kind = v } })) {
+                ForEach(LabMorphKind.offered) { Text($0.label).tag($0) }
             }
+            .labelsHidden().pickerStyle(.menu).controlSize(.small)
+            .frame(width: 88, alignment: .leading)
+            Menu {
+                ForEach(LabMorphAdornment.allCases) { a in
+                    let on = surface.adornments.contains(a)
+                    Button {
+                        update { s in if on { s.adornments.removeAll { $0 == a } } else { s.adornments.append(a) } }
+                    } label: {
+                        Label(a.label, systemImage: on ? "checkmark" : a.symbol)
+                    }
+                }
+                if assigned != nil {
+                    Divider()
+                    Button("Open in Morph") { lab.open(surface) }
+                    Button("Reset to Default", role: .destructive) { lab.spec.surfaces[item.rawValue] = nil }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(surface.adornments.isEmpty ? "None" : surface.adornments.map(\.label).joined(separator: ", "))
+                        .font(.callout)
+                        .foregroundStyle(surface.adornments.isEmpty ? .tertiary : .primary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.tertiary)
+                }
+                .frame(minWidth: 96, maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden)
+            .controlSize(.small)
+            .frame(minWidth: 96, maxWidth: .infinity, alignment: .leading)
+            Picker("", selection: Binding(get: { surface.enter }, set: { v in update { $0.enter = v } })) {
+                ForEach(LabMorphTransition.allCases) { Text($0.label).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.menu).controlSize(.small)
+            .frame(width: 58, alignment: .leading)
+            Picker("", selection: Binding(get: { surface.exit }, set: { v in update { $0.exit = v } })) {
+                ForEach(LabMorphTransition.allCases.filter { $0 != .flare }) { Text($0.label).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.menu).controlSize(.small)
+            .frame(width: 58, alignment: .leading)
         }
-        .padding(.bottom, 6)
+        .help(assigned == nil ? "The default for \(item.label). Change anything to make it this spec's own." : "\(item.label) opens a \(surface.kind.label).")
     }
 }
 

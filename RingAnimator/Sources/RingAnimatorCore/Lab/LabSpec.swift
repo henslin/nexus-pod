@@ -161,8 +161,8 @@ public struct LabLook: Codable, Equatable, Sendable {
     public init(from lab: LabState, experiment e: LabExperiment? = nil) {
         let e = e ?? lab.experiment
         var values = lab.values.filter { $0.key.hasPrefix(e.id + ".") }
-        for post in lab.post { for (k, v) in lab.values where k.hasPrefix(post.experiment.id + ".") { values[k] = v } }
-        self.init(experiment: e.id, values: values, post: lab.post.map(\.rawValue), palette: lab.palette.rawValue)
+        for post in lab.activePost { for (k, v) in lab.values where k.hasPrefix(post.experiment.id + ".") { values[k] = v } }
+        self.init(experiment: e.id, values: values, post: lab.activePost.map(\.rawValue), palette: lab.palette.rawValue)
         intensity = lab.intensity
         speed = lab.speed
         fill = lab.fill

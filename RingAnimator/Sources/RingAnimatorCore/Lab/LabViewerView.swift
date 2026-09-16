@@ -99,7 +99,7 @@ public struct LabViewerView: View {
             : min(size.width, size.height) * 0.78
         return TimelineView(.animation) { timeline in
             let frame = lab.frame(at: timeline.date, since: appeared, diameter: diameter, config: config, audio: audio)
-            LabExperimentView(experiment: experiment, frame: frame, config: config, post: lab.post)
+            LabExperimentView(experiment: experiment, frame: frame, config: config, post: lab.activePost)
                 // The flows draw their own phone; on a real phone that is
                 // the screen, so scale the canvas up to fill it.
                 .frame(width: size.width, height: size.height)

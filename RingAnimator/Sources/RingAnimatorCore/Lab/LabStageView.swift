@@ -38,7 +38,7 @@ public struct LabStageView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             controls
-                .frame(width: lab.experiment == .system ? 360 : 300)
+                .frame(width: lab.experiment == .system ? 420 : 300)
         }
         .onAppear { appeared = Date() }
         .onChange(of: lab.audioReactive, initial: true) { _, on in
@@ -82,7 +82,7 @@ public struct LabStageView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     } else {
-                        LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.post)
+                        LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.activePost)
                     }
                 }
                 .id(lab.experiment)
@@ -130,7 +130,7 @@ public struct LabStageView: View {
                 let inner = LabExperimentView(experiment: lab.experiment,
                                               frame: frame(at: timeline.date, diameter: lab.podFill ? pod : ring * 1.3),
                                               config: config,
-                                              post: lab.post)
+                                              post: lab.activePost)
                     .frame(width: pod, height: pod)
                     .clipShape(Circle())
                 Group {
@@ -154,7 +154,6 @@ public struct LabStageView: View {
         if lab.experiment == .system {
             ScrollView {
                 LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: CGFloat(lab.diameter)), specs: specs)
-                    .padding(16)
             }
         } else {
             LabRailView(lab: lab, config: config, audio: audio, presets: presets, bands: bands,
@@ -170,7 +169,7 @@ public struct LabStageView: View {
         let f = frame(at: Date(), diameter: CGFloat(lab.diameter))
         let view = ZStack {
             lab.darkStage ? Color(white: 0.06) : Color(white: 0.94)
-            LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.post)
+            LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.activePost)
         }
         .frame(width: CGFloat(lab.diameter) * 1.4, height: CGFloat(lab.diameter) * 1.4)
         .environment(\.colorScheme, lab.darkStage ? .dark : .light)
@@ -219,6 +218,9 @@ struct LabBandMeters: View {
     }
 }
 
+/// A number: label · slider · field with its unit, on one row. The help
+/// is a tooltip, not a caption — the inspector idiom (Chris, 2026-09-16:
+/// "more like Sketch"). Arrow keys step the field; ⇧ steps by ten.
 struct LabSlider: View {
     let title: String
     @Binding var value: Double
@@ -227,22 +229,71 @@ struct LabSlider: View {
     var help: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(title)
-                Spacer()
-                Text(String(format: format, value))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(width: LabRailMetrics.labelWidth, alignment: .leading)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Slider(value: $value, in: range)
-            if let help {
-                Text(help)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                .controlSize(.small)
+            LabNumberField(value: $value, range: range, format: format)
         }
+        .help(help ?? title)
+    }
+}
+
+/// The inspector's shared measures.
+enum LabRailMetrics {
+    static let labelWidth: CGFloat = 84
+    static let fieldWidth: CGFloat = 64
+}
+
+/// A numeric field showing the value in its unit ("550 ms", "1.0×"),
+/// editable; arrow keys step it by a hundredth of the range, ⇧ by a
+/// tenth.
+struct LabNumberField: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let format: String
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var shown: String { String(format: format, value) }
+    private var step: Double { (range.upperBound - range.lowerBound) / 100 }
+
+    var body: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .font(.caption.monospacedDigit())
+            .multilineTextAlignment(.trailing)
+            .frame(width: LabRailMetrics.fieldWidth)
+            .focused($focused)
+            .onAppear { text = shown }
+            .onChange(of: value) { _, _ in if !focused { text = shown } }
+            .onChange(of: focused) { _, f in if !f { commit() } }
+            .onSubmit { commit() }
+            .onKeyPress(.upArrow) { nudge(+1); return .handled }
+            .onKeyPress(.downArrow) { nudge(-1); return .handled }
+    }
+
+    private func commit() {
+        // The leading number, in any unit.
+        let scanner = Scanner(string: text.replacingOccurrences(of: ",", with: "."))
+        if let v = scanner.scanDouble() { value = min(range.upperBound, max(range.lowerBound, v)) }
+        text = shown
+    }
+
+    private func nudge(_ dir: Double) {
+        #if canImport(AppKit)
+        let big = NSEvent.modifierFlags.contains(.shift)
+        #else
+        let big = false
+        #endif
+        let s = step * (big ? 10 : 1) * dir
+        value = min(range.upperBound, max(range.lowerBound, value + s))
+        text = shown
     }
 }
 
@@ -329,6 +380,7 @@ public struct LabListView: View {
         }
         .padding(.vertical, 2)
         .tag(experiment)
+        .help(experiment.summary)
     }
 }
 
@@ -523,11 +575,10 @@ public struct LabExperimentView: View {
     }
 }
 
-/// One knob, drawn as the right control for its kind: a slider with the
-/// value and unit on the right, chips for an enumerated choice, a toggle
-/// for a two-way one. The structure the libraries.dev rail has (Chris,
-/// 2026-09-15) — a segmented control switches what is shown, a slider
-/// sets a value — applied to every experiment at once.
+/// One knob, drawn as the control its kind calls for — see
+/// `LabParameter.control`: a slider with a field, a segmented control
+/// (whose options' settings follow it), a popup, or a checkbox. Help is
+/// a tooltip on every one.
 public struct LabKnob: View {
     let parameter: LabParameter
     @Binding var value: Double
@@ -537,27 +588,53 @@ public struct LabKnob: View {
         self._value = value
     }
 
+    private var index: Binding<Int> {
+        Binding(get: { Int((value - parameter.range.lowerBound).rounded()) },
+                set: { value = parameter.range.lowerBound + Double($0) })
+    }
+
     public var body: some View {
-        if let choices = parameter.choices {
-            if parameter.isToggle {
-                Toggle(isOn: Binding(get: { value >= 0.5 }, set: { value = $0 ? 1 : 0 })) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(parameter.name)
-                        Text(parameter.help).font(.caption2).foregroundStyle(.tertiary)
+        switch parameter.control {
+        case .slider:
+            LabSlider(title: parameter.name, value: $value, range: parameter.range, format: parameter.format, help: parameter.help)
+        case .checkbox:
+            HStack(spacing: 8) {
+                Spacer().frame(width: LabRailMetrics.labelWidth)
+                Toggle(parameter.name, isOn: Binding(get: { value >= 0.5 }, set: { value = $0 ? 1 : 0 }))
+                    .font(.callout)
+                Spacer(minLength: 0)
+            }
+            .help(parameter.help.isEmpty ? parameter.name : parameter.help)
+        case .popup:
+            HStack(spacing: 8) {
+                Text(parameter.name)
+                    .font(.callout).foregroundStyle(.secondary)
+                    .frame(width: LabRailMetrics.labelWidth, alignment: .leading)
+                    .lineLimit(1)
+                Picker("", selection: index) {
+                    ForEach(Array((parameter.choices ?? []).enumerated()), id: \.offset) { i, label in
+                        Text(label).tag(i)
                     }
                 }
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(parameter.name).font(.callout)
-                    LabChips(choices: choices, selection: Binding(
-                        get: { Int((value - parameter.range.lowerBound).rounded()) },
-                        set: { value = parameter.range.lowerBound + Double($0) }))
-                    Text(parameter.help).font(.caption2).foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                Spacer(minLength: 0)
             }
-        } else {
-            LabSlider(title: parameter.name, value: $value, range: parameter.range, format: parameter.format, help: parameter.help)
+            .help(parameter.help.isEmpty ? parameter.name : parameter.help)
+        case .segmented:
+            VStack(alignment: .leading, spacing: 4) {
+                Text(parameter.name).font(.callout).foregroundStyle(.secondary)
+                Picker("", selection: index) {
+                    ForEach(Array((parameter.choices ?? []).enumerated()), id: \.offset) { i, label in
+                        Text(label).tag(i)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+            }
+            .help(parameter.help.isEmpty ? parameter.name : parameter.help)
         }
     }
 }

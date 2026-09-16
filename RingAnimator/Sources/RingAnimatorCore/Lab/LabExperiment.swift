@@ -712,7 +712,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("hold", "Hold", 0.5...6, 2, "Seconds in each state.", "%.1f s", group: "Morphing"),
             .init("spring", "Spring", 0.2...1.2, 0.55, "Response — lower is snappier.", group: "Morphing"),
             .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Morphing"),
-            .init("pingpong", "Order", 0...1, 1, "Round: first to last and back to the first. Ping-pong: up the list and back down.", "%.0f", group: "Morphing", choices: ["Round", "Ping-pong"]),
+            .init("pingpong", "Order", 0...1, 1, "Round: first to last and back to the first. Ping-pong: up the list and back down.", "%.0f", group: "Morphing", choices: ["Round", "Ping-pong"], kind: .popup),
             .init("transIn", "Enter Time", 0.1...2, 0.5, "How long a state's content and adornments take to arrive.", "%.1f s", group: "Morphing"),
             .init("transOut", "Leave Time", 0.1...2, 0.35, "How long they take to leave before the next state.", "%.1f s", group: "Morphing"),
             .init("glowStyle", "Style", 0...2, 2, "What the edge carries.", "%.0f", group: "Edge Glow", choices: ["Glow", "Tracer", "Both"]),
@@ -726,7 +726,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("tracers", "Tracers", 1...4, 1, "How many run round.", "%.0f", group: "Edge Glow"),
             .init("tracerWidth", "Tracer Width", 1...12, 3, "Line width, points.", "%.0f pt", group: "Edge Glow"),
             .init("tracerGlow", "Tracer Glow", 0...2, 1, "Halo on the tracer."),
-            .init("glowColor", "Colour", 0...1, 0, "The palette sweeping round, or the primary colour only.", "%.0f", group: "Edge Glow", choices: ["Palette", "Primary"]),
+            .init("glowColor", "Colour", 0...1, 0, "The palette sweeping round, or the primary colour only.", "%.0f", group: "Edge Glow", choices: ["Palette", "Primary"], kind: .popup),
         ]
         case .liquid: return [
             .init("blobs", "Blobs", 2...8, 5, "How many.", "%.0f"),
@@ -792,7 +792,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("effect", "Effect", 0...5, 0, "Apple's symbol effect.", "%.0f", choices: ["Bounce", "Pulse", "Variable", "Wiggle", "Breathe", "Rotate"]),
             .init("size", "Size", 0.2...0.8, 0.45, "Glyph as a fraction of the disc."),
             .init("hold", "Hold", 0.5...6, 2, "Seconds before the glyph is replaced with the next.", "%.1f s"),
-            .init("continuous", "Effect", 0...1, 1, "Fires once on each replace, or runs continuously.", "%.0f", choices: ["Once", "Continuous"]),
+            .init("continuous", "Runs", 0...1, 1, "Fires once on each replace, or runs continuously.", "%.0f", choices: ["Once", "Continuous"], kind: .popup),
         ]
         case .shapeshift: return [
             .init("hold", "Hold", 0.5...6, 2, "Seconds per shape.", "%.1f s"),
@@ -818,7 +818,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("dot", "Dot Size", 0.5...4, 1.4, "Points.", "%.1f pt"),
             .init("spin", "Spin", -1...1, 0.15, "Rotation, radians per second."),
             .init("jitter", "Breathe", 0...0.3, 0.06, "Points drifting off the surface."),
-            .init("tint", "Colour", 0...1, 0, "White, or the palette.", "%.0f", choices: ["White", "Palette"]),
+            .init("tint", "Colour", 0...1, 0, "White, or the palette.", "%.0f", choices: ["White", "Palette"], kind: .popup),
         ]
         case .tiles: return [
             .init("cell", "Tile", 8...80, 28, "Tile size, points.", "%.0f pt"),
@@ -863,7 +863,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("opacity", "Opacity", 0.05...1, 0.22, "Per shape. Additive stacks up fast — keep it low unless multiplying."),
             .init("swing", "Swing", 0...1, 0.3, "The arc they fall along."),
             .init("corner", "Corner", 0...0.5, 0.35, "Corner radius as a fraction of size."),
-            .init("multiply", "Blend", 0...1, 0, "Add is light; multiply is ink on paper.", "%.0f", choices: ["Add", "Multiply"]),
+            .init("multiply", "Blend", 0...1, 0, "Add is light; multiply is ink on paper.", "%.0f", choices: ["Add", "Multiply"], kind: .popup),
         ]
         case .prism: return [
             .init("dispersion", "Dispersion", 0...3, 1, "How far the colours split at the edges."),
@@ -897,7 +897,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("offset", "Offset", 0...1, 0.25, "Separation of the two gratings."),
             .init("speed", "Speed", 0...2, 0.4, "Drift."),
             .init("contrast", "Contrast", 0...1, 0.5, "Sharpens the beats."),
-            .init("mode", "Mode", 0...1, 0, "The gratings' form.", "%.0f", choices: ["Rings", "Lines"]),
+            .init("mode", "Mode", 0...1, 0, "The gratings' form.", "%.0f", choices: ["Rings", "Lines"], kind: .segmented),
         ]
         case .orrery: return [
             .init("rings", "Rings", 1...8, 4, "Rings.", "%.0f"),
@@ -1041,22 +1041,22 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
                   choices: ["Working", "Searching", "Solving", "Listening", "Connecting", "Weaving", "Composing", "Breathing", "Shaping"]),
             .init("count", "Dots", 12...200, 81, "Dots.", "%.0f", group: "Dots"),
             .init("dotSize", "Dot Size", 0.5...8, 2.4, "Points.", "%.1f pt", group: "Dots"),
-            .init("colour", "Colour", 0...2, 0, "White, the palette, or the primary.", "%.0f", group: "Dots", choices: ["White", "Palette", "Primary"]),
+            .init("colour", "Colour", 0...2, 0, "White, the palette, or the primary.", "%.0f", group: "Dots", choices: ["White", "Palette", "Primary"], kind: .popup),
             .init("orbits", "Orbit Paths", 0...1, 0.5, "Faint rings under Working and Weaving.", group: "Effect"),
             .init("particles", "Particles", 0...8, 3, "Brighter sparkles drifting through.", "%.0f", group: "Effect"),
         ]
         case .orbKit: return [
             .init("state", "State", 0...8, 0, "What the agent is doing.", "%.0f", group: "State",
                   choices: ["Working", "Searching", "Solving", "Listening", "Connecting", "Weaving", "Composing", "Breathing", "Shaping"]),
-            .init("size", "Size", 0...1, 0, "Their two tuned presets, drawn at the stage's size.", "%.0f", group: "Size", choices: ["64px", "20px"]),
+            .init("size", "Size", 0...1, 0, "Their two tuned presets, drawn at the stage's size.", "%.0f", group: "Size", choices: ["64px", "20px"], kind: .popup),
             .init("speed", "Speed", 0.1...3, 1, "Multiplier on the preset's speed.", "%.1f×", group: "Motion"),
-            .init("theme", "Theme", 0...2, 0, "Follows the stage, or fixed.", "%.0f", group: "Theme", choices: ["Auto", "Dark", "Light"]),
+            .init("theme", "Theme", 0...2, 0, "Follows the stage, or fixed.", "%.0f", group: "Theme", choices: ["Auto", "Dark", "Light"], kind: .popup),
         ]
         case .beamKit: return [
-            .init("family", "Family", 0...1, 0, "A travelling beam, or a breathing glow.", "%.0f", group: "Family", choices: ["Rotate", "Pulse"]),
+            .init("family", "Family", 0...1, 0, "A travelling beam, or a breathing glow.", "%.0f", group: "Family", choices: ["Rotate", "Pulse"], kind: .segmented),
             .init("type", "Type", 0...2, 0, "Rotate: large / small / line. Pulse: outside / inner (the third is inner).", "%.0f", group: "Type", choices: ["Large", "Small", "Line"]),
-            .init("variant", "Color theme", 0...3, 0, "Their four variants.", "%.0f", group: "Color theme", choices: ["Colorful", "Mono", "Ocean", "Sunset"]),
-            .init("theme", "Theme", 0...2, 0, "Follows the stage, or fixed.", "%.0f", group: "Color theme", choices: ["Auto", "Dark", "Light"]),
+            .init("variant", "Color theme", 0...3, 0, "Their four variants.", "%.0f", group: "Color theme", choices: ["Colorful", "Mono", "Ocean", "Sunset"], kind: .popup),
+            .init("theme", "Theme", 0...2, 0, "Follows the stage, or fixed.", "%.0f", group: "Color theme", choices: ["Auto", "Dark", "Light"], kind: .popup),
             .init("duration", "Duration", 0...8, 0, "Seconds per lap. 0 keeps the preset.", "%.2f s", group: "Motion"),
             .init("strength", "Strength", 0...2, 1, "Overall intensity.", "%.0f%%", group: "Glow styling"),
             .init("radius", "Corner radius", 0...40, 16, "Points.", "%.0f pt", group: "Glow styling"),
@@ -1084,11 +1084,11 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("anticipationDuration", "Anticipation duration", 0...1500, 700, "Milliseconds.", "%.0f ms", group: "Component animation"),
             .init("iconFade", "Icon fade", 0...600, 180, "Milliseconds.", "%.0f ms", group: "Component animation"),
             .init("iconDelay", "Icon delay", 0...600, 120, "Milliseconds.", "%.0f ms", group: "Component animation"),
-            .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", group: "Component animation", choices: ["Tap", "Auto"]),
+            .init("auto", "Auto-advance", 0...1, 1, "Opens and closes on the clock; off, only a tap does.", "%.0f", group: "Component animation", choices: ["Off", "On"]),
         ]
         case .metal: return [
             .init("type", "Type", 0...3, 0, "What wears the metal.", "%.0f", group: "Type", choices: ["Circle button", "Button", "Text", "Badge"]),
-            .init("color", "Color", 0...2, 0, "The metal.", "%.0f", group: "Color", choices: ["Chromatic", "Silver", "Gold"]),
+            .init("color", "Color", 0...2, 0, "The metal.", "%.0f", group: "Color", choices: ["Chromatic", "Silver", "Gold"], kind: .popup),
             .init("strength", "Strength", 0...1, 0.81, "How metallic.", "%.0f%%", group: "Metal effect styling"),
             .init("scale", "Shader scale", 0.3...3, 1.3, "Band density.", "%.1f×", group: "Metal effect styling"),
             .init("ring", "Ring width", 1...8, 2, "Points.", "%.0f pt", group: "Metal effect styling"),
@@ -1141,7 +1141,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("x", "Focus X", 0...1, 0.5, "Focal point, across."),
             .init("y", "Focus Y", 0...1, 0.5, "Focal point, down."),
             .init("radius", "Blur", 0...40, 14, "Maximum blur, points.", "%.0f pt"),
-            .init("band", "Focus", 0...1, 0, "A point, or a horizontal band (tilt-shift).", "%.0f", choices: ["Point", "Band"]),
+            .init("band", "Focus", 0...1, 0, "A point, or a horizontal band (tilt-shift).", "%.0f", choices: ["Point", "Band"], kind: .segmented),
             .init("falloff", "Falloff", 0.5...4, 1.6, "How quickly it goes soft away from focus."),
             .init("bokeh", "Bokeh", 0...1, 0.6, "Highlights kept as discs."),
             .init("drift", "Drift", 0...1, 0, "The focal point wanders."),
@@ -1215,12 +1215,12 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("desat", "Desaturate", 0...1, 0, "Toward monochrome."),
         ]
         case .journey: return [
-            .init("script", "Conversation", 0...3, 0, "Which ask the chat shows.", "%.0f", group: "Chat", choices: LabScript.all.map(\.title)),
+            .init("script", "Conversation", 0...3, 0, "Which ask the chat shows.", "%.0f", group: "Chat", choices: LabScript.all.map(\.title), kind: .popup),
             .init("orbPod", "In the pod", 0...8, 7, "Their orb's verb in the tab bar.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("orbChat", "In chat", 0...8, 0, "Their orb's verb in the chat sheet.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("orbVoice", "In voice", 0...8, 3, "Their orb's verb full screen.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("hold", "Hold", 1...8, 3, "Seconds per stage when cycling.", "%.1f s"),
-            .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", choices: ["Tap", "Auto"]),
+            .init("auto", "Auto-advance", 0...1, 1, "Steps on the clock; off, only a tap does.", "%.0f", choices: ["Off", "On"]),
             .init("spring", "Spring", 0.2...1.2, 0.5, "Response — lower is snappier."),
             .init("bounce", "Bounce", 0...1, 0.15, "Damping headroom."),
             .init("sheet", "Sheet Height", 0.4...0.95, 0.72, "The chat sheet, as a fraction of the screen."),
@@ -1235,7 +1235,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("orbThinking", "Thinking", 0...8, 0, "Their orb's verb while thinking.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("orbSpeaking", "Speaking", 0...8, 6, "Their orb's verb while speaking.", "%.0f", group: "Orb states (when the hero is Thinking Orbs)", choices: LabExperiment.orbVerbs),
             .init("hold", "Hold", 0.5...8, 2.5, "Seconds per state when cycling.", "%.1f s", group: "Motion"),
-            .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", choices: ["Tap", "Auto"]),
+            .init("auto", "Auto-advance", 0...1, 1, "Steps on the clock; off, only a tap does.", "%.0f", choices: ["Off", "On"]),
             .init("breath", "Idle Breath", 0...0.2, 0.05, "Idle scale swing."),
             .init("open", "Listen Open", 0...0.6, 0.25, "How much the ring opens when listening."),
             .init("orbit", "Think Orbit", 0.5...4, 1.6, "Thinking comet speed."),
@@ -1261,12 +1261,12 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         ]
         case .askButton: return [
             .init("placement", "Placement", 0...2, 0, "Where it sits on screens that aren’t the Nexus tab.", "%.0f", group: "Placement", choices: ["Floating", "Nav bar", "The pod"]),
-            .init("style", "Style", 0...3, 0, "What it is.", "%.0f", group: "Style", choices: ["Goo", "Pill", "Orb", "Bar"]),
-            .init("label", "Label", 0...2, 0, "The word on the pill.", "%.0f", group: "Style", choices: ["Ask", "Ask Nexus", "Nexus"]),
-            .init("size", "Size", 36...64, 52, "Points.", "%.0f pt", group: "Style"),
-            .init("glow", "Glow", 0...1, 0.6, "The palette’s glow under it.", group: "Style"),
+            .init("style", "Style", 0...3, 0, "What it is.", "%.0f", group: "Appearance", choices: ["Goo", "Pill", "Orb", "Bar"]),
+            .init("label", "Label", 0...2, 0, "The word on the pill.", "%.0f", group: "Appearance", choices: ["Ask", "Ask Nexus", "Nexus"], kind: .popup),
+            .init("size", "Size", 36...64, 52, "Points.", "%.0f pt", group: "Appearance"),
+            .init("glow", "Glow", 0...1, 0.6, "The palette’s glow under it.", group: "Appearance"),
             .init("context", "Context", 0...1, 1, "Suggestions about the screen you’re on, first. Off: the generic verbs.", "%.0f", group: "What it offers", choices: ["Off", "On"]),
-            .init("auto", "Advance", 0...1, 1, "Opens and closes on the clock, or only on tap.", "%.0f", group: "What it offers", choices: ["Tap", "Auto"]),
+            .init("auto", "Auto-advance", 0...1, 1, "Opens and closes on the clock; off, only a tap does.", "%.0f", group: "What it offers", choices: ["Off", "On"]),
         ]
         case .sunflower: return [
             .init("spacing", "Density", 6...24, 10, "Seed spacing, points — the spiral’s scale.", "%.0f pt", group: "Field"),
@@ -1294,9 +1294,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("textGlow", "Glow", 0...1, 0.4, "On each arriving word.", group: "Transcript"),
         ]
         case .system: return [
-            .init("script", "Conversation", 0...3, 0, "Which ask the play runs through the states.", "%.0f", group: "Play", choices: LabScript.all.map(\.title)),
+            .init("script", "Conversation", 0...3, 0, "Which ask the play runs through the states.", "%.0f", group: "Play", choices: LabScript.all.map(\.title), kind: .popup),
             .init("hold", "Hold", 0.5...8, 3, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
-            .init("auto", "Advance", 0...1, 1, "On the clock, or only on tap.", "%.0f", group: "Play", choices: ["Tap", "Auto"]),
+            .init("auto", "Auto-advance", 0...1, 1, "Steps on the clock; off, only a tap or the strip does.", "%.0f", group: "Play", choices: ["Off", "On"]),
             .init("spring", "Spring", 0.2...1.2, 0.55, "Response of the morph between surfaces.", group: "Play"),
             .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Play"),
             .init("talk", "Talk Time", 1...8, 3, "Seconds it speaks after a hold is released.", "%.1f s", group: "Play"),
@@ -1588,11 +1588,13 @@ public struct LabParameter: Identifiable, Sendable {
     /// experiments with one list.
     public let group: String?
     /// For an enumerated knob: the label of each integer value from the
-    /// range's lower bound up. The panel draws chips instead of a slider
-    /// — a segmented control, because these switch what is displayed.
+    /// range's lower bound up.
     public let choices: [String]?
+    /// The control this knob is drawn as, when the default rule is wrong
+    /// — see `control`.
+    public let kind: LabControlKind?
 
-    public init(_ id: String, _ name: String, _ range: ClosedRange<Double>, _ defaultValue: Double, _ help: String, _ format: String = "%.2f", group: String? = nil, choices: [String]? = nil) {
+    public init(_ id: String, _ name: String, _ range: ClosedRange<Double>, _ defaultValue: Double, _ help: String, _ format: String = "%.2f", group: String? = nil, choices: [String]? = nil, kind: LabControlKind? = nil) {
         self.id = id
         self.name = name
         self.range = range
@@ -1601,10 +1603,43 @@ public struct LabParameter: Identifiable, Sendable {
         self.format = format
         self.group = group
         self.choices = choices
+        self.kind = kind
     }
 
-    /// A two-way knob — the panel draws a toggle.
-    public var isToggle: Bool { choices?.count == 2 && range == 0...1 }
+    /// Which control draws this knob (Chris, 2026-09-16: "maybe we're not
+    /// using the right controls in all instances"). The rule: a number
+    /// is a slider with a field; two-way is a checkbox; up to four
+    /// choices that switch what the stage shows are a segmented control;
+    /// more, or a *value* picked from homogeneous options, is a popup.
+    /// A knob says `kind:` when the rule reads it wrong.
+    public var control: LabControlKind {
+        if let kind { return kind }
+        guard let choices else { return .slider }
+        if choices.count == 2 && range == 0...1 { return .checkbox }
+        return choices.count <= 4 ? .segmented : .popup
+    }
+
+    /// A two-way knob — the panel draws a checkbox.
+    public var isToggle: Bool { control == .checkbox }
+
+    /// The unit on the value, from the format — " pt", " ms", "×", "°".
+    public var unit: String {
+        let f = format
+        guard let end = f.range(of: "f") else { return "" }
+        return String(f[end.upperBound...]).replacingOccurrences(of: "%%", with: "%")
+    }
+    /// Decimal places, from the format.
+    public var decimals: Int {
+        if let m = format.range(of: #"\.(\d)f"#, options: .regularExpression) {
+            return Int(format[m].dropFirst().dropLast()) ?? 2
+        }
+        return 0
+    }
+}
+
+/// How a knob is drawn. See `LabParameter.control`.
+public enum LabControlKind: Sendable {
+    case slider, segmented, popup, checkbox
 }
 
 /// Named knob sets per experiment, kept in UserDefaults — the earmark
@@ -1635,9 +1670,9 @@ public final class LabPresetStore: ObservableObject {
         let e = lab.experiment
         let prefix = e.id + "."
         var values = lab.values.filter { $0.key.hasPrefix(prefix) }
-        for post in lab.post { for (k, v) in lab.values where k.hasPrefix(post.experiment.id + ".") { values[k] = v } }
+        for post in lab.activePost { for (k, v) in lab.values where k.hasPrefix(post.experiment.id + ".") { values[k] = v } }
         presets.removeAll { $0.experiment == e.id && $0.name == name }
-        presets.append(Preset(name: name, experiment: e.id, values: values, post: lab.post.map(\.rawValue), hero: lab.hero?.rawValue, palette: lab.palette.rawValue))
+        presets.append(Preset(name: name, experiment: e.id, values: values, post: lab.activePost.map(\.rawValue), hero: lab.hero?.rawValue, palette: lab.palette.rawValue))
         persist()
     }
 
@@ -1692,6 +1727,11 @@ public final class LabState: ObservableObject {
     @Published public var palette: LabPalette = .nexus
     /// Post effects, in the order they are applied.
     @Published public var post: [LabPostEffect] = []
+    /// Effects kept in the stack but switched off — Sketch's unchecked
+    /// fill: still listed, still tuned, not applied.
+    @Published public var disabledPost: Set<LabPostEffect> = []
+    /// The stack as applied.
+    public var activePost: [LabPostEffect] { post.filter { !disabledPost.contains($0) } }
     /// Show the experiment at pod size in a glass pod, in the corner.
     @Published public var showPod: Bool = true
     /// In the pod preview, draw the experiment across the whole 62pt pod
@@ -1959,7 +1999,7 @@ extension LabState {
                         taps: taps,
                         sinceTap: date.timeIntervalSince(lastTap),
                         hero: hero,
-                        heroPost: post,
+                        heroPost: activePost,
                         fill: fill,
                         holding: holdStart.map { date.timeIntervalSince($0) } ?? 0,
                         sinceHold: date.timeIntervalSince(holdEnd),
