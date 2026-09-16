@@ -92,7 +92,24 @@ public final class QuidgetDemo: ObservableObject {
     @Published public var locked: Bool = true
     @Published public var thermostat: Int = 70
     @Published public var expanded: QuidgetKind? = nil
+    /// The mode being switched to, while the house takes a moment to
+    /// arm or disarm — the button shows a spinner instead of its glyph.
+    @Published public var arming: SecurityMode? = nil
+    private var armingTask: Task<Void, Never>?
     public init() {}
+
+    /// Switch modes the way the house would: the button spins for a
+    /// couple of seconds, then the mode lands.
+    public func setMode(_ mode: SecurityMode) {
+        guard mode != self.mode || arming != nil else { return }
+        armingTask?.cancel()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { arming = mode }
+        armingTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self else { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { self.mode = mode; self.arming = nil }
+        }
+    }
 }
 
 // MARK: - Palette, from the file
@@ -407,7 +424,11 @@ public struct QuidgetView: View {
                 modeTray
                     .padding(.top, 10).padding(.horizontal, 10.5)
                 VStack(spacing: 0) {
-                    statusRow(symbol: "house.fill", title: demo.mode.label, status: demo.mode == .standby ? "Off" : "Active")
+                    if let arming = demo.arming {
+                        statusRow(symbol: "house.fill", title: arming.label, status: arming == .standby ? "Standing down…" : "Arming…")
+                    } else {
+                        statusRow(symbol: "house.fill", title: demo.mode.label, status: demo.mode == .standby ? "Off" : "Active")
+                    }
                     Divider().padding(.leading, 60)
                     statusRow(symbol: "shield.lefthalf.filled", title: "Automated Threat Response", status: demo.mode == .standby ? "Paused" : "Monitoring")
                 }
@@ -424,7 +445,7 @@ public struct QuidgetView: View {
         HStack(spacing: 0) {
             ForEach(SecurityMode.allCases) { mode in
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { demo.mode = mode }
+                    demo.setMode(mode)
                 } label: {
                     modeCard(mode, selected: demo.mode == mode)
                         .frame(width: 103.33)
@@ -456,11 +477,19 @@ public struct QuidgetView: View {
                         .shadow(color: .black.opacity(0.16), radius: 2, y: 2)
                         .shadow(color: .black.opacity(0.08), radius: 6, y: 6)
                 }
-                QuidgetGlyph.shape(mode)
-                    .fill(selected ? mode.glyphInk(dark: dark) : QuidgetInk.glyphGrey)
-                    .frame(width: 36, height: 36)
+                if demo.arming == mode {
+                    QuidgetSpinnerView(color: selected ? mode.glyphInk(dark: dark) : QuidgetInk.glyphGrey)
+                        .frame(width: 26, height: 26)
+                        .transition(.scale.combined(with: .opacity))
+                } else {
+                    QuidgetGlyph.shape(mode)
+                        .fill(selected ? mode.glyphInk(dark: dark) : QuidgetInk.glyphGrey)
+                        .frame(width: 36, height: 36)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
             .frame(width: 64, height: 64)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: demo.arming == mode)
             Text(mode.label)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(dark ? QuidgetInk.glyphGrey : QuidgetInk.label)
@@ -595,11 +624,18 @@ struct QuidgetDimmer: View {
         let inner = CGSize(width: track.width - inset * 2, height: track.height - inset * 2)
         let fillH = max(knobHeight * 0.6, CGFloat(level) * inner.height)
         ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(QuidgetInk.dimmerFill)
-                .modifier(QuidgetInset(radius: 20, fill: .clear, strong: true))
-                .frame(width: inner.width, height: fillH)
-                .padding(.bottom, inset)
+            // The fill grows up from the bottom and darkens as the light
+            // dims (Chris, 2026-09-16): the file's amber at full, a deep
+            // amber near off.
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Self.fill(at: level))
+                    .modifier(QuidgetInset(radius: 20, fill: .clear, strong: true))
+                    .frame(width: inner.width, height: fillH)
+            }
+            .frame(width: inner.width, height: inner.height, alignment: .bottom)
+            .padding(.bottom, inset)
             QuidgetKnob(radius: 20) {
                 Image(systemName: "lightbulb.fill")
                     .font(.system(size: icon, weight: .medium))
@@ -619,6 +655,26 @@ struct QuidgetDimmer: View {
                 withAnimation(.interactiveSpring()) { level = min(1, max(0, v)) }
             })
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: level)
+    }
+
+    /// The file's #F8B541 at full brightness, darkening toward off.
+    static func fill(at level: Double) -> Color {
+        Color(hue: 0.105, saturation: 0.74 - 0.1 * level, brightness: 0.45 + 0.52 * level)
+    }
+}
+
+/// An indeterminate spinner: three quarters of a ring, turning once a
+/// second, in the glyph's colour.
+struct QuidgetSpinnerView: View {
+    let color: Color
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            Circle()
+                .trim(from: 0, to: 0.75)
+                .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees((t * 360).truncatingRemainder(dividingBy: 360)))
+        }
     }
 }
 
