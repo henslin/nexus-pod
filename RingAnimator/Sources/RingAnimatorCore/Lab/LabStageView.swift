@@ -270,7 +270,8 @@ public struct LabStageView: View {
     private var controls: some View {
         if lab.experiment == .system {
             ScrollView {
-                LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: CGFloat(lab.diameter)), specs: specs)
+                LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: 360), specs: specs,
+                             frameAt: { frame(at: $0, diameter: 360) })
             }
         } else {
             LabRailView(lab: lab, config: config, audio: audio, presets: presets, bands: bands,

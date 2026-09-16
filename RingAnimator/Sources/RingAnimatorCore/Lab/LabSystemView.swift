@@ -266,14 +266,17 @@ public struct LabSpecBoard: View {
     @ObservedObject var config: RingConfig
     let frame: LabFrame
     @ObservedObject var specs: LabSpecStore
+    /// A live frame for the thumbnails and the popovers.
+    let frameAt: (Date) -> LabFrame
     @StateObject private var presets = LabPresetStore()
     @State private var pasteFailed = false
 
-    public init(lab: LabState, config: RingConfig, frame: LabFrame, specs: LabSpecStore) {
+    public init(lab: LabState, config: RingConfig, frame: LabFrame, specs: LabSpecStore, frameAt: ((Date) -> LabFrame)? = nil) {
         self.lab = lab
         self.config = config
         self.frame = frame
         self.specs = specs
+        self.frameAt = frameAt ?? { _ in frame }
     }
 
     private var spec: LabSpec { lab.spec }
@@ -443,97 +446,9 @@ public struct LabSpecBoard: View {
 
     // MARK: Slots
 
-    /// One slot as a row: thumbnail · name · what's in it · ⋯. The menu
-    /// (and the row's context menu) is every way to fill it.
+    /// One slot as a row — see `LabSlotRow`.
     private func slotRow(title: String, symbol: String? = nil, look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void, menu: Bool = false) -> some View {
-        HStack(spacing: 10) {
-            // The row is the thing: click it to change it.
-            Button {
-                lab.edit(look, for: target)
-            } label: {
-                HStack(spacing: 10) {
-                    thumbnail(look, menu: menu)
-                        .frame(width: Self.thumb, height: Self.thumb)
-                    if let symbol {
-                        Image(systemName: symbol).font(.caption).foregroundStyle(.secondary).frame(width: 14)
-                    }
-                    Text(title).font(.callout)
-                        .frame(width: symbol == nil ? LabRailMetrics.labelWidth : LabRailMetrics.labelWidth - 24, alignment: .leading)
-                    Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty — click to choose")
-                        .font(.callout)
-                        .foregroundStyle(look == nil ? .tertiary : .secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(look == nil ? "Choose in the Lab" : "Open on the bench to change it; Use brings it back here")
-            Menu {
-                slotActions(look: look, target: target, set: set)
-            } label: { Image(systemName: "ellipsis.circle") }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .font(.caption)
-        }
-        .contextMenu { slotActions(look: look, target: target, set: set) }
-    }
-
-    @ViewBuilder
-    private func slotActions(look: LabLook?, target: LabSlotTarget, set: @escaping (LabLook?) -> Void) -> some View {
-        if look != nil {
-            Button {
-                lab.edit(look, for: target)
-            } label: { Label("Edit on the Bench", systemImage: "slider.horizontal.3") }
-        }
-        Button {
-            lab.choose(for: target)
-        } label: { Label("Choose Another in the Lab…", systemImage: "flask") }
-        if let bench = lab.lastBench, target.accepts(bench) {
-            Button("Use the Bench · \(bench.name)") { set(LabLook(from: lab, experiment: bench)) }
-        }
-        let mine = presets.presets.filter { p in LabExperiment(rawValue: p.experiment).map(target.accepts) ?? false }
-        if !mine.isEmpty {
-            Menu("From a Preset") {
-                ForEach(mine) { p in
-                    Button("\(LabExperiment(rawValue: p.experiment)?.name ?? p.experiment) · \(p.name)") {
-                        set(LabLook(experiment: p.experiment, values: p.values, post: p.post, palette: p.palette))
-                    }
-                }
-            }
-        }
-        if let look {
-            Divider()
-            Button("Clear", role: .destructive) { set(nil) }
-        }
-    }
-
-    @ViewBuilder
-    private func thumbnail(_ look: LabLook?, menu: Bool) -> some View {
-        if let look, menu {
-            let fillChoice = Int(look.values["gooey.fill"] ?? 1)
-            let fill: Color = [Color(white: 0.13), Color(white: 0.92), Color(hex: "#5AC8FA"), Color(hex: "#FFCF9E"), frame.colors.first ?? .white][min(max(fillChoice, 0), 4)]
-            ZStack {
-                Circle().fill(fill)
-                Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(fillChoice == 0 ? .white : Color(white: 0.1))
-            }
-        } else if let look {
-            LabPodGlass(config: config, dark: frame.darkStage) {
-                LabHeroView(frame: frame.applying(look, config: config), config: config, diameter: 62)
-            }
-            .scaleEffect(Self.thumb / 62)
-        } else {
-            Circle()
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                .foregroundStyle(.tertiary)
-        }
-    }
-
-    private func gooeyEffectName(_ look: LabLook) -> String {
-        let choices = LabExperiment.gooey.parameters.first { $0.id == "effect" }?.choices ?? []
-        let i = Int(look.values["gooey.effect"] ?? 0)
-        return choices.indices.contains(i) ? "Gooey · \(choices[i])" : "Gooey"
+        LabSlotRow(lab: lab, config: config, frameAt: frameAt, title: title, symbol: symbol, look: look, target: target, set: set, isMenu: menu, presets: presets)
     }
 
     // MARK: Containers
@@ -617,6 +532,139 @@ public struct LabSpecBoard: View {
             .frame(width: 58, alignment: .leading)
         }
         .help(assigned == nil ? "The default for \(item.label). Change anything to make it this spec's own." : "\(item.label) opens a \(surface.kind.label).")
+    }
+}
+
+/// One slot: thumbnail · name · what's in it · sliders · ⋯. Click the
+/// thumbnail or name to choose from the gallery (orbs) or open the
+/// editor (the goo); the sliders glyph tunes the look in place; ⋯ keeps
+/// the bench, presets and clear.
+struct LabSlotRow: View {
+    @ObservedObject var lab: LabState
+    @ObservedObject var config: RingConfig
+    let frameAt: (Date) -> LabFrame
+    let title: String
+    var symbol: String? = nil
+    let look: LabLook?
+    let target: LabSlotTarget
+    let set: (LabLook?) -> Void
+    var isMenu = false
+    @ObservedObject var presets: LabPresetStore
+    @State private var choosing = false
+    @State private var editing = false
+
+    private static let thumb: CGFloat = 36
+
+    /// The look, bound into the spec for the editor.
+    private var lookBinding: Binding<LabLook> {
+        Binding(get: { look ?? LabLook(experiment: isMenu ? LabExperiment.gooey.id : LabExperiment.aurora.id) }, set: { set($0) })
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                if isMenu { editing = true } else { choosing = true }
+            } label: {
+                HStack(spacing: 10) {
+                    thumbnail
+                        .frame(width: Self.thumb, height: Self.thumb)
+                    if let symbol {
+                        Image(systemName: symbol).font(.caption).foregroundStyle(.secondary).frame(width: 14)
+                    }
+                    Text(title).font(.callout)
+                        .frame(width: symbol == nil ? LabRailMetrics.labelWidth : LabRailMetrics.labelWidth - 24, alignment: .leading)
+                    Text(look.map { $0.experimentCase == .gooey ? gooeyEffectName($0) : $0.title } ?? "Empty — click to choose")
+                        .font(.callout)
+                        .foregroundStyle(look == nil ? .tertiary : .secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(isMenu ? "Tune the goo" : "Choose an orb for this slot")
+            .popover(isPresented: $choosing, arrowEdge: .leading) {
+                LabOrbGallery(frameAt: frameAt, config: config, current: look) { set($0) }
+            }
+            if look != nil || isMenu {
+                Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .help("Tune this look in place")
+                    .popover(isPresented: $editing, arrowEdge: .leading) {
+                        LabLookEditor(look: lookBinding, frameAt: frameAt, config: config) { lab.edit(lookBinding.wrappedValue, for: target) }
+                    }
+            }
+            Menu {
+                actions
+            } label: { Image(systemName: "ellipsis.circle") }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .font(.caption)
+        }
+        .contextMenu { actions }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        if !isMenu {
+            Button { choosing = true } label: { Label("Choose from the Gallery…", systemImage: "square.grid.2x2") }
+        }
+        if look != nil || isMenu {
+            Button { editing = true } label: { Label("Tune in Place…", systemImage: "slider.horizontal.3") }
+        }
+        Button {
+            lab.edit(look, for: target)
+        } label: { Label("Full Rail on the Bench…", systemImage: "flask") }
+        if let bench = lab.lastBench, target.accepts(bench) {
+            Button("Use the Bench · \(bench.name)") { set(LabLook(from: lab, experiment: bench)) }
+        }
+        let mine = presets.presets.filter { p in LabExperiment(rawValue: p.experiment).map(target.accepts) ?? false }
+        if !mine.isEmpty {
+            Menu("From a Preset") {
+                ForEach(mine) { p in
+                    Button("\(LabExperiment(rawValue: p.experiment)?.name ?? p.experiment) · \(p.name)") {
+                        set(LabLook(experiment: p.experiment, values: p.values, post: p.post, palette: p.palette))
+                    }
+                }
+            }
+        }
+        if look != nil {
+            Divider()
+            Button("Clear", role: .destructive) { set(nil) }
+        }
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        if let look, isMenu {
+            let fillChoice = Int(look.values["gooey.fill"] ?? 1)
+            let f = frameAt(Date())
+            let fill: Color = [Color(white: 0.13), Color(white: 0.92), Color(hex: "#5AC8FA"), Color(hex: "#FFCF9E"), f.colors.first ?? .white][min(max(fillChoice, 0), 4)]
+            ZStack {
+                Circle().fill(fill)
+                Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(fillChoice == 0 ? .white : Color(white: 0.1))
+            }
+        } else if let look {
+            TimelineView(.animation) { timeline in
+                let f = frameAt(timeline.date)
+                LabPodGlass(config: config, dark: f.darkStage) {
+                    LabHeroView(frame: f.applying(look, config: config), config: config, diameter: 62)
+                }
+                .scaleEffect(Self.thumb / 62)
+            }
+        } else {
+            Circle()
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func gooeyEffectName(_ look: LabLook) -> String {
+        let choices = LabExperiment.gooey.parameters.first { $0.id == "effect" }?.choices ?? []
+        let i = Int(look.values["gooey.effect"] ?? 0)
+        return choices.indices.contains(i) ? "Gooey · \(choices[i])" : "Gooey"
     }
 }
 
