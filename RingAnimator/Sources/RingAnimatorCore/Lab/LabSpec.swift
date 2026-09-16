@@ -98,7 +98,8 @@ public enum LabActionItem: String, CaseIterable, Identifiable, Codable, Sendable
     /// The surface this action opens when none has been assigned.
     public var defaultSurface: LabMorphKind {
         switch self {
-        case .ask, .talk, .show: return .sheet
+        case .ask: return .sheet
+        case .talk, .show: return .fullScreen
         case .remind, .photo: return .card
         }
     }
@@ -283,8 +284,8 @@ extension LabSpec {
         s.askStyle = .goo
         s.items = [.ask, .talk, .show]
         s.surfaces["ask"] = surface(.sheet, [.edgeGlow])
-        s.surfaces["talk"] = surface(.sheet, [.edgeGlow, .waveform], enter: .flare)
-        s.surfaces["show"] = surface(.sheet, [.edgeGlow])
+        s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .waveform], enter: .flare)
+        s.surfaces["show"] = surface(.fullScreen, [.edgeGlow])
         return s
     }
 
@@ -306,7 +307,7 @@ extension LabSpec {
         s.askStyle = .pill
         s.items = [.ask, .talk, .show]
         s.surfaces["ask"] = surface(.sheet, [.borderBeam])
-        s.surfaces["talk"] = surface(.sheet, [.edgeGlow, .transcript], enter: .flare)
+        s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .transcript], enter: .flare)
         s.surfaces["show"] = surface(.card, [.edgeGlow])
         return s
     }
@@ -329,7 +330,7 @@ extension LabSpec {
         s.askStyle = .bar
         s.items = [.ask, .talk]
         s.surfaces["ask"] = surface(.sheet, [.edgeGlow, .transcript])
-        s.surfaces["talk"] = surface(.sheet, [.edgeGlow, .waveform, .caption])
+        s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .waveform, .caption])
         return s
     }
 }

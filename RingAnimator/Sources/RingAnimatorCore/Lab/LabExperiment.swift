@@ -1341,10 +1341,8 @@ public enum LabMorphKind: String, CaseIterable, Identifiable, Codable, Sendable 
         case .fullScreen: return "Full Screen"
         }
     }
-    /// The containers a designer picks from (Chris, 2026-09-16: "Pod,
-    /// Capsule, Card and Sheet"). Full screen stays in code for the
-    /// voice flows and older specs, but isn't offered as a container.
-    public static let offered: [LabMorphKind] = [.pod, .pill, .card, .sheet]
+    /// The kinds a designer picks from, smallest footprint first.
+    public static let offered: [LabMorphKind] = allCases
 }
 
 /// A UI animation a state can carry — the pieces of the hidden UI labs.
@@ -1433,7 +1431,7 @@ public enum LabSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .orb: return "The agent’s presence. What lives in the circle — a base, and post effects stacked over it."
         case .controls: return "What you tap. The Ask button, buttons, beams."
-        case .surfaces: return "What opens. Pod, capsule, card, sheet — and what rides on them."
+        case .surfaces: return "What opens. Pod, capsule, card, sheet, full screen — and what rides on them."
         case .flows: return "How it moves. Tap, hold, listen, talk — voice-forward and full screen."
         case .qBranch: return "Where it comes together. A look for every slot, the whole agent played."
         }

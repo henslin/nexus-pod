@@ -45,7 +45,7 @@ Five rooms, in the order a designer meets the parts of an agent:
 |---|---|---|
 | **Orb** | What does it look like? | ~60 bases on six shelves (Light, Water, Frosted, Particles, Shape, 3D & Kits), and post effects that stack over any |
 | **Controls** | What do you tap? | Ask Button, Gooey, Metal, Border Beam |
-| **Containers** | What opens? | Morph — pod, capsule, card, sheet — with adornments (edge glow, beam, waveform, caption, transcript) |
+| **Containers** | What opens? | Morph — pod, capsule, card, sheet, full screen — with adornments (edge glow, beam, waveform, caption, transcript) |
 | **Flows** | How does it move? | Journey, Agent States, Hold, Bloom Field |
 | **Q Branch** | How does it all fit? | The spec: every slot filled, played end to end |
 
