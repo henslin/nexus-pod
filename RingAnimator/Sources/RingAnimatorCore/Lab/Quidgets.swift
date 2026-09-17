@@ -324,20 +324,39 @@ public struct QuidgetView: View {
         }
     }
 
-    /// The small container: the well in the glass, with the tile in it.
-    /// The light's dimmer *is* the well, so it skips the well's fill.
-    private func small<Tile: View>(well: Bool = true, _ tile: () -> Tile) -> some View {
-        tile()
-            .frame(width: Self.tileSize.width, height: Self.tileSize.height)
-            .padding(4)
-            .frame(width: Self.wellSize.width, height: Self.wellSize.height)
-            .modifier(QuidgetInset(radius: 24, fill: well ? QuidgetInk.well : .clear))
-            .padding(.top, 11).padding(.bottom, 9).padding(.horizontal, 10)
-            .frame(width: Self.smallSize.width, height: Self.smallSize.height)
-            .modifier(QuidgetGlass(radius: 34))
-            .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-            .onTapGesture { expand() }
+    /// The tile's container: the well in the glass, with the tile in it
+    /// — or, expanded, the same tile at twice the size under a title,
+    /// in the light card's idiom. The light's dimmer *is* the well, so
+    /// it skips the well's fill.
+    private func tileCard<Tile: View>(well: Bool = true, title: String, value: String, _ tile: () -> Tile) -> some View {
+        let large = size == .large
+        let k: CGFloat = large ? 2 : 1
+        return VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(dark ? .white : .black)
+                Text(value).font(.system(size: 17)).foregroundStyle(dark ? .white : .black)
+                    .contentTransition(.numericText())
+            }
+            .frame(height: large ? 44 : 0)
+            .opacity(large ? 1 : 0)
+            .clipped()
+            .padding(.top, large ? 38 : 0)
+            tile()
+                .frame(width: Self.tileSize.width * k, height: Self.tileSize.height * k)
+                .padding(4 * k)
+                .frame(width: Self.wellSize.width * k, height: Self.wellSize.height * k)
+                .modifier(QuidgetInset(radius: 24 * k, fill: well ? QuidgetInk.well : .clear))
+                .padding(.top, large ? 30 : 11)
+            Spacer(minLength: 0)
+        }
+        .frame(width: large ? Self.wideWidth : Self.smallSize.width, height: large ? Self.tileCardHeight : Self.smallSize.height)
+        .modifier(QuidgetGlass(radius: 34, white: large ? 0.8 : 0))
+        .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+        .onLongPressGesture(minimumDuration: 0.35) { if !large { expand() } }
     }
+
+    /// The expanded tile card: title, gap, the doubled well, and room.
+    static let tileCardHeight: CGFloat = 38 + 44 + 30 + wellSize.height * 2 + 40
 
     // MARK: Light
 
@@ -366,53 +385,58 @@ public struct QuidgetView: View {
         .modifier(QuidgetGlass(radius: 34, white: large ? 0.8 : 0))
         .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
         .onTapGesture { if !large { expand() } }
+        .onLongPressGesture(minimumDuration: 0.35) { if !large { expand() } }
     }
 
     // MARK: Lock and thermostat (the file's other small quidgets)
 
     private var lock: some View {
-        small {
+        let k: CGFloat = size == .large ? 2 : 1
+        return tileCard(title: "Front Door", value: demo.locked ? "Locked" : "Unlocked") {
             VStack(spacing: 0) {
                 Image(systemName: demo.locked ? "lock.fill" : "lock.open.fill")
-                    .font(.system(size: 30, weight: .medium))
-                    .frame(width: 32, height: 32)
-                    .padding(.top, 6)
+                    .font(.system(size: 30 * k, weight: .medium))
+                    .frame(width: 32 * k, height: 32 * k)
+                    .padding(.top, 6 * k)
                 Spacer(minLength: 0)
-                Text("Front Door").font(.system(size: 12, weight: .semibold)).tracking(-0.43)
-                Text(demo.locked ? "Locked" : "Unlocked").font(.system(size: 12)).tracking(-0.43).padding(.bottom, 12)
+                Text("Front Door").font(.system(size: 12 * k, weight: .semibold)).tracking(-0.43)
+                Text(demo.locked ? "Locked" : "Unlocked").font(.system(size: 12 * k)).tracking(-0.43).padding(.bottom, 12 * k)
             }
             .foregroundStyle(demo.locked ? QuidgetInk.greenInk : QuidgetInk.amberInk)
-            .frame(width: Self.tileSize.width, height: Self.tileSize.height)
-            .modifier(QuidgetInset(radius: 20, fill: demo.locked ? QuidgetInk.green : QuidgetInk.amber, strong: true))
+            .frame(width: Self.tileSize.width * k, height: Self.tileSize.height * k)
+            .modifier(QuidgetInset(radius: 20 * k, fill: demo.locked ? QuidgetInk.green : QuidgetInk.amber, strong: true))
+            .contentShape(RoundedRectangle(cornerRadius: 20 * k, style: .continuous))
             .onTapGesture { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { demo.locked.toggle() } }
         }
     }
 
     private var thermostat: some View {
-        small {
+        let k: CGFloat = size == .large ? 2 : 1
+        return tileCard(title: "Thermostat", value: "\(demo.thermostat)°") {
             VStack(spacing: 0) {
-                Text("\(demo.thermostat)°").font(.system(size: 36, weight: .light)).tracking(-0.43)
+                Text("\(demo.thermostat)°").font(.system(size: 36 * k, weight: .light)).tracking(-0.43)
                     .foregroundStyle(QuidgetInk.blueInk)
-                    .padding(.top, 22)
+                    .padding(.top, 22 * k)
                     .contentTransition(.numericText())
                 Spacer(minLength: 0)
+                // Taps, not Buttons: a tap gesture lets go when you hold,
+                // so a long press anywhere on the tile opens the card.
                 HStack(spacing: 0) {
-                    Button { demo.thermostat = max(50, demo.thermostat - 1) } label: {
-                        Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    Rectangle().fill(Color.white.opacity(0.25)).frame(width: 1, height: 18)
-                    Button { demo.thermostat = min(90, demo.thermostat + 1) } label: {
-                        Image(systemName: "chevron.up").font(.system(size: 13, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
+                    Image(systemName: "chevron.down").font(.system(size: 13 * k, weight: .semibold))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
+                        .onTapGesture { demo.thermostat = max(50, demo.thermostat - 1) }
+                    Rectangle().fill(Color.white.opacity(0.25)).frame(width: 1, height: 18 * k)
+                    Image(systemName: "chevron.up").font(.system(size: 13 * k, weight: .semibold))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
+                        .onTapGesture { demo.thermostat = min(90, demo.thermostat + 1) }
                 }
-                .buttonStyle(.plain)
                 .foregroundStyle(.white)
-                .frame(width: 85, height: 32)
-                .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(QuidgetInk.blueInk))
-                .padding(.bottom, 8)
+                .frame(width: 85 * k, height: 32 * k)
+                .background(RoundedRectangle(cornerRadius: 15 * k, style: .continuous).fill(QuidgetInk.blueInk))
+                .padding(.bottom, 8 * k)
             }
-            .frame(width: Self.tileSize.width, height: Self.tileSize.height)
-            .modifier(QuidgetInset(radius: 20, fill: QuidgetInk.blue, strong: true))
+            .frame(width: Self.tileSize.width * k, height: Self.tileSize.height * k)
+            .modifier(QuidgetInset(radius: 20 * k, fill: QuidgetInk.blue, strong: true))
         }
     }
 
@@ -467,6 +491,7 @@ public struct QuidgetView: View {
         .modifier(QuidgetGlass(radius: 34, white: small ? 0 : 0.8))
         .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
         .onTapGesture { if !large { expand() } }
+        .onLongPressGesture(minimumDuration: 0.35) { if !large { expand() } }
     }
 
     /// Icon + label, as the file's "Card": a 64 circle with the mode's
@@ -539,6 +564,7 @@ public struct QuidgetView: View {
             .modifier(QuidgetGlass(radius: small ? 34 : (large ? 34 : 26), white: large ? 0.8 : 0, hidden: size == .medium))
             .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
             .onTapGesture { if !large { expand() } }
+            .onLongPressGesture(minimumDuration: 0.35) { if !large { expand() } }
     }
 
     /// The file's "Camera Widget": the frame with a fade top and bottom,
@@ -579,8 +605,9 @@ public struct QuidgetView: View {
         .shadow(color: .black.opacity(caption ? 0.06 : 0), radius: 10, y: 10)
     }
 
-    /// Lock and thermostat have no expanded form in the file yet.
-    static func expands(_ kind: QuidgetKind) -> Bool { [.light, .security, .clip].contains(kind) }
+    /// Every quidget opens: long-press, as Home's tiles do (tap is the
+    /// quick action); the three with no quick action open on tap too.
+    static func expands(_ kind: QuidgetKind) -> Bool { true }
     static func expandedWidth(_ kind: QuidgetKind) -> CGFloat { wideWidth }
 
     private func expand() {
@@ -953,6 +980,9 @@ public struct QuidgetStage<Content: View>: View {
     let slots: [QuidgetSlot]
     @ViewBuilder let content: () -> Content
     @State private var frames: [String: CGRect] = [:]
+    /// The quidget on top: the one expanded, and still the one that
+    /// was, all the way back down to its slot.
+    @State private var top: String? = nil
 
     public init(demo: QuidgetDemo, screen: CGSize, slots: [QuidgetSlot], @ViewBuilder content: @escaping () -> Content) {
         self.demo = demo
@@ -990,11 +1020,12 @@ public struct QuidgetStage<Content: View>: View {
                     .allowsHitTesting(!others)
                     .offset(x: expanded ? (screen.width - w) / 2 : frame.minX, y: expanded ? Self.expandedTop : frame.minY)
                     .opacity(frames[slot.id] == nil ? 0 : 1)
-                    .zIndex(expanded ? 1 : 0)
+                    .zIndex(expanded || top == slot.id ? 1 : 0)
             }
         }
         .coordinateSpace(name: "quidgets")
         .onPreferenceChange(QuidgetSlotKey.self) { frames = $0; QuidgetDebug.frames?($0) }
+        .onChange(of: demo.expanded) { if let e = demo.expanded { top = e } }
         .animation(Self.spring, value: demo.expanded)
         .frame(width: screen.width, height: screen.height, alignment: .topLeading)
     }
