@@ -619,6 +619,17 @@ struct QuidgetDimmer: View {
     let inset: CGFloat
     let knobHeight: CGFloat
     let icon: CGFloat
+    /// How far the drag has gone past the ends, in points — positive
+    /// past the top. The control stretches like a rubber band and snaps
+    /// back on release (Chris, 2026-09-16: "the cool thing Apple does").
+    @State private var overshoot: CGFloat = 0
+
+    /// The stretch for an overshoot: eases toward a ceiling, so a hard
+    /// pull is still a small give.
+    private var stretch: CGFloat {
+        let d = abs(overshoot)
+        return d / (d + 140) * 0.14
+    }
 
     var body: some View {
         let inner = CGSize(width: track.width - inset * 2, height: track.height - inset * 2)
@@ -657,10 +668,19 @@ struct QuidgetDimmer: View {
         .frame(width: track.width, height: track.height)
         .modifier(QuidgetInset(radius: 24, fill: QuidgetInk.well))
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        // The rubber band: longer and a little narrower, from the end
+        // being pulled away from.
+        .scaleEffect(x: 1 - stretch * 0.45, y: 1 + stretch, anchor: overshoot >= 0 ? .bottom : .top)
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { g in
                 let v = 1 - Double((g.location.y - inset) / inner.height)
-                withAnimation(.interactiveSpring()) { level = min(1, max(0, v)) }
+                withAnimation(.interactiveSpring()) {
+                    level = min(1, max(0, v))
+                    overshoot = v > 1 ? CGFloat(v - 1) * inner.height : (v < 0 ? CGFloat(v) * inner.height : 0)
+                }
+            }
+            .onEnded { _ in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { overshoot = 0 }
             })
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: level)
     }
