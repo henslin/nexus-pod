@@ -183,7 +183,6 @@ struct LabConversationView: View {
     let size: CGSize
     var heroScale: Double = 0.42
     @StateObject private var quidgets = QuidgetDemo()
-    @Namespace private var quidgetNS
 
     private var c: LabConversation { conversation }
     /// The reply's quidget, once the answer has landed — if the spec
@@ -284,8 +283,7 @@ struct LabConversationView: View {
                 inputBar(height: 44)
             }
             .padding(20)
-            .blur(radius: quidgets.expanded == nil ? 0 : 16)
-            .overlay { QuidgetOverlay(demo: quidgets, namespace: quidgetNS, screen: size) }
+            .modifier(QuidgetStageModifier(demo: quidgets, screen: size, quidget: quidget))
         case .fullScreen:
             VStack(spacing: 16) {
                 Spacer(minLength: 30)
@@ -321,8 +319,7 @@ struct LabConversationView: View {
                 }
                 Spacer().frame(height: 34)
             }
-            .blur(radius: quidgets.expanded == nil ? 0 : 16)
-            .overlay { QuidgetOverlay(demo: quidgets, namespace: quidgetNS, screen: size) }
+            .modifier(QuidgetStageModifier(demo: quidgets, screen: size, quidget: quidget))
         }
     }
 
@@ -331,13 +328,9 @@ struct LabConversationView: View {
     private func quidgetInline(_ kind: QuidgetKind, medium: Bool) -> some View {
         let s: QuidgetSize = medium ? .medium : .small
         let h: CGFloat = s == .small ? QuidgetView.smallSize.height : (kind == .clip ? 370 : 168)
-        return ZStack(alignment: .leading) {
-            Color.clear.frame(height: h)
-            if quidgets.expanded != kind {
-                QuidgetView(kind: kind, size: s, demo: quidgets, namespace: quidgetNS)
-            }
-        }
-        .transition(.opacity)
+        let w: CGFloat = s == .small ? QuidgetView.smallSize.width : (kind == .clip ? 370 : QuidgetView.wideWidth)
+        return QuidgetSlotView(id: "reply." + kind.rawValue, size: CGSize(width: min(w, size.width - 40), height: h))
+            .transition(.opacity)
     }
 
     /// The next move, as taps.
@@ -376,5 +369,19 @@ struct LabConversationView: View {
             .background(Capsule().fill(.fill.tertiary))
             LabHeroView(frame: frame, config: config, diameter: height)
         }
+    }
+}
+
+
+/// A conversation surface with its reply's quidget hosted by a
+/// `QuidgetStage`: the slot in the text, the quidget in the layer above.
+struct QuidgetStageModifier: ViewModifier {
+    @ObservedObject var demo: QuidgetDemo
+    let screen: CGSize
+    let quidget: QuidgetKind?
+
+    func body(content: Content) -> some View {
+        let slots = quidget.map { [QuidgetSlot(id: "reply." + $0.rawValue, kind: $0, size: $0 == .clip ? .medium : .small)] } ?? []
+        QuidgetStage(demo: demo, screen: screen, slots: slots) { content }
     }
 }

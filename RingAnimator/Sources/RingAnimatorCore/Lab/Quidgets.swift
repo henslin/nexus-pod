@@ -143,6 +143,8 @@ struct QuidgetGlass: ViewModifier {
     let radius: CGFloat
     /// The file's white-at-80% panel, or clear glass over the chat.
     var white: Double = 0
+    /// No glass at all — the medium clip is the camera widget alone.
+    var hidden = false
     @Environment(\.labNoGlass) private var noGlass
     @Environment(\.colorScheme) private var scheme
     private var dark: Bool { scheme == .dark }
@@ -150,7 +152,9 @@ struct QuidgetGlass: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Group {
-            if noGlass {
+            if hidden {
+                content
+            } else if noGlass {
                 content.background(shape.fill((dark ? Color(hex: "#1C1C1E") : Color.white).opacity(max(0.7, white))))
             } else if #available(iOS 26.0, macOS 26.0, *) {
                 content.glassEffect(white > 0 ? .regular.tint((dark ? Color(hex: "#1C1C1E") : Color.white).opacity(white)) : .regular, in: shape)
@@ -159,7 +163,7 @@ struct QuidgetGlass: ViewModifier {
             }
         }
         // The file's "Shadow": a soft dark blur under the container.
-        .shadow(color: .black.opacity(0.08), radius: 20, y: 8)
+        .shadow(color: .black.opacity(hidden ? 0 : 0.08), radius: 20, y: 8)
     }
 }
 
@@ -294,16 +298,13 @@ public struct QuidgetView: View {
     static let tileSize = CGSize(width: 101, height: 118)
 
     public var body: some View {
-        Group {
-            switch kind {
-            case .light: light
-            case .security: security
-            case .clip: clip
-            case .lock: lock
-            case .thermostat: thermostat
-            }
+        switch kind {
+        case .light: light
+        case .security: security
+        case .clip: clip
+        case .lock: lock
+        case .thermostat: thermostat
         }
-        .matched(kind, namespace)
     }
 
     /// The small container: the well in the glass, with the tile in it.
@@ -323,29 +324,31 @@ public struct QuidgetView: View {
 
     // MARK: Light
 
-    @ViewBuilder
+    /// One tree for every size — the title's height and the track's
+    /// measures change, so SwiftUI carries the same well, fill and
+    /// grabber from the small quidget to the tall card and back.
     private var light: some View {
-        switch size {
-        case .small, .medium:
-            // The well is the track: 109 × 126, the fill inset 4.
-            small(well: false) {
-                QuidgetDimmer(level: $demo.lightLevel, track: Self.wellSize, inset: 4, knobHeight: 44, icon: 16)
-                    .padding(-4)
-            }
-        case .large:
-            // The file's tall card (2:721): 384 × 527, the title 38 down,
-            // the track 160 × 383 at 111, the fill inset 10, the knob 64.
+        let large = size == .large
+        return VStack(spacing: 0) {
             VStack(spacing: 0) {
-                Text("Patio Light").font(.system(size: 17, weight: .semibold)).foregroundStyle(dark ? .white : .black).padding(.top, 38)
+                Text("Patio Light").font(.system(size: 17, weight: .semibold)).foregroundStyle(dark ? .white : .black)
                 Text("\(Int((demo.lightLevel * 100).rounded()))%").font(.system(size: 17)).foregroundStyle(dark ? .white : .black)
                     .contentTransition(.numericText())
-                QuidgetDimmer(level: $demo.lightLevel, track: CGSize(width: 160, height: 383), inset: 10, knobHeight: 64, icon: 22)
-                    .padding(.top, 30)
-                Spacer(minLength: 0)
             }
-            .frame(width: Self.wideWidth, height: 527)
-            .modifier(QuidgetGlass(radius: 34, white: 0.8))
+            .frame(height: large ? 44 : 0)
+            .opacity(large ? 1 : 0)
+            .clipped()
+            .padding(.top, large ? 38 : 0)
+            QuidgetDimmer(level: $demo.lightLevel,
+                          track: large ? CGSize(width: 160, height: 383) : Self.wellSize,
+                          inset: large ? 10 : 4, knobHeight: large ? 64 : 44, icon: large ? 22 : 16)
+                .padding(.top, large ? 30 : 11)
+            Spacer(minLength: 0)
         }
+        .frame(width: large ? Self.wideWidth : Self.smallSize.width, height: large ? 527 : Self.smallSize.height)
+        .modifier(QuidgetGlass(radius: 34, white: large ? 0.8 : 0))
+        .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+        .onTapGesture { if !large { expand() } }
     }
 
     // MARK: Lock and thermostat (the file's other small quidgets)
@@ -398,66 +401,55 @@ public struct QuidgetView: View {
 
     // MARK: Security
 
-    @ViewBuilder
+    /// One tree: the tray holds all three cards always; the unselected
+    /// two are zero-wide in the small quidget, so the small mode
+    /// quidget *is* the tray, folded.
     private var security: some View {
-        switch size {
-        case .small:
-            modeCard(demo.mode, selected: true)
-                .frame(width: 103.33)
-                .padding(.top, 18)
-                .frame(width: Self.wellSize.width, height: Self.wellSize.height, alignment: .top)
-                .modifier(QuidgetInset(radius: 24, fill: dark ? QuidgetInk.modeWellDark : QuidgetInk.modeWell))
-                .padding(.top, 11).padding(.bottom, 9).padding(.horizontal, 10)
-                .frame(width: Self.smallSize.width, height: Self.smallSize.height)
-                .modifier(QuidgetGlass(radius: 34))
-                .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-                .onTapGesture { expand() }
-        case .medium:
-            modeTray
-                .padding(.top, 10).padding(.bottom, 10).padding(.horizontal, 10.5)
-                .frame(width: Self.wideWidth, height: 168)
-                .modifier(QuidgetGlass(radius: 34, white: 0.8))
-                .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-                .onTapGesture { expand() }
-        case .large:
-            VStack(spacing: 0) {
-                modeTray
-                    .padding(.top, 10).padding(.horizontal, 10.5)
-                VStack(spacing: 0) {
-                    if let arming = demo.arming {
-                        statusRow(symbol: "house.fill", title: arming.label, status: arming == .standby ? "Standing down…" : "Arming…")
-                    } else {
-                        statusRow(symbol: "house.fill", title: demo.mode.label, status: demo.mode == .standby ? "Off" : "Active")
+        let small = size == .small
+        let large = size == .large
+        return VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(SecurityMode.allCases) { mode in
+                    let shown = !small || demo.mode == mode
+                    Button {
+                        demo.setMode(mode)
+                    } label: {
+                        modeCard(mode, selected: demo.mode == mode)
+                            .frame(width: 103.33)
+                            .contentShape(Rectangle())
                     }
-                    Divider().padding(.leading, 60)
-                    statusRow(symbol: "shield.lefthalf.filled", title: "Automated Threat Response", status: demo.mode == .standby ? "Paused" : "Monitoring")
+                    .buttonStyle(.plain)
+                    .frame(width: shown ? 103.33 : 0)
+                    .opacity(shown ? 1 : 0)
+                    .clipped()
+                    .allowsHitTesting(!small)
                 }
-                .padding(.horizontal, 10.5)
-                .padding(.bottom, 10)
             }
-            .frame(width: Self.wideWidth)
-            .modifier(QuidgetGlass(radius: 34, white: 0.8))
-        }
-    }
-
-    /// The file's tray: the modes' well, 363 × 148, three 103.33 cards.
-    private var modeTray: some View {
-        HStack(spacing: 0) {
-            ForEach(SecurityMode.allCases) { mode in
-                Button {
-                    demo.setMode(mode)
-                } label: {
-                    modeCard(mode, selected: demo.mode == mode)
-                        .frame(width: 103.33)
-                        .contentShape(Rectangle())
+            .padding(.horizontal, small ? 2.83 : 18.5)
+            .padding(.top, small ? 18 : 30)
+            .frame(width: small ? Self.wellSize.width : 363, height: small ? Self.wellSize.height : 148, alignment: .top)
+            .modifier(QuidgetInset(radius: 24, fill: dark ? QuidgetInk.modeWellDark : QuidgetInk.modeWell))
+            .padding(.top, small ? 11 : 10)
+            .padding(.horizontal, small ? 10 : 10.5)
+            VStack(spacing: 0) {
+                if let arming = demo.arming {
+                    statusRow(symbol: "house.fill", title: arming.label, status: arming == .standby ? "Standing down…" : "Arming…")
+                } else {
+                    statusRow(symbol: "house.fill", title: demo.mode.label, status: demo.mode == .standby ? "Off" : "Active")
                 }
-                .buttonStyle(.plain)
+                Divider().padding(.leading, 60)
+                statusRow(symbol: "shield.lefthalf.filled", title: "Automated Threat Response", status: demo.mode == .standby ? "Paused" : "Monitoring")
             }
+            .padding(.horizontal, 10.5)
+            .frame(height: large ? 135 : 0, alignment: .top)
+            .opacity(large ? 1 : 0)
+            .clipped()
+            .padding(.bottom, large ? 10 : (small ? 9 : 10))
         }
-        .padding(.horizontal, 18.5)
-        .padding(.top, 30)
-        .frame(width: 363, height: 148, alignment: .top)
-        .modifier(QuidgetInset(radius: 24, fill: dark ? QuidgetInk.modeWellDark : QuidgetInk.modeWell))
+        .frame(width: small ? Self.smallSize.width : Self.wideWidth)
+        .modifier(QuidgetGlass(radius: 34, white: small ? 0 : 0.8))
+        .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+        .onTapGesture { if !large { expand() } }
     }
 
     /// Icon + label, as the file's "Card": a 64 circle with the mode's
@@ -516,42 +508,37 @@ public struct QuidgetView: View {
 
     // MARK: Clip
 
-    @ViewBuilder
+    /// One tree: the camera widget at 101, 370 or 370-in-384; the
+    /// caption fades in past small.
     private var clip: some View {
-        switch size {
-        case .small:
-            small {
-                Image("porch-clip", bundle: .module)
-                    .resizable().scaledToFill()
-                    .frame(width: Self.tileSize.width, height: Self.tileSize.height)
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            }
-        case .medium:
-            cameraWidget(side: 370, radius: 26)
-                .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .onTapGesture { expand() }
-        case .large:
-            cameraWidget(side: 370, radius: 29)
-                .padding(7)
-                .frame(width: Self.wideWidth, height: Self.wideWidth)
-                .modifier(QuidgetGlass(radius: 34, white: 0.8))
-        }
+        let small = size == .small
+        let large = size == .large
+        let side: CGFloat = small ? Self.tileSize.width : 370
+        return cameraWidget(side: side, height: small ? Self.tileSize.height : 370, radius: small ? 20 : (large ? 29 : 26), caption: !small)
+            .padding(small ? 4 : (large ? 7 : 0))
+            .modifier(QuidgetInset(radius: 24, fill: small ? QuidgetInk.well : .clear))
+            .padding(.top, small ? 11 : 0).padding(.bottom, small ? 9 : 0).padding(.horizontal, small ? 10 : 0)
+            .frame(width: small ? Self.smallSize.width : (large ? Self.wideWidth : 370), height: small ? Self.smallSize.height : (large ? Self.wideWidth : 370))
+            .modifier(QuidgetGlass(radius: small ? 34 : (large ? 34 : 26), white: large ? 0.8 : 0, hidden: size == .medium))
+            .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+            .onTapGesture { if !large { expand() } }
     }
 
     /// The file's "Camera Widget": the frame with a fade top and bottom,
     /// and the caption on glass, inset 10.
-    private func cameraWidget(side: CGFloat, radius: CGFloat) -> some View {
+    private func cameraWidget(side: CGFloat, height: CGFloat, radius: CGFloat, caption: Bool) -> some View {
         ZStack(alignment: .bottom) {
             Image("porch-clip", bundle: .module)
                 .resizable()
                 .scaledToFill()
-                .frame(width: side, height: side)
+                .frame(width: side, height: height)
                 .clipped()
             VStack(spacing: 0) {
                 LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom).frame(height: 116)
                 Spacer(minLength: 0)
                 LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom).frame(height: 116)
             }
+            .opacity(caption ? 1 : 0)
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Amazon package was delivered")
@@ -565,17 +552,23 @@ public struct QuidgetView: View {
                 Spacer(minLength: 0)
             }
             .padding(.leading, 14).padding(.trailing, 17).padding(.vertical, 8)
-            .frame(width: side - 20, height: 64)
+            .frame(width: max(0, side - 20), height: 64)
             .modifier(QuidgetCaptionGlass())
             .padding(10)
+            .opacity(caption ? 1 : 0)
         }
-        .frame(width: side, height: side)
+        .frame(width: side, height: height)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 10, y: 10)
+        .shadow(color: .black.opacity(caption ? 0.06 : 0), radius: 10, y: 10)
     }
 
+    /// Lock and thermostat have no expanded form in the file yet.
+    static func expands(_ kind: QuidgetKind) -> Bool { [.light, .security, .clip].contains(kind) }
+    static func expandedWidth(_ kind: QuidgetKind) -> CGFloat { wideWidth }
+
     private func expand() {
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) { demo.expanded = kind }
+        guard Self.expands(kind) else { return }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { demo.expanded = kind }
     }
 }
 
@@ -595,13 +588,6 @@ struct QuidgetCaptionGlass: ViewModifier {
             }
         }
         .overlay(shape.strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func matched(_ kind: QuidgetKind, _ ns: Namespace.ID?) -> some View {
-        if let ns { self.matchedGeometryEffect(id: kind.rawValue, in: ns) } else { self }
     }
 }
 
@@ -770,8 +756,16 @@ public struct QuidgetExchange: Identifiable, Sendable {
     ]
 }
 
-/// The chat screen from the file, with the quidgets live: tap one to
-/// expand it over a blur; tap the blur to put it back.
+/// The chat screen from the file, with the quidgets live: tap one and
+/// it morphs into its expanded form over a blur; tap the blur and it
+/// morphs back into its place.
+///
+/// Every quidget is one view that is only ever *re-sized*, never
+/// swapped: the chat lays out an empty slot for each and reports the
+/// slot's frame; a layer above holds the quidgets and positions each
+/// at its slot, or — expanded — at the top of the screen, with the
+/// spring carrying the container, the well, the fill and the grabber
+/// from one geometry to the other.
 public struct QuidgetChatView: View {
     @ObservedObject var demo: QuidgetDemo
     let exchanges: [QuidgetExchange]
@@ -779,7 +773,6 @@ public struct QuidgetChatView: View {
     let screen: CGSize
     /// The Gap UI page's dark mode.
     var dark = false
-    @Namespace private var ns
     @Environment(\.labNoGlass) private var noGlass
 
     public init(demo: QuidgetDemo, exchanges: [QuidgetExchange], size: QuidgetSize = .small, screen: CGSize, dark: Bool = false) {
@@ -791,22 +784,21 @@ public struct QuidgetChatView: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .top) {
-            dark ? QuidgetInk.groundDark : QuidgetInk.ground
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(exchanges) { x in
-                    exchange(x)
+        QuidgetStage(demo: demo, screen: screen, slots: exchanges.flatMap { x in x.kinds.map { QuidgetSlot(id: x.id + "." + $0.rawValue, kind: $0, size: inlineSize($0, count: x.kinds.count)) } }) {
+            ZStack(alignment: .topLeading) {
+                dark ? QuidgetInk.groundDark : QuidgetInk.ground
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(exchanges) { x in
+                        exchange(x)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .padding(.top, 125)
+                .frame(width: screen.width, height: screen.height, alignment: .top)
             }
-            .padding(.top, 125)
-            .frame(width: screen.width, height: screen.height, alignment: .top)
-            // Full-screen modal: the chat blurs behind the expanded quidget.
-            .blur(radius: demo.expanded == nil ? 0 : 16)
-            .animation(.easeInOut(duration: 0.3), value: demo.expanded == nil)
-            QuidgetOverlay(demo: demo, namespace: ns, screen: screen)
         }
         .frame(width: screen.width, height: screen.height)
+        .clipped()
         .environment(\.colorScheme, dark ? .dark : .light)
     }
 
@@ -833,24 +825,19 @@ public struct QuidgetChatView: View {
                 .frame(width: 370, alignment: .leading)
                 .padding(.leading, 16)
                 .padding(.top, 48)
-            // The quidgets' place stays while one is expanded — it comes
-            // back here. Three small sit side by side, 10 apart, and the
-            // row scrolls: the file shows the third cut off at the edge.
+            // The quidgets' slots. Three small sit side by side, 10
+            // apart, and the row scrolls: the file shows the third cut
+            // off at the edge.
             let row = HStack(alignment: .top, spacing: 10) {
                 ForEach(x.kinds) { kind in
                     let inline = inlineSize(kind, count: x.kinds.count)
-                    ZStack(alignment: .leading) {
-                        Color.clear.frame(width: inlineWidth(kind, inline), height: inlineHeight(kind, inline))
-                        if demo.expanded != kind {
-                            QuidgetView(kind: kind, size: inline, demo: demo, namespace: ns)
-                        }
-                    }
+                    QuidgetSlotView(id: x.id + "." + kind.rawValue, size: CGSize(width: inlineWidth(kind, inline), height: inlineHeight(kind, inline)))
                 }
             }
             .padding(.leading, 16)
             .padding(.trailing, 16)
             Group {
-                if noGlass {
+                if noGlass || x.kinds.count == 1 {
                     row.frame(width: screen.width, alignment: .leading).clipped()
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) { row }
@@ -859,7 +846,6 @@ public struct QuidgetChatView: View {
             }
             .padding(.top, 15)
             if !x.chips.isEmpty {
-                // The chips scroll too; the file runs them off the edge.
                 let chips = HStack(spacing: 10) {
                     ForEach(x.chips, id: \.self) { chip in
                         HStack(spacing: 4) {
@@ -905,36 +891,83 @@ public struct QuidgetChatView: View {
     }
 }
 
-/// The expanded quidget over the blurred, dimmed screen (the file's dim:
-/// black at 5% over black at 25%). Tap the dim to put it back; the
-/// geometry matches, so it grows out of its inline place.
-public struct QuidgetOverlay: View {
-    @ObservedObject var demo: QuidgetDemo
-    let namespace: Namespace.ID
-    let screen: CGSize
+/// Where each quidget's slot is, in the stage.
+struct QuidgetSlotKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
 
-    public init(demo: QuidgetDemo, namespace: Namespace.ID, screen: CGSize) {
+/// A quidget's place in a layout: empty, the right size, reporting its
+/// frame to the stage above.
+public struct QuidgetSlotView: View {
+    let id: String
+    let size: CGSize
+    public init(id: String, size: CGSize) { self.id = id; self.size = size }
+    public var body: some View {
+        Color.clear
+            .frame(width: size.width, height: size.height)
+            .background(GeometryReader { g in
+                Color.clear.preference(key: QuidgetSlotKey.self, value: [id: g.frame(in: .named("quidgets"))])
+            })
+    }
+}
+
+public struct QuidgetSlot: Identifiable {
+    public let id: String
+    public let kind: QuidgetKind
+    public let size: QuidgetSize
+    public init(id: String, kind: QuidgetKind, size: QuidgetSize) { self.id = id; self.kind = kind; self.size = size }
+}
+
+/// Content with quidget slots in it, and the quidgets themselves in a
+/// layer above: each sits at its slot, or — expanded — morphs to the
+/// top of the stage over a blur and a dim. One view per quidget, only
+/// ever re-sized, so the spring carries every part of it across.
+public struct QuidgetStage<Content: View>: View {
+    @ObservedObject var demo: QuidgetDemo
+    let screen: CGSize
+    let slots: [QuidgetSlot]
+    @ViewBuilder let content: () -> Content
+    @State private var frames: [String: CGRect] = [:]
+
+    public init(demo: QuidgetDemo, screen: CGSize, slots: [QuidgetSlot], @ViewBuilder content: @escaping () -> Content) {
         self.demo = demo
-        self.namespace = namespace
         self.screen = screen
+        self.slots = slots
+        self.content = content
     }
 
+    static var spring: Animation { .spring(response: 0.5, dampingFraction: 0.82) }
+    /// The expanded card's top, from the file.
+    static var expandedTop: CGFloat { 118 }
+
     public var body: some View {
-        ZStack(alignment: .top) {
-            if let kind = demo.expanded {
-                Color.black.opacity(0.29)
-                    .frame(width: screen.width, height: screen.height)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) { demo.expanded = nil }
-                    }
-                    .transition(.opacity)
-                QuidgetView(kind: kind, size: .large, demo: demo, namespace: namespace)
-                    .padding(.top, 118)
+        ZStack(alignment: .topLeading) {
+            content()
+                .blur(radius: demo.expanded == nil ? 0 : 16)
+            Color.black.opacity(demo.expanded == nil ? 0 : 0.29)
+                .frame(width: screen.width, height: screen.height)
+                .contentShape(Rectangle())
+                .allowsHitTesting(demo.expanded != nil)
+                .onTapGesture { withAnimation(Self.spring) { demo.expanded = nil } }
+            ForEach(slots) { slot in
+                let expanded = demo.expanded == slot.kind
+                let frame = frames[slot.id] ?? .zero
+                let w = expanded ? QuidgetView.expandedWidth(slot.kind) : frame.width
+                QuidgetView(kind: slot.kind, size: expanded ? .large : slot.size, demo: demo)
+                    .frame(width: max(1, w), alignment: .top)
+                    .blur(radius: demo.expanded != nil && !expanded ? 16 : 0)
+                    .offset(x: expanded ? (screen.width - w) / 2 : frame.minX, y: expanded ? Self.expandedTop : frame.minY)
+                    .zIndex(expanded ? 2 : 0)
+                    .opacity(frames[slot.id] == nil ? 0 : 1)
             }
         }
-        .frame(width: screen.width, height: screen.height, alignment: .top)
-        .allowsHitTesting(demo.expanded != nil)
+        .coordinateSpace(name: "quidgets")
+        .onPreferenceChange(QuidgetSlotKey.self) { frames = $0 }
+        .animation(Self.spring, value: demo.expanded)
+        .frame(width: screen.width, height: screen.height, alignment: .topLeading)
     }
 }
 
