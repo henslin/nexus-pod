@@ -325,7 +325,7 @@ public struct LabRailView: View {
                     .font(.caption)
             }
             if openPost == effect {
-                LabKnobList(lab: lab, experiment: effect.experiment)
+                LabKnobList(lab: lab, experiment: effect.experiment, scope: lab.experiment)
                     .padding(.leading, 22)
             }
         }
@@ -445,6 +445,8 @@ public struct LabRailView: View {
 struct LabKnobList: View {
     @ObservedObject var lab: LabState
     let experiment: LabExperiment
+    /// For a post effect: the base it sits on, whose scope its knobs are in.
+    var scope: LabExperiment? = nil
 
     var body: some View {
         let params = experiment.parameters
@@ -459,7 +461,7 @@ struct LabKnobList: View {
                     .foregroundStyle(.secondary)
                     .padding(.top, i == 0 ? 0 : 6)
             }
-            LabKnob(parameter: parameter, value: lab.binding(parameter, of: experiment))
+            LabKnob(parameter: parameter, value: lab.binding(parameter, of: experiment, scope: scope))
         }
     }
 }

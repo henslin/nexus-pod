@@ -1771,9 +1771,7 @@ public final class LabPresetStore: ObservableObject {
 
     public func save(_ name: String, from lab: LabState) {
         let e = lab.experiment
-        let prefix = e.id + "."
-        var values = lab.values.filter { $0.key.hasPrefix(prefix) }
-        for post in lab.activePost { for (k, v) in lab.values where k.hasPrefix(post.experiment.id + ".") { values[k] = v } }
+        let values = lab.values.filter { LabState.belongs($0.key, to: e) }
         presets.removeAll { $0.experiment == e.id && $0.name == name }
         presets.append(Preset(name: name, experiment: e.id, values: values, post: lab.activePost.map(\.rawValue), hero: lab.hero?.rawValue, palette: lab.palette.rawValue))
         persist()
@@ -1816,7 +1814,18 @@ public final class LabDefaultsStore: ObservableObject {
 
     public init() {
         if let data = UserDefaults.standard.data(forKey: key),
-           let decoded = try? JSONDecoder().decode([String: Default].self, from: data) { defaults = decoded }
+           let decoded = try? JSONDecoder().decode([String: Default].self, from: data) {
+            // Pins made before post knobs were scoped kept them as the
+            // effect's own keys; those are this experiment's now.
+            defaults = Dictionary(uniqueKeysWithValues: decoded.map { id, d in
+                var d = d
+                for (k, v) in d.values where !k.hasPrefix(id + ".") && !k.hasPrefix(id + ">") {
+                    d.values.removeValue(forKey: k)
+                    d.values[id + ">" + k] = v
+                }
+                return (id, d)
+            })
+        }
     }
 
     public func has(_ e: LabExperiment) -> Bool { defaults[e.id] != nil }
@@ -1827,13 +1836,12 @@ public final class LabDefaultsStore: ObservableObject {
     /// Make the experiment as it is now its default.
     public func set(from lab: LabState) {
         let e = lab.experiment
-        let prefix = e.id + "."
-        var values = lab.values.filter { $0.key.hasPrefix(prefix) }
-        // The post stack's own knobs come along, so the look is whole.
-        for post in lab.activePost { for (k, v) in lab.values where k.hasPrefix(post.experiment.id + ".") { values[k] = v } }
-        // Resolve what's set against the current default, so a knob left
-        // at the old default stays where it is.
-        for p in e.parameters { values["\(e.id).\(p.id)"] = lab.value(p, of: e) }
+        // The experiment's knobs, and its post effects' in its scope —
+        // resolved against the current default, so a knob left where it
+        // was stays there.
+        var values: [String: Double] = [:]
+        for p in e.parameters { values[LabState.key(p, of: e)] = lab.value(p, of: e) }
+        for post in lab.post { for p in post.experiment.parameters { values[LabState.key(p, of: post.experiment, scope: e)] = lab.value(p, of: post.experiment, scope: e) } }
         defaults[e.id] = Default(values: values, post: lab.activePost.map(\.rawValue), hero: lab.hero?.rawValue)
         persist()
     }
@@ -2021,30 +2029,47 @@ public final class LabState: ObservableObject {
         post.swapAt(i, j)
     }
 
-    /// Every experiment's knobs, resolved — the base and the post stack
-    /// each read their own by experiment.
+    /// Every experiment's knobs, resolved — and the current experiment's
+    /// post stack read through its own scope, so Bloom on Aurora and
+    /// Bloom on Orb are two Blooms (Chris, 2026-09-17: "they should all
+    /// be independent").
     public func allResolvedParameters() -> [String: Double] {
         var out: [String: Double] = [:]
         for e in LabExperiment.allCases {
             for p in e.parameters { out["\(e.id).\(p.id)"] = value(p, of: e) }
         }
+        for post in post {
+            for p in post.experiment.parameters { out["\(post.experiment.id).\(p.id)"] = value(p, of: post.experiment, scope: experiment) }
+        }
         return out
     }
 
-    public func value(_ parameter: LabParameter, of experiment: LabExperiment) -> Double {
-        let key = "\(experiment.id).\(parameter.id)"
-        return values[key] ?? LabDefaultsStore.shared.value(key, of: experiment) ?? parameter.defaultValue
+    /// A knob's key: the experiment's own, or — for a post effect on a
+    /// base — scoped to that base.
+    public static func key(_ parameter: LabParameter, of experiment: LabExperiment, scope: LabExperiment? = nil) -> String {
+        (scope.map { "\($0.id)>" } ?? "") + "\(experiment.id).\(parameter.id)"
     }
 
-    public func binding(_ parameter: LabParameter, of experiment: LabExperiment) -> Binding<Double> {
+    public func value(_ parameter: LabParameter, of experiment: LabExperiment, scope: LabExperiment? = nil) -> Double {
+        let key = Self.key(parameter, of: experiment, scope: scope)
+        return values[key] ?? LabDefaultsStore.shared.value(key, of: scope ?? experiment) ?? parameter.defaultValue
+    }
+
+    public func binding(_ parameter: LabParameter, of experiment: LabExperiment, scope: LabExperiment? = nil) -> Binding<Double> {
         Binding(
-            get: { self.value(parameter, of: experiment) },
-            set: { self.values["\(experiment.id).\(parameter.id)"] = $0 })
+            get: { self.value(parameter, of: experiment, scope: scope) },
+            set: { self.values[Self.key(parameter, of: experiment, scope: scope)] = $0 })
+    }
+
+    /// The keys that belong to an experiment: its own knobs, and its
+    /// post effects' knobs in its scope.
+    static func belongs(_ key: String, to experiment: LabExperiment) -> Bool {
+        key.hasPrefix(experiment.id + ".") || key.hasPrefix(experiment.id + ">")
     }
 
     /// Back to the experiment's default — yours, if you've set one.
     public func resetParameters(of experiment: LabExperiment) {
-        for p in experiment.parameters { values.removeValue(forKey: "\(experiment.id).\(p.id)") }
+        for key in values.keys where Self.belongs(key, to: experiment) { values.removeValue(forKey: key) }
         LabDefaultsStore.shared.applyLook(of: experiment, to: self)
     }
 
