@@ -117,6 +117,14 @@ public struct LabConversation: Equatable {
     }
     /// Whether the ask is still being made.
     public var composing: Bool { verb == .listening }
+    /// Typing, in text: how many characters have landed and where in
+    /// the current character's slot the clock is — what the keyboard
+    /// taps to. The same clock as `askShown`.
+    public var typing: (typed: Int, phase: Double)? {
+        guard verb == .listening, mode == .text else { return nil }
+        let t = max(0, since - 0.9) * 14
+        return (min(script.ask.count, Int(t)), t - t.rounded(.down))
+    }
     /// The status line — the state, named.
     public var status: String? {
         switch verb {
@@ -281,9 +289,11 @@ struct LabConversationView: View {
                 if c.showsFollowUps { followUps(size: 13).padding(.leading, 4) }
                 Spacer(minLength: 0)
                 inputBar(height: 44)
+                    .padding(.bottom, c.typing == nil ? 0 : LabKeyboardView.height - 20 + 8)
             }
             .padding(20)
             .modifier(QuidgetStageModifier(demo: quidgets, screen: size, quidget: quidget))
+            .overlay(alignment: .bottom) { keyboard(width: size.width) }
         case .fullScreen:
             VStack(spacing: 16) {
                 Spacer(minLength: 30)
@@ -317,9 +327,10 @@ struct LabConversationView: View {
                 } else {
                     inputBar(height: 48).padding(.horizontal, 20)
                 }
-                Spacer().frame(height: 34)
+                Spacer().frame(height: c.typing == nil ? 34 : LabKeyboardView.height + 8)
             }
             .modifier(QuidgetStageModifier(demo: quidgets, screen: size, quidget: quidget))
+            .overlay(alignment: .bottom) { keyboard(width: size.width) }
         }
     }
 
@@ -331,6 +342,20 @@ struct LabConversationView: View {
         let w: CGFloat = s == .small ? QuidgetView.smallSize.width : (kind == .clip ? 370 : QuidgetView.wideWidth)
         return QuidgetSlotView(id: "reply." + kind.rawValue, size: CGSize(width: min(w, size.width - 40), height: h))
             .transition(.opacity)
+    }
+
+    /// The iPhone keyboard, typing the ask by itself while the ask is
+    /// being made in text — up from the bottom as a keyboard comes, and
+    /// gone when the ask is sent.
+    @ViewBuilder
+    private func keyboard(width: CGFloat) -> some View {
+        ZStack(alignment: .bottom) {
+            if let t = c.typing {
+                LabKeyboardView(text: c.script.ask, typed: t.typed, phase: t.phase, width: width)
+                    .transition(.move(edge: .bottom))
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.9), value: c.typing == nil)
     }
 
     /// The next move, as taps.
