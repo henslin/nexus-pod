@@ -474,10 +474,17 @@ public struct QuidgetView: View {
         let value = trend > 0 ? "Heating to \(demo.thermostat)°" : trend < 0 ? "Cooling to \(demo.thermostat)°" : "Holding at \(demo.thermostat)°"
         return tileCard(title: "Thermostat", value: value) {
             VStack(spacing: 0) {
-                Text("\(demo.thermostat)°").font(.system(size: 36 * k, weight: .light)).tracking(-0.43)
+                // The number sits centred and the degree hangs off it,
+                // so the pair reads centred (Chris, 2026-09-17).
+                Text("\(demo.thermostat)").font(.system(size: 36 * k, weight: .light)).tracking(-0.43)
                     .foregroundStyle(ink)
-                    .padding(.top, 22 * k)
                     .contentTransition(.numericText())
+                    .overlay(alignment: .topTrailing) {
+                        Text("°").font(.system(size: 36 * k, weight: .light))
+                            .foregroundStyle(ink)
+                            .alignmentGuide(.trailing) { d in d[.leading] + 2 * k }
+                    }
+                    .padding(.top, 22 * k)
                 Spacer(minLength: 0)
                 // The file's two circle chevrons, 22 pt, 42 apart, in the
                 // state's ink. Taps, not Buttons: a tap gesture lets go
