@@ -119,6 +119,11 @@ public final class QuidgetDemo: ObservableObject {
     private var armingTask: Task<Void, Never>?
     public init() {}
 
+    /// The one house the Lab plays in: the agent's quidgets and the
+    /// app's screens read and write the same state, so arming the
+    /// house in a reply arms it on the dashboard.
+    public static let shared = QuidgetDemo()
+
     /// Heating or cooling, or neither.
     public var thermostatTrend: Int { (thermostat - ambient).signum() }
 
@@ -1284,7 +1289,7 @@ public struct QuidgetStage<Content: View>: View {
 /// live. Tap one to expand it; change the thing; tap the dim.
 struct LabQuidgetsView: View {
     let frame: LabFrame
-    @StateObject private var demo = QuidgetDemo()
+    @ObservedObject private var demo = QuidgetDemo.shared
 
     var body: some View {
         let scene = Int(frame.p("scene", .quidgets))

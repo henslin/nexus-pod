@@ -28,6 +28,9 @@ public struct LabScript: Identifiable, Equatable, Sendable {
     /// A quidget the reply carries — the thing you asked about, as a
     /// control, so you never ask twice to get a setting right.
     public var quidget: QuidgetKind? = nil
+    /// What the agent does to the house as it answers — so the app's
+    /// screens show it (the arm bar arms, the light dims).
+    public var effect: LabScriptEffect? = nil
 
     public static let all: [LabScript] = [
         LabScript(id: "battery", title: "Quick question",
@@ -54,12 +57,12 @@ public struct LabScript: Identifiable, Equatable, Sendable {
                   ask: "Dim the Patio Light",
                   checking: "Dimming the patio light…",
                   answer: "I’ve dimmed the lights to 40%.",
-                  followUps: [], quidget: .light),
+                  followUps: [], quidget: .light, effect: .dim(0.4)),
         LabScript(id: "arm", title: "Arm the house",
                   ask: "Arm my system",
                   checking: "Arming the cameras…",
                   answer: "Your cameras are armed and your system is in Arm Away mode.",
-                  followUps: ["Arm Away when you leave?", "Disarm when you arrive home?"], quidget: .security),
+                  followUps: ["Arm Away when you leave?", "Disarm when you arrive home?"], quidget: .security, effect: .arm(.armAway)),
         LabScript(id: "packages", title: "Packages today",
                   ask: "Did I receive any packages today?",
                   checking: "Checking the front door…",
@@ -68,6 +71,27 @@ public struct LabScript: Identifiable, Equatable, Sendable {
     ]
 
     public static func named(_ index: Int) -> LabScript { all[max(0, min(all.count - 1, index))] }
+}
+
+/// The agent's hand on the house.
+public enum LabScriptEffect: Equatable, Sendable {
+    case arm(SecurityMode)
+    case dim(Double)
+
+    /// Before the ask: make sure the answer will change something.
+    @MainActor func stage(home: QuidgetDemo) {
+        switch self {
+        case .arm(let mode): if home.mode == mode, home.arming == nil { home.mode = .standby }
+        case .dim(let level): if abs(home.lightLevel - level) < 0.01 { home.lightLevel = 1 }
+        }
+    }
+
+    @MainActor func apply(to home: QuidgetDemo) {
+        switch self {
+        case .arm(let mode): home.setMode(mode)
+        case .dim(let level): withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { home.lightLevel = level }
+        }
+    }
 }
 
 /// Where a conversation is: which script, in which mode, in which
@@ -190,7 +214,7 @@ struct LabConversationView: View {
     @ObservedObject var config: RingConfig
     let size: CGSize
     var heroScale: Double = 0.42
-    @StateObject private var quidgets = QuidgetDemo()
+    @ObservedObject private var quidgets = QuidgetDemo.shared
 
     private var c: LabConversation { conversation }
     /// The reply's quidget, once the answer has landed — if the spec
@@ -202,6 +226,20 @@ struct LabConversationView: View {
     private var primary: Color { frame.colors.first ?? .accentColor }
 
     var body: some View {
+        surface
+            // As the answer starts, the agent does the thing — the house
+            // changes, and every screen reading it follows.
+            .onChange(of: c.verb) {
+                guard let effect = c.script.effect else { return }
+                // The play starts with something to do: if the house is
+                // already where the ask would put it, step it back first.
+                if c.verb == .listening { effect.stage(home: quidgets) }
+                if c.verb == .speaking { effect.apply(to: quidgets) }
+            }
+    }
+
+    @ViewBuilder
+    private var surface: some View {
         switch kind {
         case .pod:
             LabHeroView(frame: frame, config: config, diameter: 62)

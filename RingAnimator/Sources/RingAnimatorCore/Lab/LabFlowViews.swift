@@ -55,11 +55,18 @@ struct LabPhoneBackdrop: View {
 
     var body: some View {
         if frame.appUI {
-            tab.screenshotImage(dark: frame.darkStage)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size.width, height: size.height)
+            // The app's screen, natively, from the file — at the phone's
+            // own width, scaled to whatever this canvas is. The Lab draws
+            // its own tab bar (with the pod) over it.
+            let phone = AnimationExporter.phoneScreenSize
+            let k = size.width / phone.width
+            NexusScreen(tab: NexusTab(tab), home: .shared, size: CGSize(width: phone.width, height: size.height / k), showsTabBar: false)
+                .environment(\.colorScheme, frame.darkStage ? .dark : .light)
+                .scaleEffect(k, anchor: .topLeading)
+                .frame(width: size.width, height: size.height, alignment: .topLeading)
                 .clipped()
+                // The agent drives it; a tap on the phone still steps the play.
+                .allowsHitTesting(false)
         } else {
             (frame.darkStage ? Color.black : Color(white: 0.96))
                 .frame(width: size.width, height: size.height)
