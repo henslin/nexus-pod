@@ -952,15 +952,20 @@ public struct QuidgetStage<Content: View>: View {
                 .contentShape(Rectangle())
                 .allowsHitTesting(demo.expanded != nil)
                 .onTapGesture { withAnimation(Self.spring) { demo.expanded = nil } }
+            // The quidgets sit above the dim; the ones not expanded dim
+            // and blur themselves. (A changing zIndex would re-insert
+            // the view and animate a second copy — never change it.)
             ForEach(slots) { slot in
                 let expanded = demo.expanded == slot.kind
+                let others = demo.expanded != nil && !expanded
                 let frame = frames[slot.id] ?? .zero
                 let w = expanded ? QuidgetView.expandedWidth(slot.kind) : frame.width
                 QuidgetView(kind: slot.kind, size: expanded ? .large : slot.size, demo: demo)
                     .frame(width: max(1, w), alignment: .top)
-                    .blur(radius: demo.expanded != nil && !expanded ? 16 : 0)
+                    .blur(radius: others ? 16 : 0)
+                    .brightness(others ? -0.25 : 0)
+                    .allowsHitTesting(!others)
                     .offset(x: expanded ? (screen.width - w) / 2 : frame.minX, y: expanded ? Self.expandedTop : frame.minY)
-                    .zIndex(expanded ? 2 : 0)
                     .opacity(frames[slot.id] == nil ? 0 : 1)
             }
         }
