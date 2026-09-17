@@ -105,6 +105,9 @@ public final class QuidgetDemo: ObservableObject {
     /// progress stands down — when the tile's gesture takes the press,
     /// the hold's watcher is cancelled without a word.
     @Published var tileBusy = false
+    /// The expanded card, pulled by the finger — the swipe that sends
+    /// it home.
+    @Published var pull: CGSize = .zero
     /// The slot whose quidget is expanded — the slot, not the kind: a
     /// chat can show the same kind twice (the patio light, then the
     /// light in the multi-command row), and only the one you tapped
@@ -698,6 +701,8 @@ struct QuidgetBreath: ViewModifier {
 /// out the release that follows. Nothing on the expanded card.
 struct QuidgetHold: ViewModifier {
     let demo: QuidgetDemo
+    /// Small or medium: a hold pops it open. Otherwise it's the
+    /// expanded card, and the same press swipes it away.
     let enabled: Bool
     let open: () -> Void
     @State private var pressing = false
@@ -708,36 +713,61 @@ struct QuidgetHold: ViewModifier {
     static let duration: Duration = .milliseconds(320)
     /// How far it may wander before it's a drag instead.
     static let slop: CGFloat = 6
+    /// The swipe that sends the card home: this far, or this fast.
+    static let away: CGFloat = 110
+    static let flick: CGFloat = 260
 
     func body(content: Content) -> some View {
         content
             // Push: the quidget gives under the finger.
             .scaleEffect(pressing ? 0.95 : 1)
             .animation(.spring(response: 0.22, dampingFraction: 0.8), value: pressing)
-            // A press, watched alongside whatever the tile does with it:
-            // the timer starts on touch-down and pops the quidget open
-            // while the finger is still there; moving or lifting first
-            // cancels it. The quick actions read the flag on release.
+            // One press, watched alongside whatever the tile does with it.
+            // Small: the timer starts on touch-down and pops the quidget
+            // open while the finger is still there; moving or lifting
+            // first cancels it. Expanded: the drag pulls the card, as a
+            // photo in Photos, and the release decides whether it goes
+            // home. A tile's own drag (the dimmer) stands it down.
             .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { g in
-                    if let start {
-                        if hypot(g.location.x - start.x, g.location.y - start.y) > Self.slop { cancel() }
-                        return
+                    if start == nil {
+                        start = g.location
+                        demo.holdOpened = false
                     }
-                    start = g.location
-                    demo.holdOpened = false
-                    guard enabled else { return }
-                    pressing = true
-                    timer = Task { @MainActor in
-                        try? await Task.sleep(for: Self.duration)
-                        guard !Task.isCancelled, pressing, !demo.tileBusy else { return }
-                        pressing = false
-                        demo.holdOpened = true
-                        open()
+                    if enabled {
+                        if pressing == false, timer == nil, let start, hypot(g.location.x - start.x, g.location.y - start.y) <= Self.slop {
+                            pressing = true
+                            timer = Task { @MainActor in
+                                try? await Task.sleep(for: Self.duration)
+                                guard !Task.isCancelled, pressing, !demo.tileBusy else { return }
+                                pressing = false
+                                demo.holdOpened = true
+                                open()
+                            }
+                        } else if let start, hypot(g.location.x - start.x, g.location.y - start.y) > Self.slop {
+                            cancel()
+                        }
+                    } else if !demo.tileBusy {
+                        demo.pull = g.translation
                     }
                 }
-                .onEnded { _ in cancel() })
-            .onChange(of: demo.tileBusy) { if demo.tileBusy { cancel() } }
+                .onEnded { g in
+                    if !enabled {
+                        let gone = hypot(g.translation.width, g.translation.height)
+                        let flick = hypot(g.predictedEndTranslation.width, g.predictedEndTranslation.height)
+                        withAnimation(QuidgetStage<EmptyView>.spring) {
+                            demo.pull = .zero
+                            if !demo.tileBusy, gone > Self.away || flick > Self.flick { demo.expanded = nil }
+                        }
+                    }
+                    cancel()
+                })
+            .onChange(of: demo.tileBusy) {
+                if demo.tileBusy {
+                    cancel()
+                    withAnimation(QuidgetStage<EmptyView>.spring) { demo.pull = .zero }
+                }
+            }
     }
 
     private func cancel() {
@@ -1137,11 +1167,6 @@ public struct QuidgetStage<Content: View>: View {
     /// The quidget on top: the one expanded, and still the one that
     /// was, all the way back down to its slot.
     @State private var top: String? = nil
-    /// The expanded card, pulled: it follows the finger, shrinking a
-    /// little and thinning the dim, and past the threshold (or flicked)
-    /// it goes home along the morph; short of it, it springs back.
-    @State private var pull: CGSize = .zero
-
     public init(demo: QuidgetDemo, screen: CGSize, slots: [QuidgetSlot], @ViewBuilder content: @escaping () -> Content) {
         self.demo = demo
         self.screen = screen
@@ -1155,22 +1180,11 @@ public struct QuidgetStage<Content: View>: View {
     /// The expanded card's top, from the file.
     static var expandedTop: CGFloat { 118 }
 
-    /// How far the pull has gone, 0…1 over the first 260 points.
-    private var pullProgress: CGFloat { min(1, hypot(pull.width, pull.height) / 260) }
-
-    /// Swipe the card away, as a photo in Photos.
-    private var swipeAway: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { g in pull = g.translation }
-            .onEnded { g in
-                let gone = hypot(g.translation.width, g.translation.height)
-                let flick = hypot(g.predictedEndTranslation.width, g.predictedEndTranslation.height)
-                withAnimation(Self.spring) {
-                    pull = .zero
-                    if gone > 110 || flick > 260 { demo.expanded = nil }
-                }
-            }
-    }
+    /// How far the expanded card has been pulled, 0…1 over the first
+    /// 260 points: it follows the finger, shrinking a little and
+    /// thinning the dim, and past the threshold (or flicked) it goes
+    /// home along the morph; short of it, it springs back.
+    private var pullProgress: CGFloat { min(1, hypot(demo.pull.width, demo.pull.height) / 260) }
 
     public var body: some View {
         ZStack(alignment: .topLeading) {
@@ -1195,12 +1209,9 @@ public struct QuidgetStage<Content: View>: View {
                     .brightness(others ? -0.25 : 0)
                     .allowsHitTesting(!others)
                     .scaleEffect(expanded ? 1 - pullProgress * 0.12 : 1)
-                    .offset(expanded ? pull : .zero)
+                    .offset(expanded ? demo.pull : .zero)
                     .offset(x: expanded ? (screen.width - w) / 2 : frame.minX, y: expanded ? Self.expandedTop : frame.minY)
                     .opacity(frames[slot.id] == nil ? 0 : 1)
-                    // The card's own controls come first; a drag that
-                    // starts anywhere else on it is the swipe.
-                    .gesture(swipeAway, including: expanded ? .all : .subviews)
                     .zIndex(expanded || top == slot.id ? 1 : 0)
             }
         }
