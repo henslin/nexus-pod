@@ -101,6 +101,10 @@ public final class QuidgetDemo: ObservableObject {
     /// quick action (Chris, 2026-09-17: "don't adjust the light, just
     /// spawn the modal").
     var holdOpened = false
+    /// True while a tile's own drag (the dimmer) is running: a hold in
+    /// progress stands down — when the tile's gesture takes the press,
+    /// the hold's watcher is cancelled without a word.
+    @Published var tileBusy = false
     /// The slot whose quidget is expanded — the slot, not the kind: a
     /// chat can show the same kind twice (the patio light, then the
     /// light in the multi-command row), and only the one you tapped
@@ -412,7 +416,7 @@ public struct QuidgetView: View {
             QuidgetDimmer(level: $demo.lightLevel,
                           track: large ? CGSize(width: 160, height: 383) : Self.wellSize,
                           inset: large ? 10 : 4, knobHeight: large ? 64 : 44, icon: large ? 22 : 16, relative: !large,
-                          held: { demo.holdOpened })
+                          held: { demo.holdOpened }, busy: { demo.tileBusy = $0 })
                 .padding(.top, large ? 30 : 11)
             Spacer(minLength: 0)
         }
@@ -726,13 +730,14 @@ struct QuidgetHold: ViewModifier {
                     pressing = true
                     timer = Task { @MainActor in
                         try? await Task.sleep(for: Self.duration)
-                        guard !Task.isCancelled, pressing else { return }
+                        guard !Task.isCancelled, pressing, !demo.tileBusy else { return }
                         pressing = false
                         demo.holdOpened = true
                         open()
                     }
                 }
                 .onEnded { _ in cancel() })
+            .onChange(of: demo.tileBusy) { if demo.tileBusy { cancel() } }
     }
 
     private func cancel() {
@@ -784,6 +789,8 @@ struct QuidgetDimmer: View {
     /// True while the press that popped the quidget open is still down:
     /// the tall card's track must not take it as a touch.
     var held: () -> Bool = { false }
+    /// Tells the quidget the drag has the press.
+    var busy: (Bool) -> Void = { _ in }
     @State private var dragFrom: Double? = nil
     /// How far the drag has gone past the ends, in points — positive
     /// past the top. The control stretches like a rubber band and snaps
@@ -840,6 +847,7 @@ struct QuidgetDimmer: View {
         .gesture(DragGesture(minimumDistance: relative ? 8 : 0)
             .onChanged { g in
                 guard !held() else { return }
+                busy(true)
                 let v: Double
                 if relative {
                     let from = dragFrom ?? level
@@ -855,6 +863,7 @@ struct QuidgetDimmer: View {
             }
             .onEnded { _ in
                 dragFrom = nil
+                busy(false)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { overshoot = 0 }
             })
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: level)
