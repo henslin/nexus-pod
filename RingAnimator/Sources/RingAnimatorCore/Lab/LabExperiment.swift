@@ -1852,8 +1852,9 @@ public final class LabDefaultsStore: ObservableObject {
     /// The experiment's post stack and hero, as you set them.
     func applyLook(of e: LabExperiment, to lab: LabState) {
         guard let d = defaults[e.id] else { return }
-        lab.post = d.post.compactMap(LabPostEffect.init(rawValue:))
-        lab.hero = d.hero.flatMap(LabExperiment.init(rawValue:))
+        lab.posts[e] = d.post.compactMap(LabPostEffect.init(rawValue:))
+        lab.disabledPosts[e] = []
+        if let hero = d.hero.flatMap(LabExperiment.init(rawValue:)) { lab.hero = hero }
     }
 
     private func persist() {
@@ -1870,8 +1871,9 @@ public final class LabState: ObservableObject {
         didSet {
             if !oldValue.isQBranch { benchBefore = oldValue }
             // An experiment opens as you left its default: its own knobs
-            // fall through to it, and its post stack and hero come with it.
-            if experiment != oldValue { LabDefaultsStore.shared.applyLook(of: experiment, to: self) }
+            // fall through to it, and — the first time this session — its
+            // post stack and hero come with it.
+            if experiment != oldValue, posts[experiment] == nil { LabDefaultsStore.shared.applyLook(of: experiment, to: self) }
         }
     }
     /// 0…1. What "more" means is per experiment — warp for Aurora, glow
@@ -1901,11 +1903,22 @@ public final class LabState: ObservableObject {
     @Published public var appUI: Bool = true
     @Published public var finish: AnimationExporter.DeviceFinish = .silver
     @Published public var palette: LabPalette = .nexus
-    /// Post effects, in the order they are applied.
-    @Published public var post: [LabPostEffect] = []
-    /// Effects kept in the stack but switched off — Sketch's unchecked
-    /// fill: still listed, still tuned, not applied.
-    @Published public var disabledPost: Set<LabPostEffect> = []
+    /// Post effects, per experiment, in the order they are applied —
+    /// each animation carries its own stack (Chris, 2026-09-17: "tied to
+    /// each animation, not global").
+    @Published public var posts: [LabExperiment: [LabPostEffect]] = [:]
+    /// Effects kept in a stack but switched off — Sketch's unchecked
+    /// fill: still listed, still tuned, not applied. Per experiment too.
+    @Published public var disabledPosts: [LabExperiment: Set<LabPostEffect>] = [:]
+    /// The current experiment's stack.
+    public var post: [LabPostEffect] {
+        get { posts[experiment] ?? [] }
+        set { posts[experiment] = newValue }
+    }
+    public var disabledPost: Set<LabPostEffect> {
+        get { disabledPosts[experiment] ?? [] }
+        set { disabledPosts[experiment] = newValue }
+    }
     /// The stack as applied.
     public var activePost: [LabPostEffect] { post.filter { !disabledPost.contains($0) } }
     /// Show the experiment at pod size in a glass pod, in the corner.
@@ -2040,7 +2053,8 @@ public final class LabState: ObservableObject {
     /// starter. Presets and reviews stay — they're named.
     public func resetEverything() {
         values = [:]
-        post = []
+        posts = [:]
+        disabledPosts = [:]
         hero = nil
         LabDefaultsStore.shared.forgetAll()
         spec = LabSpec.starters[0]
