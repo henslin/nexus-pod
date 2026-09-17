@@ -90,7 +90,17 @@ public final class QuidgetDemo: ObservableObject {
     @Published public var lightLevel: Double = 0.4
     @Published public var mode: SecurityMode = .armAway
     @Published public var locked: Bool = true
-    @Published public var thermostat: Int = 70
+    /// The setpoint, and the room: the tile runs warm while the room
+    /// is below the setpoint, cool while above, and settles when they
+    /// meet — the room drifts a degree at a time toward the setpoint.
+    @Published public var thermostat: Int = 70 { didSet { drift() } }
+    @Published public var ambient: Int = 70
+    private var driftTask: Task<Void, Never>?
+    /// True from the moment a long press opens a quidget until the next
+    /// press: the release that follows must not also fire the tile's
+    /// quick action (Chris, 2026-09-17: "don't adjust the light, just
+    /// spawn the modal").
+    var holdOpened = false
     /// The slot whose quidget is expanded — the slot, not the kind: a
     /// chat can show the same kind twice (the patio light, then the
     /// light in the multi-command row), and only the one you tapped
@@ -101,6 +111,21 @@ public final class QuidgetDemo: ObservableObject {
     @Published public var arming: SecurityMode? = nil
     private var armingTask: Task<Void, Never>?
     public init() {}
+
+    /// Heating or cooling, or neither.
+    public var thermostatTrend: Int { (thermostat - ambient).signum() }
+
+    private func drift() {
+        driftTask?.cancel()
+        guard thermostat != ambient else { return }
+        driftTask = Task { @MainActor [weak self] in
+            while let self, !Task.isCancelled, self.ambient != self.thermostat {
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.6)) { self.ambient += (self.thermostat - self.ambient).signum() }
+            }
+        }
+    }
 
     /// Switch modes the way the house would: the button spins for a
     /// couple of seconds, then the mode lands.
@@ -131,6 +156,8 @@ enum QuidgetInk {
     static let greenInk = Color(hex: "#174A2C")
     static let blue = Color(hex: "#69A2E8")            // the thermostat, cooling
     static let blueInk = Color(hex: "#17539C")
+    static let heat = Color(hex: "#EE8A62")            // the thermostat, heating
+    static let heatInk = Color(hex: "#8A2F12")
     static let glyphGrey = Color(hex: "#8E919E")
     static let label = Color(hex: "#636466")
     // Dark mode, from the Gap UI page (25672:5560).
@@ -352,11 +379,18 @@ public struct QuidgetView: View {
         .frame(width: large ? Self.wideWidth : Self.smallSize.width, height: large ? Self.tileCardHeight : Self.smallSize.height)
         .modifier(QuidgetGlass(radius: 34, white: large ? 0.8 : 0))
         .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-        .onLongPressGesture(minimumDuration: 0.35) { if !large { expand() } }
+        .modifier(hold)
     }
 
     /// The expanded tile card: title, gap, the doubled well, and room.
     static let tileCardHeight: CGFloat = 38 + 44 + 30 + wellSize.height * 2 + 40
+
+    /// The hold that opens this quidget, on the small and medium.
+    private var hold: QuidgetHold { QuidgetHold(demo: demo, enabled: size != .large) { expand() } }
+
+    /// Whether a quick action may run: always on the expanded card,
+    /// and on the small ones unless a hold just opened it.
+    private var quick: Bool { size == .large || !demo.holdOpened }
 
     // MARK: Light
 
@@ -377,7 +411,7 @@ public struct QuidgetView: View {
             .padding(.top, large ? 38 : 0)
             QuidgetDimmer(level: $demo.lightLevel,
                           track: large ? CGSize(width: 160, height: 383) : Self.wellSize,
-                          inset: large ? 10 : 4, knobHeight: large ? 64 : 44, icon: large ? 22 : 16)
+                          inset: large ? 10 : 4, knobHeight: large ? 64 : 44, icon: large ? 22 : 16, relative: !large)
                 .padding(.top, large ? 30 : 11)
             Spacer(minLength: 0)
         }
@@ -385,7 +419,7 @@ public struct QuidgetView: View {
         .modifier(QuidgetGlass(radius: 34, white: large ? 0.8 : 0))
         .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
         .onTapGesture { if !large { expand() } }
-        .onLongPressGesture(minimumDuration: 0.35) { if !large { expand() } }
+        .modifier(hold)
     }
 
     // MARK: Lock and thermostat (the file's other small quidgets)
@@ -406,16 +440,20 @@ public struct QuidgetView: View {
             .frame(width: Self.tileSize.width * k, height: Self.tileSize.height * k)
             .modifier(QuidgetInset(radius: 20 * k, fill: demo.locked ? QuidgetInk.green : QuidgetInk.amber, strong: true))
             .contentShape(RoundedRectangle(cornerRadius: 20 * k, style: .continuous))
-            .onTapGesture { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { demo.locked.toggle() } }
+            .onTapGesture { guard quick else { return }; withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { demo.locked.toggle() } }
         }
     }
 
     private var thermostat: some View {
         let k: CGFloat = size == .large ? 2 : 1
-        return tileCard(title: "Thermostat", value: "\(demo.thermostat)°") {
+        let trend = demo.thermostatTrend
+        let fill = trend > 0 ? QuidgetInk.heat : QuidgetInk.blue
+        let ink = trend > 0 ? QuidgetInk.heatInk : QuidgetInk.blueInk
+        let value = trend > 0 ? "Heating to \(demo.thermostat)°" : trend < 0 ? "Cooling to \(demo.thermostat)°" : "\(demo.thermostat)°"
+        return tileCard(title: "Thermostat", value: value) {
             VStack(spacing: 0) {
                 Text("\(demo.thermostat)°").font(.system(size: 36 * k, weight: .light)).tracking(-0.43)
-                    .foregroundStyle(QuidgetInk.blueInk)
+                    .foregroundStyle(ink)
                     .padding(.top, 22 * k)
                     .contentTransition(.numericText())
                 Spacer(minLength: 0)
@@ -424,19 +462,23 @@ public struct QuidgetView: View {
                 HStack(spacing: 0) {
                     Image(systemName: "chevron.down").font(.system(size: 13 * k, weight: .semibold))
                         .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
-                        .onTapGesture { demo.thermostat = max(50, demo.thermostat - 1) }
+                        .onTapGesture { guard quick else { return }; demo.thermostat = max(50, demo.thermostat - 1) }
                     Rectangle().fill(Color.white.opacity(0.25)).frame(width: 1, height: 18 * k)
                     Image(systemName: "chevron.up").font(.system(size: 13 * k, weight: .semibold))
                         .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
-                        .onTapGesture { demo.thermostat = min(90, demo.thermostat + 1) }
+                        .onTapGesture { guard quick else { return }; demo.thermostat = min(90, demo.thermostat + 1) }
                 }
                 .foregroundStyle(.white)
                 .frame(width: 85 * k, height: 32 * k)
-                .background(RoundedRectangle(cornerRadius: 15 * k, style: .continuous).fill(QuidgetInk.blueInk))
+                .background(RoundedRectangle(cornerRadius: 15 * k, style: .continuous).fill(ink))
                 .padding(.bottom, 8 * k)
             }
             .frame(width: Self.tileSize.width * k, height: Self.tileSize.height * k)
-            .modifier(QuidgetInset(radius: 20 * k, fill: QuidgetInk.blue, strong: true))
+            .modifier(QuidgetInset(radius: 20 * k, fill: fill, strong: true))
+            // Warm while the room is below the setpoint, cool above,
+            // breathing softly while it works; still when it's there.
+            .modifier(QuidgetBreath(active: trend != 0, radius: 20 * k))
+            .animation(.easeInOut(duration: 0.5), value: trend)
         }
     }
 
@@ -452,18 +494,14 @@ public struct QuidgetView: View {
             HStack(spacing: 0) {
                 ForEach(SecurityMode.allCases) { mode in
                     let shown = !small || demo.mode == mode
-                    Button {
-                        demo.setMode(mode)
-                    } label: {
-                        modeCard(mode, selected: demo.mode == mode)
-                            .frame(width: 103.33)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .frame(width: shown ? 103.33 : 0)
-                    .opacity(shown ? 1 : 0)
-                    .clipped()
-                    .allowsHitTesting(!small)
+                    modeCard(mode, selected: demo.mode == mode)
+                        .frame(width: 103.33)
+                        .contentShape(Rectangle())
+                        .onTapGesture { guard quick else { return }; demo.setMode(mode) }
+                        .frame(width: shown ? 103.33 : 0)
+                        .opacity(shown ? 1 : 0)
+                        .clipped()
+                        .allowsHitTesting(!small)
                 }
             }
             .padding(.horizontal, small ? 2.83 : 18.5)
@@ -491,7 +529,7 @@ public struct QuidgetView: View {
         .modifier(QuidgetGlass(radius: 34, white: small ? 0 : 0.8))
         .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
         .onTapGesture { if !large { expand() } }
-        .onLongPressGesture(minimumDuration: 0.35) { if !large { expand() } }
+        .modifier(hold)
     }
 
     /// Icon + label, as the file's "Card": a 64 circle with the mode's
@@ -564,7 +602,7 @@ public struct QuidgetView: View {
             .modifier(QuidgetGlass(radius: small ? 34 : (large ? 34 : 26), white: large ? 0.8 : 0, hidden: size == .medium))
             .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
             .onTapGesture { if !large { expand() } }
-            .onLongPressGesture(minimumDuration: 0.35) { if !large { expand() } }
+            .modifier(hold)
     }
 
     /// The file's "Camera Widget": the frame with a fade top and bottom,
@@ -616,6 +654,46 @@ public struct QuidgetView: View {
     }
 }
 
+/// A soft breath over a tile while its device works — a light wash
+/// that comes and goes about every three seconds.
+struct QuidgetBreath: ViewModifier {
+    let active: Bool
+    let radius: CGFloat
+    @State private var up = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(Color.white)
+                .opacity(active && up ? 0.16 : 0)
+                .allowsHitTesting(false))
+            .scaleEffect(active && up ? 1.015 : 1)
+            .animation(active ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .easeInOut(duration: 0.4), value: up)
+            .onAppear { if active { up = true } }
+            .onChange(of: active) { up = active }
+    }
+}
+
+/// The long press that opens a small or medium quidget from anywhere
+/// on it, without touching what it controls: the press clears the hold
+/// flag, the hold sets it and opens, and the tile's quick actions sit
+/// out the release that follows. Nothing on the expanded card.
+struct QuidgetHold: ViewModifier {
+    let demo: QuidgetDemo
+    let enabled: Bool
+    let open: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onLongPressGesture(minimumDuration: 0.35, maximumDistance: 6) {
+            guard enabled else { return }
+            demo.holdOpened = true
+            open()
+        } onPressingChanged: { pressing in
+            if pressing, enabled { demo.holdOpened = false }
+        }
+    }
+}
+
 /// The caption's glass: the file's white-at-7% screen over a blur, 16
 /// radius.
 struct QuidgetCaptionGlass: ViewModifier {
@@ -649,6 +727,12 @@ struct QuidgetDimmer: View {
     let inset: CGFloat
     let knobHeight: CGFloat
     let icon: CGFloat
+    /// On the small quidget the drag is relative — it has to move to
+    /// count, and moves the level from where it is — so a press or a
+    /// hold on the well doesn't set the light; the tall card's track
+    /// goes straight to the touch.
+    var relative = false
+    @State private var dragFrom: Double? = nil
     /// How far the drag has gone past the ends, in points — positive
     /// past the top. The control stretches like a rubber band and snaps
     /// back on release (Chris, 2026-09-16: "the cool thing Apple does").
@@ -701,15 +785,23 @@ struct QuidgetDimmer: View {
         // The rubber band: longer and a little narrower, from the end
         // being pulled away from.
         .scaleEffect(x: 1 - stretch * 0.45, y: 1 + stretch, anchor: overshoot >= 0 ? .bottom : .top)
-        .gesture(DragGesture(minimumDistance: 0)
+        .gesture(DragGesture(minimumDistance: relative ? 8 : 0)
             .onChanged { g in
-                let v = 1 - Double((g.location.y - inset) / inner.height)
+                let v: Double
+                if relative {
+                    let from = dragFrom ?? level
+                    dragFrom = from
+                    v = from - Double(g.translation.height / inner.height)
+                } else {
+                    v = 1 - Double((g.location.y - inset) / inner.height)
+                }
                 withAnimation(.interactiveSpring()) {
                     level = min(1, max(0, v))
                     overshoot = v > 1 ? CGFloat(v - 1) * inner.height : (v < 0 ? CGFloat(v) * inner.height : 0)
                 }
             }
             .onEnded { _ in
+                dragFrom = nil
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { overshoot = 0 }
             })
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: level)
