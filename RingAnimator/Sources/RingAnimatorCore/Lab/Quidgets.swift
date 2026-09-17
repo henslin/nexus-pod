@@ -1137,6 +1137,10 @@ public struct QuidgetStage<Content: View>: View {
     /// The quidget on top: the one expanded, and still the one that
     /// was, all the way back down to its slot.
     @State private var top: String? = nil
+    /// The expanded card, pulled: it follows the finger, shrinking a
+    /// little and thinning the dim, and past the threshold (or flicked)
+    /// it goes home along the morph; short of it, it springs back.
+    @State private var pull: CGSize = .zero
 
     public init(demo: QuidgetDemo, screen: CGSize, slots: [QuidgetSlot], @ViewBuilder content: @escaping () -> Content) {
         self.demo = demo
@@ -1151,11 +1155,28 @@ public struct QuidgetStage<Content: View>: View {
     /// The expanded card's top, from the file.
     static var expandedTop: CGFloat { 118 }
 
+    /// How far the pull has gone, 0…1 over the first 260 points.
+    private var pullProgress: CGFloat { min(1, hypot(pull.width, pull.height) / 260) }
+
+    /// Swipe the card away, as a photo in Photos.
+    private var swipeAway: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { g in pull = g.translation }
+            .onEnded { g in
+                let gone = hypot(g.translation.width, g.translation.height)
+                let flick = hypot(g.predictedEndTranslation.width, g.predictedEndTranslation.height)
+                withAnimation(Self.spring) {
+                    pull = .zero
+                    if gone > 110 || flick > 260 { demo.expanded = nil }
+                }
+            }
+    }
+
     public var body: some View {
         ZStack(alignment: .topLeading) {
             content()
-                .blur(radius: demo.expanded == nil ? 0 : 16)
-            Color.black.opacity(demo.expanded == nil ? 0 : 0.29)
+                .blur(radius: demo.expanded == nil ? 0 : 16 * (1 - pullProgress * 0.6))
+            Color.black.opacity(demo.expanded == nil ? 0 : 0.29 * (1 - pullProgress * 0.8))
                 .frame(width: screen.width, height: screen.height)
                 .contentShape(Rectangle())
                 .allowsHitTesting(demo.expanded != nil)
@@ -1173,8 +1194,13 @@ public struct QuidgetStage<Content: View>: View {
                     .blur(radius: others ? 16 : 0)
                     .brightness(others ? -0.25 : 0)
                     .allowsHitTesting(!others)
+                    .scaleEffect(expanded ? 1 - pullProgress * 0.12 : 1)
+                    .offset(expanded ? pull : .zero)
                     .offset(x: expanded ? (screen.width - w) / 2 : frame.minX, y: expanded ? Self.expandedTop : frame.minY)
                     .opacity(frames[slot.id] == nil ? 0 : 1)
+                    // The card's own controls come first; a drag that
+                    // starts anywhere else on it is the swipe.
+                    .gesture(swipeAway, including: expanded ? .all : .subviews)
                     .zIndex(expanded || top == slot.id ? 1 : 0)
             }
         }
