@@ -630,17 +630,16 @@ struct QuidgetDimmer: View {
             // The fill grows up from the bottom and darkens as the light
             // dims (Chris, 2026-09-16): the file's amber at full, a deep
             // amber near off.
-            // The fill is the full tile, revealed from the bottom by a
-            // mask — so its corners keep their radius however low it
-            // goes, instead of squashing as the rectangle gets short.
-            // Its straight top edge hides under the grabber.
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            // The fill keeps its corners at both ends: tall enough for
+            // two corner radii, it's a rounded rectangle of its own
+            // height; shorter, it's the bottom slice of one — perfect
+            // bottom corners, a straight top the grabber covers.
+            DimmerFillShape(height: max(0, fillH), radius: 20)
                 .fill(Self.fill(at: level))
-                .modifier(QuidgetInset(radius: 20, fill: .clear, strong: true))
+                .overlay(DimmerFillShape(height: max(0, fillH), radius: 20)
+                    .stroke(Color.black.opacity(0.16), lineWidth: 3).blur(radius: 4).offset(y: 1.5)
+                    .mask(DimmerFillShape(height: max(0, fillH), radius: 20)))
                 .frame(width: inner.width, height: inner.height)
-                .mask(alignment: .bottom) {
-                    Rectangle().frame(width: inner.width, height: max(0, fillH))
-                }
                 .opacity(fillAlpha)
                 .padding(.bottom, inset)
             QuidgetKnob(radius: 20) {
@@ -669,6 +668,27 @@ struct QuidgetDimmer: View {
     /// The file's #F8B541 at full brightness, darkening toward off.
     static func fill(at level: Double) -> Color {
         Color(hue: 0.105, saturation: 0.74 - 0.1 * level, brightness: 0.45 + 0.52 * level)
+    }
+}
+
+/// The dimmer's fill: a rounded rectangle of the given height rising
+/// from the bottom of its rect — or, when that would squash the
+/// corners, the bottom slice of a full-radius one.
+struct DimmerFillShape: Shape {
+    var height: CGFloat
+    let radius: CGFloat
+    var animatableData: CGFloat { get { height } set { height = newValue } }
+
+    func path(in rect: CGRect) -> Path {
+        let h = min(rect.height, max(0, height))
+        guard h > 0 else { return Path() }
+        let band = CGRect(x: rect.minX, y: rect.maxY - h, width: rect.width, height: h)
+        if h >= radius * 2 {
+            return Path(roundedRect: band, cornerRadius: radius, style: .continuous)
+        }
+        // The bottom of a rounded rect two radii tall, cut at h.
+        let tall = CGRect(x: rect.minX, y: rect.maxY - radius * 2, width: rect.width, height: radius * 2)
+        return Path(roundedRect: tall, cornerRadius: radius, style: .continuous).intersection(Path(band))
     }
 }
 
