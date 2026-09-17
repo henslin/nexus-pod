@@ -728,7 +728,10 @@ struct QuidgetHold: ViewModifier {
             // first cancels it. Expanded: the drag pulls the card, as a
             // photo in Photos, and the release decides whether it goes
             // home. A tile's own drag (the dimmer) stands it down.
-            .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            // Global space: the quidget itself moves under the finger
+            // when it pops, and a local translation would read that
+            // jump as a swipe.
+            .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { g in
                     if start == nil {
                         start = g.location
