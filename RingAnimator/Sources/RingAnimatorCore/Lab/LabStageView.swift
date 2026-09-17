@@ -660,6 +660,9 @@ public struct LabExperimentView: View {
         case .thinkingOrbs: LabThinkingOrbsView(frame: frame)
         case .orbKit: LabOrbKitView(frame: frame)
         case .beamKit: LabBeamKitView(frame: frame)
+        case .matrixOrb: LabMatrixOrbView(frame: frame)
+        case .voiceOrb: LabVoiceOrbView(frame: frame)
+        case .orb21: LabOrb21View(frame: frame)
         case .gooey: LabGooeyView(frame: frame, config: config)
         case .metal: LabMetalView(frame: frame, config: config)
         case .water: LabWaterView(frame: frame) { ring }

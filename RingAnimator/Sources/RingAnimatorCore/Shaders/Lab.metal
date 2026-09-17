@@ -2271,3 +2271,198 @@ static float metal_sd(float2 p, float2 hs, float kind) {
     k = k * k * (3.0f - 2.0f * k);
     return position - normalize(d) * maxDent * k * -1.0f;
 }
+
+// MARK: - Voice Orb (colorEffect) — assistant-ui's orb, ported
+//
+// assistant-ui's `VoiceOrb` (MIT, © 2025 AgentbaseAI Inc.), its GLSL
+// fragment carried over line for line: a hard circle with a soft edge,
+// three simplex noise fields mixed through three colours, a distortion
+// field for the veins, a depth shade, a rim, two speculars, an outer
+// glow. Their state table and volume mapping live in Swift.
+
+static float3 vo_mod289(float3 x) { return x - floor(x / 289.0f) * 289.0f; }
+static float4 vo_mod289(float4 x) { return x - floor(x / 289.0f) * 289.0f; }
+static float4 vo_permute(float4 x) { return vo_mod289((x * 34.0f + 1.0f) * x); }
+static float4 vo_taylorInvSqrt(float4 r) { return 1.79284291400159f - 0.85373472095314f * r; }
+
+static float vo_snoise(float3 v) {
+    const float2 C = float2(1.0f / 6.0f, 1.0f / 3.0f);
+    float3 i = floor(v + dot(v, float3(C.y)));
+    float3 x0 = v - i + dot(i, float3(C.x));
+    float3 g = step(x0.yzx, x0.xyz);
+    float3 l = 1.0f - g;
+    float3 i1 = min(g, l.zxy);
+    float3 i2 = max(g, l.zxy);
+    float3 x1 = x0 - i1 + C.x;
+    float3 x2 = x0 - i2 + C.y;
+    float3 x3 = x0 - 0.5f;
+    i = vo_mod289(i);
+    float4 p = vo_permute(vo_permute(vo_permute(
+        i.z + float4(0.0f, i1.z, i2.z, 1.0f))
+        + i.y + float4(0.0f, i1.y, i2.y, 1.0f))
+        + i.x + float4(0.0f, i1.x, i2.x, 1.0f));
+    float4 j = p - 49.0f * floor(p / 49.0f);
+    float4 x_ = floor(j / 7.0f);
+    float4 y_ = floor(j - 7.0f * x_);
+    float4 x = (x_ * 2.0f + 0.5f) / 7.0f - 1.0f;
+    float4 y = (y_ * 2.0f + 0.5f) / 7.0f - 1.0f;
+    float4 h = 1.0f - abs(x) - abs(y);
+    float4 b0 = float4(x.xy, y.xy);
+    float4 b1 = float4(x.zw, y.zw);
+    float4 s0 = floor(b0) * 2.0f + 1.0f;
+    float4 s1 = floor(b1) * 2.0f + 1.0f;
+    float4 sh = -step(h, float4(0.0f));
+    float4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+    float4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+    float3 g0 = float3(a0.xy, h.x);
+    float3 g1 = float3(a0.zw, h.y);
+    float3 g2 = float3(a1.xy, h.z);
+    float3 g3 = float3(a1.zw, h.w);
+    float4 norm = vo_taylorInvSqrt(float4(dot(g0, g0), dot(g1, g1), dot(g2, g2), dot(g3, g3)));
+    g0 *= norm.x; g1 *= norm.y; g2 *= norm.z; g3 *= norm.w;
+    float4 m = max(0.6f - float4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0f);
+    m = m * m;
+    return 42.0f * dot(m * m, float4(dot(g0, x0), dot(g1, x1), dot(g2, x2), dot(g3, x3)));
+}
+
+[[ stitchable ]] half4 labVoiceOrb(float2 position, half4 color,
+                                   float2 size, float time,
+                                   float speed, float amplitude, float glowK, float brightness, float pulse, float saturation,
+                                   half4 color0, half4 color1, half4 color2)
+{
+    float2 uv = (position / size) * 2.0f - 1.0f;
+    float dist = length(uv);
+    float t = time * speed;
+    float3 c0 = float3(color0.rgb), c1 = float3(color1.rgb), c2 = float3(color2.rgb);
+
+    float radius = 0.44f;
+    float circle = 1.0f - smoothstep(radius - 0.008f, radius + 0.008f, dist);
+    if (circle < 0.001f) {
+        float glowDist = dist - radius;
+        float glow = exp(-glowDist * 12.0f) * glowK * 0.4f;
+        float3 glowColor = mix(c0, c1, 0.5f);
+        return half4(half3(glowColor * glow), half(glow));
+    }
+
+    float n1 = vo_snoise(float3(uv * 2.0f, t * 0.6f)) * 0.5f + 0.5f;
+    float n2 = vo_snoise(float3(uv * 3.5f + 7.0f, t * 0.9f)) * 0.5f + 0.5f;
+    float n3 = vo_snoise(float3(uv * 1.5f - 3.0f, t * 0.4f + 10.0f)) * 0.5f + 0.5f;
+    float2 distort = float2(vo_snoise(float3(uv * 2.0f + 5.0f, t * 0.7f)),
+                            vo_snoise(float3(uv * 2.0f + 15.0f, t * 0.7f))) * amplitude * 2.0f;
+    float n4 = vo_snoise(float3((uv + distort) * 3.0f, t * 0.5f)) * 0.5f + 0.5f;
+
+    float3 col = mix(c0, c1, n1);
+    col = mix(col, c2, n2 * 0.5f);
+    col = mix(col, c1 * 1.3f, n4 * 0.4f);
+    float vein = pow(n3, 3.0f) * amplitude * 6.0f;
+    col += vein * mix(c1, float3(1.0f), 0.3f);
+    float centerDist = dist / radius;
+    float depthShade = 1.0f - centerDist * centerDist * 0.4f;
+    col *= depthShade;
+    float rim = pow(centerDist, 4.0f) * 0.6f;
+    col += rim * mix(c0, float3(1.0f), 0.5f);
+    float2 lightPos = float2(-0.15f, -0.18f);
+    float specDist = length(uv - lightPos);
+    float spec = exp(-specDist * specDist * 30.0f) * 0.7f;
+    col += spec;
+    float2 lightPos2 = float2(0.2f, 0.25f);
+    float spec2 = exp(-length(uv - lightPos2) * 8.0f) * 0.15f;
+    col += spec2 * c1;
+    float pulseFactor = 1.0f + pulse * sin(time * 3.5f) * 0.35f;
+    float lum = dot(col, float3(0.299f, 0.587f, 0.114f));
+    col = mix(float3(lum), col, saturation);
+    col *= brightness * pulseFactor;
+    col = clamp(col, 0.0f, 1.0f);
+    return half4(half3(col * circle), half(circle));
+}
+
+// MARK: - Orb 21 (colorEffect) — shadercn's ORB-21, ported
+//
+// "Light diffusing through a cloud." Shader by XorDev (https://x.com/XorDev),
+// ported for shadercn's Orbkit with the author's permission and carried
+// here from their TypeGPU source: NON-COMMERCIAL USE ONLY, with attribution
+// to XorDev — keep this notice with the file. A ray march through a
+// sphere of cos-warped density, a short march toward an orbiting light for
+// self-shadowing, Henyey-Greenstein forward scatter, tanh tone map.
+//
+// knobs: 0 camDist 1 focal 2 radius 3 scale 4 churn 5 threshold 6 edgeSoft
+// 7 density 8 absorb 9 shadowAbsorb 10 shadowLift 11 aniso 12 lightSpin
+// 13 power 14 ambient 15 exposure 16 alphaGain 17 steps 18 lightSteps
+
+static float o21_density(float3 p, float animTime, float nimbusDensity,
+                         float radius, float scale, float churn, float threshold, float edgeSoft)
+{
+    float shell = 1.0f - length(p) / radius;
+    if (shell <= 0.0f) return 0.0f;
+    float3 q = p * scale;
+    float f = 1.0f;
+    for (int k = 0; k < 4; k++) {
+        q += cos(float3(q.y, q.z, q.x) * f + animTime * churn) / f;
+        f *= 1.8f;
+    }
+    float n = ((sin(q.x) + sin(q.y) + sin(q.z)) / 3.0f) * 0.5f + 0.5f;
+    float clump = smoothstep(threshold, 1.0f, n);
+    return clump * pow(shell, edgeSoft) * nimbusDensity;
+}
+
+static float o21_phaseHG(float c, float g) {
+    float g2 = g * g;
+    return (1.0f - g2) / pow(max(1.0f + g2 - 2.0f * g * c, 0.0001f), 1.5f);
+}
+
+[[ stitchable ]] half4 labOrb21(float2 position, half4 color,
+                                float2 size, float animTime, float inputVol, float outputVol,
+                                device const float *knobs, int knobCount,
+                                half4 lightColor, half4 shadowColor)
+{
+    float camDist = knobs[0], focal = knobs[1], radius = knobs[2], scale = knobs[3], churn = knobs[4];
+    float threshold = knobs[5], edgeSoft = knobs[6], density = knobs[7], absorb = knobs[8];
+    float shadowAbsorb = knobs[9], shadowLift = knobs[10], aniso = knobs[11], lightSpin = knobs[12];
+    float power = knobs[13], ambient = knobs[14], exposure = knobs[15], alphaGain = knobs[16];
+    int steps = max(8, int(knobs[17]));
+    int lightSteps = max(1, int(knobs[18]));
+    float3 cLight = float3(lightColor.rgb), cShadow = float3(shadowColor.rgb);
+
+    float nimbusPower = power * (0.7f + 0.9f * outputVol);
+    float nimbusDensity = density * (1.0f + 0.35f * inputVol);
+
+    // Their frag coord is y-up; SwiftUI's is y-down.
+    float2 fragCoord = float2(position.x, size.y - position.y);
+    float2 uv = (fragCoord * 2.0f - size) / min(size.x, size.y);
+    float3 ro = float3(0.0f, 0.0f, -camDist);
+    float3 rd = normalize(float3(uv.x, uv.y, focal));
+    float3 L = normalize(float3(cos(animTime * lightSpin) * 0.7f, 0.45f, sin(animTime * lightSpin) * 0.35f + 0.65f));
+    float phase = o21_phaseHG(dot(rd, L), aniso);
+
+    float tStart = max(camDist - radius, 0.0f);
+    float span = 2.0f * radius;
+    float dt = span / float(steps);
+    float T = 1.0f;
+    float3 scattered = float3(0.0f);
+    float lstep = radius / float(lightSteps);
+
+    for (int i = 0; i < steps; i++) {
+        float t = tStart + (float(i) + 0.5f) * dt;
+        float3 p = ro + rd * t;
+        float dn = o21_density(p, animTime, nimbusDensity, radius, scale, churn, threshold, edgeSoft);
+        if (dn > 0.001f) {
+            float shadow = 1.0f;
+            for (int k = 0; k < lightSteps; k++) {
+                float fk = float(k) + 1.0f;
+                float3 lp = p + L * ((fk - 0.5f) * lstep);
+                shadow *= exp(-o21_density(lp, animTime, nimbusDensity, radius, scale, churn, threshold, edgeSoft) * lstep * shadowAbsorb);
+            }
+            float3 lit = mix(cShadow * shadowLift, cLight, shadow);
+            scattered += lit * (T * dn * dt * phase * nimbusPower);
+            T *= exp(-dn * dt * absorb);
+            if (T < 0.01f) break;
+        }
+    }
+    float body = 1.0f - T;
+    scattered += cShadow * (body * ambient);
+    float3 e = exp(clamp(scattered * exposure, -10.0f, 10.0f) * 2.0f);
+    float3 col = (e - 1.0f) / (e + 1.0f);
+    float a = clamp(body * alphaGain, 0.0f, 1.0f);
+    // Scattered light is already premultiplied.
+    return half4(half3(clamp(col, 0.0f, 1.0f)), half(a));
+}

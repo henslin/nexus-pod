@@ -90,6 +90,10 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case hold
     // Libraries.dev kits (Vendor/).
     case beamKit
+    // Three more orbs from the web, ported (LabOrbKitsView).
+    case matrixOrb
+    case voiceOrb
+    case orb21
     case gooey
     case metal
     // Flows — the tap-on-Nexus question, on a phone canvas.
@@ -162,6 +166,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .thinkingOrbs: return "Thinking Orbs · Native"
         case .orbKit:     return "Thinking Orbs"
         case .beamKit:    return "Border Beam"
+        case .matrixOrb:  return "Matrix Orb"
+        case .voiceOrb:   return "Voice Orb"
+        case .orb21:      return "Orb 21"
         case .gooey:      return "Gooey"
         case .metal:      return "Metal"
         case .water:      return "Water"
@@ -245,6 +252,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .thinkingOrbs: return "SwiftUI · Canvas"
         case .orbKit:     return "Libraries.dev · ThinkingOrbsKit"
         case .beamKit:    return "Libraries.dev · BorderBeamKit"
+        case .matrixOrb:  return "rareui · canvas, ported"
+        case .voiceOrb:   return "assistant-ui · GLSL → Metal"
+        case .orb21:      return "shadercn · XorDev · GLSL → Metal"
         case .gooey:      return "SwiftUI · Canvas filters"
         case .metal:      return "Metal · colorEffect + distortionEffect"
         case .water, .haze, .fizz, .glints, .parallax, .focus: return "Metal · layerEffect"
@@ -328,6 +338,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .thinkingOrbs: return "circle.hexagongrid.circle"
         case .orbKit:     return "shippingbox"
         case .beamKit:    return "shippingbox"
+        case .matrixOrb:  return "circle.grid.3x3.fill"
+        case .voiceOrb:   return "circle.lefthalf.filled"
+        case .orb21:      return "cloud.fill"
         case .gooey:      return "plus.circle.fill"
         case .metal:      return "circle.circle"
         case .water:      return "water.waves"
@@ -473,6 +486,12 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             return "A cloud of dots with nine states of motion — Working, Searching, Solving, Listening, Connecting, Weaving, Composing, Breathing, Shaping — the agent’s verbs as motion, each a different way for the same dots to move. Every position is a function of time, so the state switches are clean."
         case .orbKit:
             return "Libraries.dev’s Thinking orbs, the real SwiftUI port (MIT, vendored): nine states, two tuned size presets drawn at any display size, a theme, a speed. Beside our own Thinking Orbs so the two can be compared on one stage."
+        case .matrixOrb:
+            return "rareui’s Matrix Orb, ported: a dot matrix in a round outline that breathes at rest, ripples outward while listening and runs three orbiting hot spots while thinking — the dots swelling with a level that follows their built-in envelope, the slider, or your voice. Interrupt a state change and it blends from what’s on screen. Their colour, or the ring’s. Free for commercial use; attribution appreciated."
+        case .voiceOrb:
+            return "assistant-ui’s Voice Orb, its GLSL carried into Metal: a marbled sphere — three noise fields through three colours, veins, a depth shade, a rim and two speculars, an outer glow — with five session states (idle, connecting, listening, speaking, muted) eased into at their rate, volume riding on top. Their four palettes, or the ring’s colours. MIT."
+        case .orb21:
+            return "shadercn’s ORB-21 — “light diffusing through a cloud” — a volumetric ray march: a sphere of cos-warped density, a short march toward an orbiting light for self-shadowing, forward scatter, a tanh tone map. Their three states shift the palette and the light. Marched at a fraction of the size for speed. Shader by XorDev, ported with permission: NON-COMMERCIAL USE ONLY, with attribution — it can’t ship in a product without XorDev’s say-so."
         case .beamKit:
             return "Libraries.dev’s Border beam, the real SwiftUI port (MIT, vendored): rotate (large / small / line) and pulse (outside / inner) families, four colour variants, and their tuning — stroke, inner glow, bloom, brightness, saturation, hue range. Also available as a Morph adornment beside our edge glow."
         case .gooey:
@@ -578,7 +597,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// The bases that draw a disc on their own.
     public var canBeHero: Bool {
         switch self {
-        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing, .tide, .droplet, .pour, .pool, .caustics, .lava, .jelly, .slick, .deep, .nebula, .thinkingOrbs, .orbKit: return true
+        case .aurora, .orb, .mesh, .swarm, .liquid, .sphere, .tunnel, .constellation, .harmonograph, .ink, .volumetric, .sparks, .cells, .warp, .shapeshift, .symbols, .lattice, .stipple, .bubble, .slices, .stack, .cascade, .prism, .holo, .lenticular, .moire, .orrery, .bokeh, .frostOrb, .globe, .silk, .liquidRing, .tide, .droplet, .pour, .pool, .caustics, .lava, .jelly, .slick, .deep, .nebula, .thinkingOrbs, .orbKit, .matrixOrb, .voiceOrb, .orb21: return true
         default: return false
         }
     }
@@ -642,7 +661,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .frostOrb, .globe, .silk, .liquidRing: return .frosted
         case .mesh, .swarm, .sparks, .constellation, .ink, .stipple, .lattice, .bokeh, .warp: return .particles
         case .harmonograph, .shapeshift, .slices, .stack, .cascade, .prism, .orrery, .symbols: return .shape
-        case .volumetric, .orbKit, .thinkingOrbs: return .kits
+        case .volumetric, .orbKit, .thinkingOrbs, .matrixOrb, .voiceOrb, .orb21: return .kits
         default: return nil
         }
     }
@@ -1066,6 +1085,46 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("size", "Size", 0...1, 0, "Their two tuned presets, drawn at the stage's size.", "%.0f", group: "Size", choices: ["64px", "20px"], kind: .popup),
             .init("speed", "Speed", 0.1...3, 1, "Multiplier on the preset's speed.", "%.1f×", group: "Motion"),
             .init("theme", "Theme", 0...2, 0, "Follows the stage, or fixed.", "%.0f", group: "Theme", choices: ["Auto", "Dark", "Light"], kind: .popup),
+        ]
+        case .matrixOrb: return [
+            .init("state", "State", 0...2, 0, "Their three: breathing, rippling, orbiting.", "%.0f", group: "State", choices: ["Idle", "Listening", "Thinking"], kind: .popup),
+            .init("envelope", "Built-in envelope", 0...1, 1, "The level breathes on their envelope; off, the Level slider sets it. Your voice overrides both.", "%.0f", group: "Level", choices: ["Off", "On"]),
+            .init("level", "Level", 0...1, 0.6, "Bloom, with the envelope off.", group: "Level"),
+            .init("dots", "Dots", 5...21, 11, "Dots across the grid.", "%.0f", group: "Grid"),
+            .init("size", "Size", 0.4...1, 0.85, "Of the stage.", "%.0f%%", group: "Grid"),
+            .init("speed", "Speed", 0.2...3, 1, "Their clock, scaled.", "%.1f×", group: "Motion"),
+            .init("color", "Color", 0...1, 0, "Their orange, or the ring's first colour.", "%.0f", group: "Color", choices: ["Theirs", "Ring"], kind: .segmented),
+        ]
+        case .voiceOrb: return [
+            .init("state", "State", 0...4, 0, "Their five session states, eased into.", "%.0f", group: "State", choices: ["Idle", "Connecting", "Listening", "Speaking", "Muted"], kind: .popup),
+            .init("volume", "Volume", 0...1, 0, "Rides on the state: speed, distortion and glow. Your voice adds to it.", group: "State"),
+            .init("variant", "Palette", 0...4, 0, "Their four, or the ring's colours.", "%.0f", group: "Color", choices: ["Default", "Blue", "Violet", "Emerald", "Ring"], kind: .popup),
+            .init("speed", "Speed", 0.2...3, 1, "Their clock, scaled.", "%.1f×", group: "Motion"),
+        ]
+        case .orb21: return [
+            .init("state", "State", 0...2, 0, "Their three: the palette and the light shift with each.", "%.0f", group: "State", choices: ["Idle", "Thinking", "Speaking"], kind: .popup),
+            .init("palette", "Palette", 0...1, 0, "Their warm-over-cool, or the ring's first two colours.", "%.0f", group: "State", choices: ["Theirs", "Ring"], kind: .segmented),
+            .init("speed", "Speed", 0.05...3, 0.6, "Their clock, scaled.", "%.2f×", group: "Motion"),
+            .init("churn", "Churn", 0...5, 0.3, "How fast the cloud turns over.", "%.2f", group: "Motion"),
+            .init("lightSpin", "Light orbit", 0...3, 0.12, "The light's slow circle.", "%.2f", group: "Motion"),
+            .init("radius", "Cloud radius", 0.15...10, 2, "", "%.2f", group: "Cloud"),
+            .init("scale", "Cloud scale", 0.1...15, 0.8, "", "%.1f", group: "Cloud"),
+            .init("threshold", "Clumping", 0...3, 0.075, "High leaves sparse wisps; low fills the sphere with fog.", "%.3f", group: "Cloud"),
+            .init("edgeSoft", "Edge softness", 0.1...10, 0.8, "", "%.2f", group: "Cloud"),
+            .init("density", "Density", 0.03...20, 3.2, "", "%.1f", group: "Cloud"),
+            .init("absorb", "Absorption", 0.03...15, 1.4, "", "%.1f", group: "Cloud"),
+            .init("camDist", "Camera distance", 0.5...40, 4.4, "", "%.1f", group: "Camera"),
+            .init("focal", "Lens", 0.3...15, 1.8, "", "%.1f", group: "Camera"),
+            .init("shadowAbsorb", "Shadow depth", 0...20, 2.4, "", "%.1f", group: "Light"),
+            .init("shadowLift", "Shadow lift", 0...5, 0.55, "How much light still reaches the shadowed side.", "%.2f", group: "Light"),
+            .init("aniso", "Forward scatter", -0.9...0.9, 0.45, "Henyey-Greenstein g: positive blooms the limb facing the light.", "%.2f", group: "Light"),
+            .init("power", "Light power", 0.03...40, 1.9, "", "%.1f", group: "Light"),
+            .init("ambient", "Ambient", 0...3, 0.12, "", "%.2f", group: "Light"),
+            .init("exposure", "Exposure", 0.03...10, 1, "", "%.2f", group: "Tone"),
+            .init("alphaGain", "Alpha gain", 0.05...10, 1.5, "", "%.2f", group: "Tone"),
+            .init("resolution", "Resolution", 0.25...1, 0.5, "The march's size as a fraction of the stage — the cost.", "%.0f%%", group: "Quality"),
+            .init("steps", "March steps", 8...64, 40, "Samples along each ray (theirs: 56).", "%.0f", group: "Quality"),
+            .init("lightSteps", "Light steps", 1...4, 3, "Samples toward the light (theirs: 4).", "%.0f", group: "Quality"),
         ]
         case .beamKit: return [
             .init("family", "Family", 0...1, 0, "A travelling beam, or a breathing glow.", "%.0f", group: "Family", choices: ["Rotate", "Pulse"], kind: .segmented),
