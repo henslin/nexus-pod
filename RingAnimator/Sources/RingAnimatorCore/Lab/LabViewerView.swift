@@ -140,7 +140,7 @@ public struct LabViewerView: View {
 
     private var footer: some View {
         VStack(spacing: 10) {
-            if let pasteMessage, lab.experiment == .system {
+            if let pasteMessage, lab.experiment.isQBranch {
                 Text(pasteMessage).font(.caption2).foregroundStyle(.secondary)
             }
             LabStarRating(stars: reviews.binding(for: lab.experiment).stars)
@@ -159,7 +159,7 @@ public struct LabViewerView: View {
                 }
                 // The System plays what the Mac assembled: its spec
                 // arrives as JSON on the pasteboard.
-                if lab.experiment == .system {
+                if lab.experiment.isQBranch {
                     Menu {
                         Section("Starters") {
                             ForEach(LabSpec.starters) { s in Button(s.name) { lab.spec = s; pasteMessage = nil } }

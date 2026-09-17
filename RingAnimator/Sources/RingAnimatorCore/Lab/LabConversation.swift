@@ -107,6 +107,12 @@ public struct LabConversation: Equatable {
     /// verbs (the ask, once made).
     public var age: Double
 
+    /// Live, in The App: what's been typed so far, and how long since
+    /// the last key — the ask is these words, not the script's, and the
+    /// keyboard lights the key just pressed.
+    public var typedAsk: String? = nil
+    public var sinceKey: Double = .infinity
+
     public init(script: LabScript, mode: Mode, verb: LabAgentVerb, since: Double, age: Double) {
         self.script = script
         self.mode = mode
@@ -118,6 +124,7 @@ public struct LabConversation: Equatable {
     /// The ask so far: typed at ~14 characters a second, or spoken at
     /// ~3 words a second — or, with the transcript live, your own words.
     public func askShown(frame: LabFrame) -> String {
+        if let typedAsk, mode == .text { return verb == .idle ? "" : typedAsk }
         switch verb {
         case .idle: return ""
         case .listening:
@@ -146,6 +153,7 @@ public struct LabConversation: Equatable {
     /// taps to. The same clock as `askShown`.
     public var typing: (typed: Int, phase: Double)? {
         guard verb == .listening, mode == .text else { return nil }
+        if let typedAsk { return (typedAsk.count, min(1, sinceKey / 0.1)) }
         let t = max(0, since - 0.9) * 14
         return (min(script.ask.count, Int(t)), t - t.rounded(.down))
     }
@@ -215,6 +223,10 @@ struct LabConversationView: View {
     let size: CGSize
     var heroScale: Double = 0.42
     @ObservedObject private var quidgets = QuidgetDemo.shared
+    /// Set when the conversation is live (The App): the chips ask, the
+    /// field takes your words, the × closes.
+    @Environment(\.labConversationActions) private var actions
+    @FocusState private var fieldFocused: Bool
 
     private var c: LabConversation { conversation }
     /// The reply's quidget, once the answer has landed — if the spec
@@ -279,6 +291,8 @@ struct LabConversationView: View {
                     Text("Nexus").font(.title3.bold())
                     Spacer(minLength: 0)
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).font(.title3)
+                        .contentShape(Circle())
+                        .onTapGesture { actions?.close() }
                 }
                 // Before you've said anything: what you might ask, as
                 // taps — the other scripts' asks stand in for context.
@@ -292,6 +306,8 @@ struct LabConversationView: View {
                                     .font(.system(size: 13, weight: .medium))
                                     .padding(.horizontal, 11).padding(.vertical, 7)
                                     .background(Capsule().fill(.fill.tertiary))
+                                    .contentShape(Capsule())
+                                    .onTapGesture { actions?.submit(other.ask) }
                             }
                         }
                     }
@@ -369,6 +385,14 @@ struct LabConversationView: View {
             }
             .modifier(QuidgetStageModifier(demo: quidgets, screen: size, quidget: quidget))
             .overlay(alignment: .bottom) { keyboard(width: size.width) }
+            .overlay(alignment: .topTrailing) {
+                if actions != nil {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).font(.title2)
+                        .padding(20).padding(.top, 40)
+                        .contentShape(Circle())
+                        .onTapGesture { actions?.close() }
+                }
+            }
         }
     }
 
@@ -389,7 +413,7 @@ struct LabConversationView: View {
     private func keyboard(width: CGFloat) -> some View {
         ZStack(alignment: .bottom) {
             if let t = c.typing {
-                LabKeyboardView(text: c.script.ask, typed: t.typed, phase: t.phase, width: width)
+                LabKeyboardView(text: c.typedAsk ?? c.script.ask, typed: t.typed, phase: t.phase, width: width)
                     .transition(.move(edge: .bottom))
             }
         }
@@ -418,9 +442,18 @@ struct LabConversationView: View {
                     LabWaveformBars(frame: frame, bars: 26, height: 20)
                 } else {
                     HStack {
-                        Text(c.composing ? c.askShown(frame: frame) : "Ask Nexus")
-                            .foregroundStyle(c.composing ? .primary : .secondary)
-                            .lineLimit(1)
+                        if let actions, c.composing {
+                            // Live: your words, from the Mac's keyboard.
+                            TextField("Ask Nexus", text: actions.draft)
+                                .textFieldStyle(.plain)
+                                .focused($fieldFocused)
+                                .onSubmit { actions.submit(actions.draft.wrappedValue) }
+                                .onAppear { fieldFocused = true }
+                        } else {
+                            Text(c.composing ? c.askShown(frame: frame) : "Ask Nexus")
+                                .foregroundStyle(c.composing ? .primary : .secondary)
+                                .lineLimit(1)
+                        }
                         Spacer(minLength: 0)
                         Image(systemName: "mic.fill").foregroundStyle(.secondary)
                     }

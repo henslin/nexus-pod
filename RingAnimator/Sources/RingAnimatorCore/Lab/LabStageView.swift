@@ -38,7 +38,7 @@ public struct LabStageView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             controls
-                .frame(width: lab.experiment == .system ? 420 : 300)
+                .frame(width: lab.experiment.isQBranch ? 420 : 300)
         }
         .onAppear { appeared = Date() }
         .onChange(of: lab.audioReactive, initial: true) { _, on in
@@ -92,6 +92,8 @@ public struct LabStageView: View {
                     Group {
                         if lab.experiment == .system {
                             LabPlayView(frame: f, config: config)
+                        } else if lab.experiment == .app {
+                            LabAppView(frame: f, config: config)
                         } else {
                             LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.activePost)
                         }
@@ -213,14 +215,14 @@ public struct LabStageView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .onTapGesture {
-                if lab.experiment.isTappable, lab.experiment != .system { lab.advance() }
+                if lab.experiment.isTappable, !lab.experiment.isQBranch { lab.advance() }
             }
             // Press and hold, for the Hold flow: begins on touch-down,
             // ends on release — `DragGesture(minimumDistance: 0)` is the
             // one gesture that reports both.
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { g in
-                    if lab.experiment.isHoldable, lab.experiment != .system { lab.beginHold() }
+                    if lab.experiment.isHoldable, !lab.experiment.isQBranch { lab.beginHold() }
                     if lab.experiment.usesPointer { lab.pointer = pointerLocal(g.location) }
                 }
                 .onEnded { _ in lab.endHold() })
@@ -273,7 +275,7 @@ public struct LabStageView: View {
     /// The inspector: the experiment's rail, or — in Q Branch — the board.
     @ViewBuilder
     private var controls: some View {
-        if lab.experiment == .system {
+        if lab.experiment.isQBranch {
             ScrollView {
                 LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: 360), specs: specs,
                              frameAt: { frame(at: $0, diameter: 360) })
@@ -681,6 +683,8 @@ public struct LabExperimentView: View {
             LabCaptionView(frame: frame, config: config)
         case .system:
             LabPlayView(frame: frame, config: config)
+        case .app:
+            LabAppView(frame: frame, config: config)
         case .askButton:
             LabAskButtonView(frame: frame, config: config)
         case .quidgets:

@@ -55,12 +55,14 @@ struct LabAskButton: View {
         return CGPoint(x: LabPhone.inset + (size.width - LabPhone.inset * 2) - pod / 2, y: size.height - LabPhone.bottom - pod / 2)
     }
     /// Where the button sits, by placement.
-    private var home: CGPoint {
+    private var home: CGPoint { Self.home(placement, size: size, buttonSize: buttonSize) }
+    static func home(_ placement: LabAskPlacement, size: CGSize, buttonSize: CGFloat = 52) -> CGPoint {
         let r = buttonSize / 2
+        let pod = CGFloat(RingConfig.tabBarPodDiameter)
         switch placement {
         case .floating: return CGPoint(x: size.width - 16 - r, y: size.height - LabPhone.bottom - 62 - 14 - r)
         case .navBar: return CGPoint(x: size.width - 16 - 22, y: 62)
-        case .tabBar: return podHome
+        case .tabBar: return CGPoint(x: LabPhone.inset + (size.width - LabPhone.inset * 2) - pod / 2, y: size.height - LabPhone.bottom - pod / 2)
         }
     }
     private var fillChoice: Int { Int(frame.p("fill", .gooey)) }

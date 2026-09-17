@@ -863,6 +863,8 @@ struct LabGooeyMenu: View {
     let icons: [String]
     /// The + itself, or the pod's own look sitting there.
     var drawsButton: Bool = true
+    /// Live: an item tapped, by index.
+    var onSelect: ((Int) -> Void)? = nil
 
     var body: some View {
         let effect = Int(frame.p("effect", .gooey))
@@ -969,6 +971,12 @@ struct LabGooeyMenu: View {
                     .foregroundStyle(iconColor)
                     .opacity(iconAlpha * (p > 0.6 ? 1 : 0))
                     .position(pt)
+                if let onSelect, open, p > 0.9 {
+                    Circle().fill(Color.clear).frame(width: R * 2 + 8, height: R * 2 + 8)
+                        .contentShape(Circle())
+                        .position(pt)
+                        .onTapGesture { onSelect(i) }
+                }
             }
         }
     }
