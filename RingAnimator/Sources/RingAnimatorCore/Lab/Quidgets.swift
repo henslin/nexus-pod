@@ -151,19 +151,28 @@ struct QuidgetGlass: ViewModifier {
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        Group {
-            if hidden {
-                content
-            } else if noGlass {
-                content.background(shape.fill((dark ? Color(hex: "#1C1C1E") : Color.white).opacity(max(0.7, white))))
-            } else if #available(iOS 26.0, macOS 26.0, *) {
-                content.glassEffect(white > 0 ? .regular.tint((dark ? Color(hex: "#1C1C1E") : Color.white).opacity(white)) : .regular, in: shape)
-            } else {
-                content.background(.regularMaterial, in: shape)
+        let panel = dark ? Color(hex: "#1C1C1E") : Color.white
+        // The glass is one platform view with one, constant, look: the
+        // panel's white is a fill over it, and "hidden" is opacity —
+        // so a size or style change while a quidget morphs only ever
+        // animates, never inserts a fresh glass view (which AppKit
+        // would bring in from the window's bottom-left).
+        content
+            .background(shape.fill(panel.opacity(hidden ? 0 : (noGlass ? max(0.7, white) : white))))
+            .background {
+                if !noGlass {
+                    Group {
+                        if #available(iOS 26.0, macOS 26.0, *) {
+                            Color.clear.glassEffect(.regular, in: shape)
+                        } else {
+                            shape.fill(.regularMaterial)
+                        }
+                    }
+                    .opacity(hidden ? 0 : 1)
+                }
             }
-        }
-        // The file's "Shadow": a soft dark blur under the container.
-        .shadow(color: .black.opacity(hidden ? 0 : 0.08), radius: 20, y: 8)
+            // The file's "Shadow": a soft dark blur under the container.
+            .shadow(color: .black.opacity(hidden ? 0 : 0.08), radius: 20, y: 8)
     }
 }
 
@@ -891,6 +900,11 @@ public struct QuidgetChatView: View {
     }
 }
 
+/// For harnesses: hear the slot frames as they arrive.
+public enum QuidgetDebug {
+    nonisolated(unsafe) public static var frames: (([String: CGRect]) -> Void)?
+}
+
 /// Where each quidget's slot is, in the stage.
 struct QuidgetSlotKey: PreferenceKey {
     static let defaultValue: [String: CGRect] = [:]
@@ -940,6 +954,7 @@ public struct QuidgetStage<Content: View>: View {
     }
 
     static var spring: Animation { .spring(response: 0.5, dampingFraction: 0.82) }
+
     /// The expanded card's top, from the file.
     static var expandedTop: CGFloat { 118 }
 
@@ -970,7 +985,7 @@ public struct QuidgetStage<Content: View>: View {
             }
         }
         .coordinateSpace(name: "quidgets")
-        .onPreferenceChange(QuidgetSlotKey.self) { frames = $0 }
+        .onPreferenceChange(QuidgetSlotKey.self) { frames = $0; QuidgetDebug.frames?($0) }
         .animation(Self.spring, value: demo.expanded)
         .frame(width: screen.width, height: screen.height, alignment: .topLeading)
     }
