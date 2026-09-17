@@ -428,10 +428,20 @@ public struct QuidgetView: View {
         let k: CGFloat = size == .large ? 2 : 1
         return tileCard(title: "Front Door", value: demo.locked ? "Locked" : "Unlocked") {
             VStack(spacing: 0) {
-                Image(systemName: demo.locked ? "lock.fill" : "lock.open.fill")
-                    .font(.system(size: 30 * k, weight: .medium))
-                    .frame(width: 32 * k, height: 32 * k)
-                    .padding(.top, 6 * k)
+                Spacer(minLength: 0)
+                // The shackle swings between locked and open (SF Symbols'
+                // magic replace, where the platform has it).
+                Group {
+                    if #available(macOS 15.0, iOS 18.0, *) {
+                        Image(systemName: demo.locked ? "lock.fill" : "lock.open.fill")
+                            .contentTransition(.symbolEffect(.replace.magic(fallback: .downUp)))
+                    } else {
+                        Image(systemName: demo.locked ? "lock.fill" : "lock.open.fill")
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                }
+                .font(.system(size: 30 * k, weight: .medium))
+                .frame(width: 36 * k, height: 36 * k)
                 Spacer(minLength: 0)
                 Text("Front Door").font(.system(size: 12 * k, weight: .semibold)).tracking(-0.43)
                 Text(demo.locked ? "Locked" : "Unlocked").font(.system(size: 12 * k)).tracking(-0.43).padding(.bottom, 12 * k)
@@ -650,7 +660,7 @@ public struct QuidgetView: View {
 
     private func expand() {
         guard Self.expands(kind) else { return }
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { demo.expanded = slot ?? kind.rawValue }
+        withAnimation(QuidgetStage<EmptyView>.spring) { demo.expanded = slot ?? kind.rawValue }
     }
 }
 
@@ -682,15 +692,50 @@ struct QuidgetHold: ViewModifier {
     let demo: QuidgetDemo
     let enabled: Bool
     let open: () -> Void
+    @State private var pressing = false
+    @State private var start: CGPoint? = nil
+    @State private var timer: Task<Void, Never>? = nil
+
+    /// How long a press is a hold.
+    static let duration: Duration = .milliseconds(320)
+    /// How far it may wander before it's a drag instead.
+    static let slop: CGFloat = 6
 
     func body(content: Content) -> some View {
-        content.onLongPressGesture(minimumDuration: 0.35, maximumDistance: 6) {
-            guard enabled else { return }
-            demo.holdOpened = true
-            open()
-        } onPressingChanged: { pressing in
-            if pressing, enabled { demo.holdOpened = false }
-        }
+        content
+            // Push: the quidget gives under the finger.
+            .scaleEffect(pressing ? 0.95 : 1)
+            .animation(.spring(response: 0.22, dampingFraction: 0.8), value: pressing)
+            // A press, watched alongside whatever the tile does with it:
+            // the timer starts on touch-down and pops the quidget open
+            // while the finger is still there; moving or lifting first
+            // cancels it. The quick actions read the flag on release.
+            .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { g in
+                    guard enabled else { return }
+                    if let start {
+                        if hypot(g.location.x - start.x, g.location.y - start.y) > Self.slop { cancel() }
+                        return
+                    }
+                    start = g.location
+                    demo.holdOpened = false
+                    pressing = true
+                    timer = Task { @MainActor in
+                        try? await Task.sleep(for: Self.duration)
+                        guard !Task.isCancelled, pressing else { return }
+                        pressing = false
+                        demo.holdOpened = true
+                        open()
+                    }
+                }
+                .onEnded { _ in cancel() })
+    }
+
+    private func cancel() {
+        timer?.cancel()
+        timer = nil
+        start = nil
+        pressing = false
     }
 }
 
@@ -1083,7 +1128,8 @@ public struct QuidgetStage<Content: View>: View {
         self.content = content
     }
 
-    static var spring: Animation { .spring(response: 0.5, dampingFraction: 0.82) }
+    /// Quick, like a peek popping open.
+    static var spring: Animation { .spring(response: 0.36, dampingFraction: 0.86) }
 
     /// The expanded card's top, from the file.
     static var expandedTop: CGFloat { 118 }
