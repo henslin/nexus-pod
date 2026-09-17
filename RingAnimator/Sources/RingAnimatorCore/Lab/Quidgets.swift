@@ -630,16 +630,19 @@ struct QuidgetDimmer: View {
             // The fill grows up from the bottom and darkens as the light
             // dims (Chris, 2026-09-16): the file's amber at full, a deep
             // amber near off.
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Self.fill(at: level))
-                    .modifier(QuidgetInset(radius: 20, fill: .clear, strong: true))
-                    .frame(width: inner.width, height: max(0, fillH))
-                    .opacity(fillAlpha)
-            }
-            .frame(width: inner.width, height: inner.height, alignment: .bottom)
-            .padding(.bottom, inset)
+            // The fill is the full tile, revealed from the bottom by a
+            // mask — so its corners keep their radius however low it
+            // goes, instead of squashing as the rectangle gets short.
+            // Its straight top edge hides under the grabber.
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Self.fill(at: level))
+                .modifier(QuidgetInset(radius: 20, fill: .clear, strong: true))
+                .frame(width: inner.width, height: inner.height)
+                .mask(alignment: .bottom) {
+                    Rectangle().frame(width: inner.width, height: max(0, fillH))
+                }
+                .opacity(fillAlpha)
+                .padding(.bottom, inset)
             QuidgetKnob(radius: 20) {
                 Image(systemName: "lightbulb.fill")
                     .font(.system(size: icon, weight: .medium))
