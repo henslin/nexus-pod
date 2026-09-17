@@ -149,13 +149,29 @@ public struct LabPlayView: View {
                              open: step == .askMenu, since: sinceChange, items: spec.items,
                              suggestions: LabAskContext.devices)
             }
+            // A typed ask in a container that floats — the pill, the
+            // card — brings the keyboard up from the bottom of the phone
+            // and lifts the container above it. The sheet and the full
+            // screen hold their own.
+            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card) && !onAnotherScreen
+            let lift: CGFloat = keyboardUp ? LabKeyboardView.height - 62 - LabPhone.bottom : 0
+            ZStack(alignment: .bottom) {
+                Color.clear
+                if let t = conversation?.typing, keyboardUp {
+                    LabKeyboardView(text: script.ask, typed: t.typed, phase: t.phase, width: phone.width)
+                        .transition(.move(edge: .bottom))
+                }
+            }
+            .animation(spring, value: keyboardUp)
             LabMorphPanel(state: state, frame: panelFrame, config: config,
                           sinceChange: state.kind == .pod ? .infinity : surfaceAge,
                           untilChange: untilClose,
                           caption: verb.caption,
                           conversation: conversation)
                 .position(onAnotherScreen ? podHome : home)
+                .offset(y: -lift)
                 .animation(spring, value: state.kind)
+                .animation(spring, value: keyboardUp)
             if showChrome {
                 VStack(spacing: 3) {
                     Text(Self.title(of: step))
