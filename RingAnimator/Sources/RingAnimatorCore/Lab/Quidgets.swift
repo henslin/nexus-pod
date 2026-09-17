@@ -165,6 +165,8 @@ enum QuidgetInk {
     static let blueInk = Color(hex: "#17539C")
     static let heat = Color(hex: "#EE8A62")            // the thermostat, heating
     static let heatInk = Color(hex: "#8A2F12")
+    static let standby = Color(hex: "#D0D0D0")         // the thermostat, holding (25694:6920)
+    static let standbyInk = Color(hex: "#404040")
     static let glyphGrey = Color(hex: "#8E919E")
     static let label = Color(hex: "#636466")
     // Dark mode, from the Gap UI page (25672:5560).
@@ -465,9 +467,11 @@ public struct QuidgetView: View {
     private var thermostat: some View {
         let k: CGFloat = size == .large ? 2 : 1
         let trend = demo.thermostatTrend
-        let fill = trend > 0 ? QuidgetInk.heat : QuidgetInk.blue
-        let ink = trend > 0 ? QuidgetInk.heatInk : QuidgetInk.blueInk
-        let value = trend > 0 ? "Heating to \(demo.thermostat)°" : trend < 0 ? "Cooling to \(demo.thermostat)°" : "\(demo.thermostat)°"
+        // Warm below the setpoint, cool above, and — there — the file's
+        // grey standby: neither heating nor cooling.
+        let fill = trend > 0 ? QuidgetInk.heat : trend < 0 ? QuidgetInk.blue : QuidgetInk.standby
+        let ink = trend > 0 ? QuidgetInk.heatInk : trend < 0 ? QuidgetInk.blueInk : QuidgetInk.standbyInk
+        let value = trend > 0 ? "Heating to \(demo.thermostat)°" : trend < 0 ? "Cooling to \(demo.thermostat)°" : "Holding at \(demo.thermostat)°"
         return tileCard(title: "Thermostat", value: value) {
             VStack(spacing: 0) {
                 Text("\(demo.thermostat)°").font(.system(size: 36 * k, weight: .light)).tracking(-0.43)
@@ -475,21 +479,20 @@ public struct QuidgetView: View {
                     .padding(.top, 22 * k)
                     .contentTransition(.numericText())
                 Spacer(minLength: 0)
-                // Taps, not Buttons: a tap gesture lets go when you hold,
-                // so a long press anywhere on the tile opens the card.
-                HStack(spacing: 0) {
-                    Image(systemName: "chevron.down").font(.system(size: 13 * k, weight: .semibold))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
-                        .onTapGesture { guard quick else { return }; demo.thermostat = max(50, demo.thermostat - 1) }
-                    Rectangle().fill(Color.white.opacity(0.25)).frame(width: 1, height: 18 * k)
-                    Image(systemName: "chevron.up").font(.system(size: 13 * k, weight: .semibold))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
+                // The file's two circle chevrons, 22 pt, 42 apart, in the
+                // state's ink. Taps, not Buttons: a tap gesture lets go
+                // when you hold, so a long press anywhere opens the card.
+                HStack(spacing: 13 * k) {
+                    Image(systemName: "chevron.up.circle.fill")
+                        .frame(width: 29 * k, height: 29 * k).contentShape(Circle())
                         .onTapGesture { guard quick else { return }; demo.thermostat = min(90, demo.thermostat + 1) }
+                    Image(systemName: "chevron.down.circle.fill")
+                        .frame(width: 29 * k, height: 29 * k).contentShape(Circle())
+                        .onTapGesture { guard quick else { return }; demo.thermostat = max(50, demo.thermostat - 1) }
                 }
-                .foregroundStyle(.white)
-                .frame(width: 85 * k, height: 32 * k)
-                .background(RoundedRectangle(cornerRadius: 15 * k, style: .continuous).fill(ink))
-                .padding(.bottom, 8 * k)
+                .font(.system(size: 22 * k))
+                .foregroundStyle(ink)
+                .padding(.bottom, 14 * k)
             }
             .frame(width: Self.tileSize.width * k, height: Self.tileSize.height * k)
             .modifier(QuidgetInset(radius: 20 * k, fill: fill, strong: true))
