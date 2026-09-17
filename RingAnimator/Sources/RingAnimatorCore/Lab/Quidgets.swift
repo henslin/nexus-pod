@@ -834,6 +834,8 @@ struct QuidgetDimmer: View {
     var held: () -> Bool = { false }
     /// Tells the quidget the drag has the press.
     var busy: (Bool) -> Void = { _ in }
+    /// A drag that set off sideways is a row pan, not a dim.
+    @State private var sideways = false
     @State private var dragFrom: Double? = nil
     /// How far the drag has gone past the ends, in points — positive
     /// past the top. The control stretches like a rubber band and snaps
@@ -890,6 +892,8 @@ struct QuidgetDimmer: View {
         .gesture(DragGesture(minimumDistance: relative ? 8 : 0)
             .onChanged { g in
                 guard !held() else { return }
+                if relative, dragFrom == nil { sideways = abs(g.translation.width) > abs(g.translation.height) }
+                guard !sideways else { return }
                 busy(true)
                 let v: Double
                 if relative {
@@ -906,6 +910,7 @@ struct QuidgetDimmer: View {
             }
             .onEnded { _ in
                 dragFrom = nil
+                sideways = false
                 busy(false)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { overshoot = 0 }
             })
@@ -1025,7 +1030,7 @@ public struct QuidgetChatView: View {
     }
 
     public var body: some View {
-        QuidgetStage(demo: demo, screen: screen, slots: exchanges.flatMap { x in x.kinds.map { QuidgetSlot(id: x.id + "." + $0.rawValue, kind: $0, size: inlineSize($0, count: x.kinds.count)) } }) {
+        QuidgetStage(demo: demo, screen: screen, slots: exchanges.flatMap { x in x.kinds.map { QuidgetSlot(id: x.id + "." + $0.rawValue, kind: $0, size: inlineSize($0, count: x.kinds.count), row: x.kinds.count > 1 ? x.id : nil) } }) {
             ZStack(alignment: .topLeading) {
                 dark ? QuidgetInk.groundDark : QuidgetInk.ground
                 VStack(alignment: .leading, spacing: 0) {
@@ -1077,15 +1082,10 @@ public struct QuidgetChatView: View {
             }
             .padding(.leading, 16)
             .padding(.trailing, 16)
-            Group {
-                if noGlass || x.kinds.count == 1 {
-                    row.frame(width: screen.width, alignment: .leading).clipped()
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) { row }
-                        .frame(width: screen.width)
-                }
-            }
-            .padding(.top, 15)
+            // The slots are placeholders — the quidgets themselves are
+            // in the stage's layer, so it's the stage that pans the row.
+            row.frame(width: screen.width, alignment: .leading).clipped()
+                .padding(.top, 15)
             if !x.chips.isEmpty {
                 let chips = HStack(spacing: 10) {
                     ForEach(x.chips, id: \.self) { chip in
@@ -1164,7 +1164,10 @@ public struct QuidgetSlot: Identifiable {
     public let id: String
     public let kind: QuidgetKind
     public let size: QuidgetSize
-    public init(id: String, kind: QuidgetKind, size: QuidgetSize) { self.id = id; self.kind = kind; self.size = size }
+    /// The row this slot is in, when the row is wider than the screen
+    /// and pans — three small quidgets, the third cut off at the edge.
+    public var row: String? = nil
+    public init(id: String, kind: QuidgetKind, size: QuidgetSize, row: String? = nil) { self.id = id; self.kind = kind; self.size = size; self.row = row }
 }
 
 /// Content with quidget slots in it, and the quidgets themselves in a
@@ -1180,6 +1183,9 @@ public struct QuidgetStage<Content: View>: View {
     /// The quidget on top: the one expanded, and still the one that
     /// was, all the way back down to its slot.
     @State private var top: String? = nil
+    /// Each row's pan, and where a pan began.
+    @State private var pans: [String: CGFloat] = [:]
+    @State private var panFrom: CGFloat? = nil
     public init(demo: QuidgetDemo, screen: CGSize, slots: [QuidgetSlot], @ViewBuilder content: @escaping () -> Content) {
         self.demo = demo
         self.screen = screen
@@ -1192,6 +1198,40 @@ public struct QuidgetStage<Content: View>: View {
 
     /// The expanded card's top, from the file.
     static var expandedTop: CGFloat { 118 }
+
+    /// How far a row can pan: its last slot's edge, 16 in from the
+    /// screen's, back to where it started.
+    private func panRange(_ row: String) -> CGFloat {
+        let right = slots.filter { $0.row == row }.compactMap { frames[$0.id]?.maxX }.max() ?? 0
+        return max(0, right + 16 - screen.width)
+    }
+
+    /// A sideways drag on a row's quidget pans the row, rubber-banding
+    /// past its ends and coasting on release; an up-and-down drag is
+    /// the quidget's own.
+    private func rowPan(_ slot: QuidgetSlot) -> some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
+            .onChanged { g in
+                guard let row = slot.row else { return }
+                if panFrom == nil {
+                    guard abs(g.translation.width) > abs(g.translation.height) else { return }
+                    panFrom = pans[row] ?? 0
+                }
+                guard let from = panFrom else { return }
+                let range = panRange(row)
+                let raw = from + g.translation.width
+                let over = raw > 0 ? raw : (raw < -range ? raw + range : 0)
+                let clamped = min(0, max(-range, raw))
+                pans[row] = clamped + over * 0.3
+            }
+            .onEnded { g in
+                guard let row = slot.row, let from = panFrom else { return }
+                panFrom = nil
+                let range = panRange(row)
+                let target = min(0, max(-range, from + g.predictedEndTranslation.width))
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) { pans[row] = target }
+            }
+    }
 
     /// How far the expanded card has been pulled, 0…1 over the first
     /// 260 points: it follows the finger, shrinking a little and
@@ -1215,6 +1255,7 @@ public struct QuidgetStage<Content: View>: View {
                 let expanded = demo.expanded == slot.id
                 let others = demo.expanded != nil && !expanded
                 let frame = frames[slot.id] ?? .zero
+                let pan = slot.row.flatMap { pans[$0] } ?? 0
                 let w = expanded ? QuidgetView.expandedWidth(slot.kind) : frame.width
                 QuidgetView(kind: slot.kind, size: expanded ? .large : slot.size, demo: demo, slot: slot.id)
                     .frame(width: max(1, w), alignment: .top)
@@ -1223,8 +1264,9 @@ public struct QuidgetStage<Content: View>: View {
                     .allowsHitTesting(!others)
                     .scaleEffect(expanded ? 1 - pullProgress * 0.12 : 1)
                     .offset(expanded ? demo.pull : .zero)
-                    .offset(x: expanded ? (screen.width - w) / 2 : frame.minX, y: expanded ? Self.expandedTop : frame.minY)
+                    .offset(x: expanded ? (screen.width - w) / 2 : frame.minX + pan, y: expanded ? Self.expandedTop : frame.minY)
                     .opacity(frames[slot.id] == nil ? 0 : 1)
+                    .simultaneousGesture(rowPan(slot), including: slot.row != nil && !expanded ? .all : .subviews)
                     .zIndex(expanded || top == slot.id ? 1 : 0)
             }
         }
