@@ -593,6 +593,21 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Where an experiment's code came from, and what its licence lets
+    /// us do — shown in the rail, so the terms are in front of you
+    /// while you explore (Chris, 2026-09-17: "clear that we can use it
+    /// to explore but can't ship without permission").
+    public var licence: LabLicence? {
+        switch self {
+        case .orbKit: return LabLicence(source: "Libraries.dev · ThinkingOrbsKit", terms: "MIT — free to ship.", shippable: true)
+        case .beamKit: return LabLicence(source: "Libraries.dev · BorderBeamKit", terms: "MIT — free to ship.", shippable: true)
+        case .matrixOrb: return LabLicence(source: "rareui · Matrix Orb", terms: "Free for personal and commercial use; attribution appreciated. Not to be resold as a kit.", shippable: true)
+        case .voiceOrb: return LabLicence(source: "assistant-ui · Voice Orb", terms: "MIT, © 2025 AgentbaseAI — free to ship with the notice.", shippable: true)
+        case .orb21: return LabLicence(source: "shadercn · ORB-21 · shader by XorDev", terms: "Non-commercial use only, with attribution to XorDev. Explore here freely; it can’t ship in a product without XorDev’s permission.", shippable: false)
+        default: return nil
+        }
+    }
+
     /// Can stand in for the ring inside the flows — see `LabState.hero`.
     /// The bases that draw a disc on their own.
     public var canBeHero: Bool {
@@ -2136,4 +2151,13 @@ extension LabState {
         if h < 0 { h += 1 }
         return Color(hue: h, saturation: s, brightness: v)
     }
+}
+
+
+/// The terms a vendored thing came with.
+public struct LabLicence: Equatable, Sendable {
+    public var source: String
+    public var terms: String
+    /// Whether it may go into the product as-is.
+    public var shippable: Bool
 }

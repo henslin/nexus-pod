@@ -106,6 +106,10 @@ public struct LabRailView: View {
                 targetBanner(target)
                 Divider()
             }
+            if let licence = lab.experiment.licence {
+                licenceBanner(licence)
+                Divider()
+            }
             aboutSection
             experimentSection
             if !lab.experiment.usesPhoneCanvas {
@@ -198,6 +202,25 @@ public struct LabRailView: View {
         }
         .padding(14)
         .background(Color.accentColor.opacity(0.08))
+    }
+
+    /// Whose code this is and what we may do with it — loud when it
+    /// can't ship, quiet when it can.
+    private func licenceBanner(_ licence: LabLicence) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(licence.shippable ? licence.source : "Explore only — not shippable", systemImage: licence.shippable ? "checkmark.seal" : "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(licence.shippable ? Color.secondary : Color.orange)
+            if !licence.shippable {
+                Text(licence.source).font(.caption.weight(.medium))
+            }
+            Text(licence.terms)
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(licence.shippable ? Color.clear : Color.orange.opacity(0.12))
     }
 
     // MARK: Sections
