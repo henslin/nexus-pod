@@ -976,8 +976,8 @@ public struct QuidgetStage<Content: View>: View {
                 .allowsHitTesting(demo.expanded != nil)
                 .onTapGesture { withAnimation(Self.spring) { demo.expanded = nil } }
             // The quidgets sit above the dim; the ones not expanded dim
-            // and blur themselves. (A changing zIndex would re-insert
-            // the view and animate a second copy — never change it.)
+            // and blur themselves, and the expanded one rises above
+            // them all, whatever its place in the chat.
             ForEach(slots) { slot in
                 let expanded = demo.expanded == slot.id
                 let others = demo.expanded != nil && !expanded
@@ -990,6 +990,7 @@ public struct QuidgetStage<Content: View>: View {
                     .allowsHitTesting(!others)
                     .offset(x: expanded ? (screen.width - w) / 2 : frame.minX, y: expanded ? Self.expandedTop : frame.minY)
                     .opacity(frames[slot.id] == nil ? 0 : 1)
+                    .zIndex(expanded ? 1 : 0)
             }
         }
         .coordinateSpace(name: "quidgets")
