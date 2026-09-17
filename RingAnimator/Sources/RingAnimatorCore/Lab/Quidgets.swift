@@ -91,7 +91,11 @@ public final class QuidgetDemo: ObservableObject {
     @Published public var mode: SecurityMode = .armAway
     @Published public var locked: Bool = true
     @Published public var thermostat: Int = 70
-    @Published public var expanded: QuidgetKind? = nil
+    /// The slot whose quidget is expanded — the slot, not the kind: a
+    /// chat can show the same kind twice (the patio light, then the
+    /// light in the multi-command row), and only the one you tapped
+    /// should morph.
+    @Published public var expanded: String? = nil
     /// The mode being switched to, while the house takes a moment to
     /// arm or disarm — the button shows a spinner instead of its glyph.
     @Published public var arming: SecurityMode? = nil
@@ -289,14 +293,18 @@ public struct QuidgetView: View {
     public let size: QuidgetSize
     @ObservedObject var demo: QuidgetDemo
     var namespace: Namespace.ID? = nil
+    /// The slot this quidget sits in, for a stage to know which one
+    /// expanded. On its own, the kind stands in.
+    var slot: String? = nil
     @Environment(\.colorScheme) private var scheme
     private var dark: Bool { scheme == .dark }
 
-    public init(kind: QuidgetKind, size: QuidgetSize, demo: QuidgetDemo, namespace: Namespace.ID? = nil) {
+    public init(kind: QuidgetKind, size: QuidgetSize, demo: QuidgetDemo, namespace: Namespace.ID? = nil, slot: String? = nil) {
         self.kind = kind
         self.size = size
         self.demo = demo
         self.namespace = namespace
+        self.slot = slot
     }
 
     /// The file's small quidget: 129 × 146, radius 34.
@@ -577,7 +585,7 @@ public struct QuidgetView: View {
 
     private func expand() {
         guard Self.expands(kind) else { return }
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { demo.expanded = kind }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { demo.expanded = slot ?? kind.rawValue }
     }
 }
 
@@ -971,11 +979,11 @@ public struct QuidgetStage<Content: View>: View {
             // and blur themselves. (A changing zIndex would re-insert
             // the view and animate a second copy — never change it.)
             ForEach(slots) { slot in
-                let expanded = demo.expanded == slot.kind
+                let expanded = demo.expanded == slot.id
                 let others = demo.expanded != nil && !expanded
                 let frame = frames[slot.id] ?? .zero
                 let w = expanded ? QuidgetView.expandedWidth(slot.kind) : frame.width
-                QuidgetView(kind: slot.kind, size: expanded ? .large : slot.size, demo: demo)
+                QuidgetView(kind: slot.kind, size: expanded ? .large : slot.size, demo: demo, slot: slot.id)
                     .frame(width: max(1, w), alignment: .top)
                     .blur(radius: others ? 16 : 0)
                     .brightness(others ? -0.25 : 0)
