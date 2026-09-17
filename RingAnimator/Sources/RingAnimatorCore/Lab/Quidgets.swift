@@ -411,7 +411,8 @@ public struct QuidgetView: View {
             .padding(.top, large ? 38 : 0)
             QuidgetDimmer(level: $demo.lightLevel,
                           track: large ? CGSize(width: 160, height: 383) : Self.wellSize,
-                          inset: large ? 10 : 4, knobHeight: large ? 64 : 44, icon: large ? 22 : 16, relative: !large)
+                          inset: large ? 10 : 4, knobHeight: large ? 64 : 44, icon: large ? 22 : 16, relative: !large,
+                          held: { demo.holdOpened })
                 .padding(.top, large ? 30 : 11)
             Spacer(minLength: 0)
         }
@@ -503,7 +504,10 @@ public struct QuidgetView: View {
         return VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(SecurityMode.allCases) { mode in
-                    let shown = !small || demo.mode == mode
+                    // Folded, the tray shows the mode on its way in — pick
+                    // one in the card and come back early, and the small
+                    // quidget has it spinning until it lands.
+                    let shown = !small || (demo.arming ?? demo.mode) == mode
                     modeCard(mode, selected: demo.mode == mode)
                         .frame(width: 103.33)
                         .contentShape(Rectangle())
@@ -712,13 +716,13 @@ struct QuidgetHold: ViewModifier {
             // cancels it. The quick actions read the flag on release.
             .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { g in
-                    guard enabled else { return }
                     if let start {
                         if hypot(g.location.x - start.x, g.location.y - start.y) > Self.slop { cancel() }
                         return
                     }
                     start = g.location
                     demo.holdOpened = false
+                    guard enabled else { return }
                     pressing = true
                     timer = Task { @MainActor in
                         try? await Task.sleep(for: Self.duration)
@@ -777,6 +781,9 @@ struct QuidgetDimmer: View {
     /// hold on the well doesn't set the light; the tall card's track
     /// goes straight to the touch.
     var relative = false
+    /// True while the press that popped the quidget open is still down:
+    /// the tall card's track must not take it as a touch.
+    var held: () -> Bool = { false }
     @State private var dragFrom: Double? = nil
     /// How far the drag has gone past the ends, in points — positive
     /// past the top. The control stretches like a rubber band and snaps
@@ -832,6 +839,7 @@ struct QuidgetDimmer: View {
         .scaleEffect(x: 1 - stretch * 0.45, y: 1 + stretch, anchor: overshoot >= 0 ? .bottom : .top)
         .gesture(DragGesture(minimumDistance: relative ? 8 : 0)
             .onChanged { g in
+                guard !held() else { return }
                 let v: Double
                 if relative {
                     let from = dragFrom ?? level
