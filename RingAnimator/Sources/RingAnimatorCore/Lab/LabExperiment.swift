@@ -1797,13 +1797,82 @@ public final class LabPresetStore: ObservableObject {
     }
 }
 
+/// Your defaults, per experiment: the knobs, post stack and hero an
+/// experiment opens with, and what Reset returns to — set from the rail
+/// as you go through each one (Chris, 2026-09-17: "tweak it and have
+/// that become the new default"). Kept in UserDefaults; the code's own
+/// defaults are the factory floor underneath. When the pass is done,
+/// these get baked into the code.
+@MainActor
+public final class LabDefaultsStore: ObservableObject {
+    public struct Default: Codable, Equatable {
+        public var values: [String: Double]
+        public var post: [String]
+        public var hero: String?
+    }
+    public static let shared = LabDefaultsStore()
+    @Published public private(set) var defaults: [String: Default] = [:]
+    private let key = "nexus.lab.defaults"
+
+    public init() {
+        if let data = UserDefaults.standard.data(forKey: key),
+           let decoded = try? JSONDecoder().decode([String: Default].self, from: data) { defaults = decoded }
+    }
+
+    public func has(_ e: LabExperiment) -> Bool { defaults[e.id] != nil }
+
+    /// A knob's default, if you've set one.
+    public func value(_ key: String, of e: LabExperiment) -> Double? { defaults[e.id]?.values[key] }
+
+    /// Make the experiment as it is now its default.
+    public func set(from lab: LabState) {
+        let e = lab.experiment
+        let prefix = e.id + "."
+        var values = lab.values.filter { $0.key.hasPrefix(prefix) }
+        // The post stack's own knobs come along, so the look is whole.
+        for post in lab.activePost { for (k, v) in lab.values where k.hasPrefix(post.experiment.id + ".") { values[k] = v } }
+        // Resolve what's set against the current default, so a knob left
+        // at the old default stays where it is.
+        for p in e.parameters { values["\(e.id).\(p.id)"] = lab.value(p, of: e) }
+        defaults[e.id] = Default(values: values, post: lab.activePost.map(\.rawValue), hero: lab.hero?.rawValue)
+        persist()
+    }
+
+    /// Back to the code's own default.
+    public func forget(_ e: LabExperiment) {
+        defaults.removeValue(forKey: e.id)
+        persist()
+    }
+
+    public func forgetAll() {
+        defaults = [:]
+        persist()
+    }
+
+    /// The experiment's post stack and hero, as you set them.
+    func applyLook(of e: LabExperiment, to lab: LabState) {
+        guard let d = defaults[e.id] else { return }
+        lab.post = d.post.compactMap(LabPostEffect.init(rawValue:))
+        lab.hero = d.hero.flatMap(LabExperiment.init(rawValue:))
+    }
+
+    private func persist() {
+        if let data = try? JSONEncoder().encode(defaults) { UserDefaults.standard.set(data, forKey: key) }
+    }
+}
+
 /// The Lab's shared knobs. One object so every experiment gets the same
 /// inputs and switching between them is a fair comparison, not a
 /// comparison of two different settings.
 @MainActor
 public final class LabState: ObservableObject {
     @Published public var experiment: LabExperiment = .aurora {
-        didSet { if !oldValue.isQBranch { benchBefore = oldValue } }
+        didSet {
+            if !oldValue.isQBranch { benchBefore = oldValue }
+            // An experiment opens as you left its default: its own knobs
+            // fall through to it, and its post stack and hero come with it.
+            if experiment != oldValue { LabDefaultsStore.shared.applyLook(of: experiment, to: self) }
+        }
     }
     /// 0…1. What "more" means is per experiment — warp for Aurora, glow
     /// for Orb, radius for Bloom — but it always means more.
@@ -1950,7 +2019,8 @@ public final class LabState: ObservableObject {
     }
 
     public func value(_ parameter: LabParameter, of experiment: LabExperiment) -> Double {
-        values["\(experiment.id).\(parameter.id)"] ?? parameter.defaultValue
+        let key = "\(experiment.id).\(parameter.id)"
+        return values[key] ?? LabDefaultsStore.shared.value(key, of: experiment) ?? parameter.defaultValue
     }
 
     public func binding(_ parameter: LabParameter, of experiment: LabExperiment) -> Binding<Double> {
@@ -1959,8 +2029,25 @@ public final class LabState: ObservableObject {
             set: { self.values["\(experiment.id).\(parameter.id)"] = $0 })
     }
 
+    /// Back to the experiment's default — yours, if you've set one.
     public func resetParameters(of experiment: LabExperiment) {
         for p in experiment.parameters { values.removeValue(forKey: "\(experiment.id).\(p.id)") }
+        LabDefaultsStore.shared.applyLook(of: experiment, to: self)
+    }
+
+    /// Everything the Lab remembers, forgotten: every knob, every
+    /// default you set, the post stack, the hero, the spec back to a
+    /// starter. Presets and reviews stay — they're named.
+    public func resetEverything() {
+        values = [:]
+        post = []
+        hero = nil
+        LabDefaultsStore.shared.forgetAll()
+        spec = LabSpec.starters[0]
+        target = nil
+        for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("nexus.lab.rail.") {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 
     /// The current experiment's knobs, resolved, for a `LabFrame`.

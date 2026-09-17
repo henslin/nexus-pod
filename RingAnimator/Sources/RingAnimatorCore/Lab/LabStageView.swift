@@ -858,9 +858,23 @@ struct LabPresetsMenu: View {
     @Binding var saving: Bool
     @Binding var name: String
 
+    @ObservedObject private var defaults = LabDefaultsStore.shared
+    @State private var confirmingReset = false
+
     var body: some View {
         let mine = presets.presets(for: lab.experiment)
         Menu {
+            // The default: what this experiment opens with and Reset
+            // returns to. Set it as you go through each one.
+            Button {
+                defaults.set(from: lab)
+            } label: {
+                Label(defaults.has(lab.experiment) ? "Update Default" : "Make This the Default", systemImage: "pin")
+            }
+            if defaults.has(lab.experiment) {
+                Button("Forget Default (Factory)", role: .destructive) { defaults.forget(lab.experiment) }
+            }
+            Divider()
             if mine.isEmpty {
                 Text("No presets yet")
             } else {
@@ -874,10 +888,19 @@ struct LabPresetsMenu: View {
             }
             Divider()
             Button("Save Preset…") { saving = true }
+            Divider()
+            Button("Reset Everything to Factory…", role: .destructive) { confirmingReset = true }
         } label: {
-            Label("Presets", systemImage: "square.stack").font(.caption)
+            Label("Presets", systemImage: defaults.has(lab.experiment) ? "pin.fill" : "square.stack").font(.caption)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .help(defaults.has(lab.experiment) ? "This experiment has a default you set." : "Presets, and the default this experiment opens with.")
+        .confirmationDialog("Reset everything to factory?", isPresented: $confirmingReset, titleVisibility: .visible) {
+            Button("Reset Everything", role: .destructive) { lab.resetEverything() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every knob, every default you've set, the post stack, the hero and the Q Branch spec go back to the code's own. Presets and reviews stay.")
+        }
     }
 }
