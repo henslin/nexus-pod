@@ -95,6 +95,7 @@ public struct LabStageView: View {
                     .id(lab.experiment)
                 }
                 .frame(width: screen.width, height: screen.height)
+                .traceFrame("stage screen")
                 .clipShape(RoundedRectangle(cornerRadius: AnimationExporter.phoneScreenCornerRadius, style: .continuous))
                 .contentShape(Rectangle())
                 .onTapGesture { if lab.stageTappable { lab.advance() } }
@@ -114,6 +115,7 @@ public struct LabStageView: View {
                 lab.finish.image
                     .resizable()
                     .frame(width: AnimationExporter.phoneFrameSize.width, height: AnimationExporter.phoneFrameSize.height)
+                    .traceFrame("stage frame artwork")
                     .allowsHitTesting(false)
             }
             .frame(width: AnimationExporter.phoneFrameSize.width, height: AnimationExporter.phoneFrameSize.height)
@@ -707,8 +709,10 @@ public struct LabExperimentView: View {
     public var body: some View {
         // Fill: scale the base so its content spans the disc. The post
         // stack and the glyph sit outside the scale, so a bloom's reach
-        // and the glyph's size are unaffected.
-        let scale = 1 + frame.fill * (1 / experiment.naturalFill - 1)
+        // and the glyph's size are unaffected. A phone canvas is a
+        // phone, not an orb on a disc: never scaled — 3% on Q Branch
+        // put its screen 13 pt above the frame's aperture (2026-09-18).
+        let scale = experiment.usesPhoneCanvas ? 1 : 1 + frame.fill * (1 / experiment.naturalFill - 1)
         LabPostStack(effects: post, frame: frame) {
             ZStack {
                 base.scaleEffect(scale)

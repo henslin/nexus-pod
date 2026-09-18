@@ -112,6 +112,7 @@ public struct NexusScreen: View {
         }
         .frame(width: size.width, height: size.height)
         .clipped()
+        .traceFrame("NexusScreen \(tab.rawValue)")
     }
 }
 
@@ -163,6 +164,7 @@ struct NexusNavBar: View {
             }
             .foregroundStyle(ink.dark ? .white : .black)
             .frame(height: Self.islandCenterY * 2)
+            .traceFrame("status band")
             .frame(height: 62, alignment: .top)
             // The toolbar, 4 pt further from the island than the status
             // band alone leaves.
