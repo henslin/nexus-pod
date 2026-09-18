@@ -454,8 +454,8 @@ public struct LabListView: View {
             set: { if let it = $0 { lab.experiment = it } }
         )
         List(selection: selection) {
-            ForEach(LabSection.allCases) { section in
-                Section {
+            ForEach(LabSection.sidebarOrder) { section in
+                Section(isExpanded: expanded(section)) {
                     if section == .orb {
                         // Sixty bases read as six shelves.
                         ForEach(section.families, id: \.family) { family, bases in
@@ -489,7 +489,19 @@ public struct LabListView: View {
                 }
             }
         }
+        #if os(macOS)
+        .listStyle(.sidebar)
+        #endif
     }
+
+    /// Q Branch stays open; the experiments fold, and start folded.
+    private func expanded(_ section: LabSection) -> Binding<Bool> {
+        Binding(
+            get: { section == .qBranch || UserDefaults.standard.object(forKey: "nexus.lab.side.\(section.id)") as? Bool ?? false },
+            set: { open = ($0, section.id); UserDefaults.standard.set($0, forKey: "nexus.lab.side.\(section.id)") })
+    }
+    /// A tick so the list re-reads the folds.
+    @State private var open: (Bool, String) = (false, "")
 
     private func row(_ experiment: LabExperiment) -> some View {
         HStack(spacing: 10) {

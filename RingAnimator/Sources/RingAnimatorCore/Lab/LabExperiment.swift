@@ -1523,6 +1523,10 @@ public struct LabMorphState: Identifiable, Equatable, Sendable {
 public enum LabSection: String, CaseIterable, Identifiable, Sendable {
     case orb, controls, surfaces, flows, qBranch
     public var id: String { rawValue }
+    /// The sidebar's order: Q Branch on top, the experiments — its
+    /// parts bin — folded under it (Chris, 2026-09-17: "elevate Q Branch
+    /// to the top and collapse the experiments").
+    public static var sidebarOrder: [LabSection] { [.qBranch, .orb, .controls, .surfaces, .flows] }
     public var title: String {
         switch self {
         case .orb: return "Orb"
@@ -1539,7 +1543,7 @@ public enum LabSection: String, CaseIterable, Identifiable, Sendable {
         case .controls: return "What you tap. The Ask button, buttons, beams."
         case .surfaces: return "What opens. Pod, capsule, card, sheet, full screen — and what rides on them."
         case .flows: return "How it moves. Tap, hold, listen, talk — voice-forward and full screen."
-        case .qBranch: return "Where it comes together. A look for every slot, the whole agent played."
+        case .qBranch: return "Where it comes together: the Agent, played; the App, in your hand. Everything below serves this."
         }
     }
     public var symbol: String {
