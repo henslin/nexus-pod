@@ -115,7 +115,15 @@ public final class AudioSpectrumMonitor: ObservableObject, @unchecked Sendable {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         #if !targetEnvironment(simulator)
-        if recognizer.supportsOnDeviceRecognition { req.requiresOnDeviceRecognition = true }
+        // Nothing leaves the device: the transcript runs on the device's
+        // own model or not at all. (The Simulator has no such model and
+        // is the one place the server path is allowed — development
+        // only, never a shipped device.)
+        guard recognizer.supportsOnDeviceRecognition else {
+            transcriptError = "On-device speech recognition isn't available for this language, so the transcript stays off — nothing is sent anywhere."
+            return
+        }
+        req.requiresOnDeviceRecognition = true
         #endif
         request = req
         partialCount = 0

@@ -154,33 +154,38 @@ public enum WhatsNew {
     /// Bump this when the notes change. The screen shows itself once per
     /// value, so editing the copy without bumping it means nobody who has
     /// already dismissed the old notes ever sees the new ones.
-    public static let version = "3.7.0"
+    public static let version = "3.8.0"
 
     public static let current: [WhatsNewItem] = [
         WhatsNewItem(
-            symbol: "circle.circle",
-            title: "The Pod Has States",
-            detail: "The Nexus tab can now show the ring, a photo, or a glyph. The ring is the quiet default; a photo or glyph is what interrupts it — a known person arriving home, an alert. Pick one under Status."
+            symbol: "wrench.and.screwdriver",
+            title: "Q Branch, Two Lanes",
+            detail: "The Lab now leads with Q Branch. The Agent plays the whole assembly on the clock — every state, the menu, each surface. The App is the phone in your hand: the real screens, tap a tab, tap the pod, type an ask or hold to talk, and the agent answers and does the thing. The experiments fold underneath as its parts bin."
         ),
         WhatsNewItem(
-            symbol: "ellipsis.message",
-            title: "A Message Above the Bar",
-            detail: "A photo or glyph can carry a sentence — \"John arrived home.\" — as a glass panel the full width of the tab bar that spawns from the pod, the way Music's mini player does. It wraps rather than truncating, chooses how it enters, and can dismiss itself after a few seconds or wait to be tapped."
+            symbol: "square.grid.2x2.fill",
+            title: "Quidgets",
+            detail: "Quick widgets in the agent’s replies — a dimmer, the arm bar, a clip, a lock, a thermostat — built to the pixel with Liquid Glass. Tap one for its quick action, hold to pop it open, swipe it away. Arm the house in a reply and the dashboard arms."
         ),
         WhatsNewItem(
-            symbol: "square.grid.2x2",
-            title: "Four Inspectors, One State",
-            detail: "The Controls panel is split the way Keynote's is: Animation, Status, and AI Agent are three views of the selected state, and Global is the app around it. A state is still one saved animation — nothing was split into separate libraries."
+            symbol: "iphone",
+            title: "The App’s Screens, Natively",
+            detail: "Dashboard, Feed, Emergency, Devices and Routines are built from the design file rather than screenshots — light and dark, the file’s own glyphs — and they read the same house the agent writes to."
         ),
         WhatsNewItem(
-            symbol: "textformat",
-            title: "Rename the Tabs",
-            detail: "Global → Tabs lets you change each tab's name and swap its glyph for any SF Symbol or one of the bundled icons. Which screenshot a tab shows is tied to the tab itself, so renaming one never repoints its content."
+            symbol: "circle.hexagongrid.fill",
+            title: "Three More Orbs",
+            detail: "Matrix Orb, Voice Orb and Orb 21, ported from the web into Canvas and Metal, with every knob on the rail. Each room says whose code it is and what we may do with it; Orb 21 is explore-only until its author says otherwise."
         ),
         WhatsNewItem(
-            symbol: "wand.and.stars",
-            title: "Glass Is App-Wide",
-            detail: "Liquid Glass settings now belong to the app rather than to each saved animation, so switching states no longer restyles the tab bar underneath you. Existing animations still open; they just no longer carry a material of their own."
+            symbol: "pin.fill",
+            title: "Your Defaults",
+            detail: "Every orb opens on the defaults you set in the pass of 17 September; Reset returns to them. Pin a room to change its default, and post effects belong to the animation they sit on."
+        ),
+        WhatsNewItem(
+            symbol: "checkmark.seal",
+            title: "Snow Leopard",
+            detail: "No new features in this last pass, just the existing ones made right: every build clean on every platform, the microphone says why when it can’t start, and a spec saved by an older build opens instead of vanishing."
         ),
     ]
 }

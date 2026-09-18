@@ -138,9 +138,13 @@ public final class SpeechToTextService: ObservableObject, @unchecked Sendable {
         // Speech framework). Real devices get the (faster, offline-
         // capable) on-device path; the Simulator falls back to Apple's
         // server-based recognition, which works fine but needs internet.
-        if recognizer.supportsOnDeviceRecognition {
-            req.requiresOnDeviceRecognition = true
+        // Nothing leaves the device: on the device's own model, or not at
+        // all (the Simulator, above, is development only).
+        guard recognizer.supportsOnDeviceRecognition else {
+            lastError = "On-device speech recognition isn't available for this language, so dictation stays off — nothing is sent anywhere."
+            return
         }
+        req.requiresOnDeviceRecognition = true
         #endif
         request = req
 
