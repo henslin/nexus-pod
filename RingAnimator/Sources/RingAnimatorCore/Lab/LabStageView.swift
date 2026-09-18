@@ -182,6 +182,7 @@ public struct LabStageView: View {
                     Text("Interact").tag(true)
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .frame(width: 180)
             }
         }

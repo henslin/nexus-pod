@@ -112,6 +112,9 @@ public struct LabConversation: Equatable {
     /// keyboard lights the key just pressed.
     public var typedAsk: String? = nil
     public var sinceKey: Double = .infinity
+    /// The ask field: the pill as an input — text, the mic, send — the
+    /// moment after tapping Nexus (Chris, 2026-09-18).
+    public var field: Bool = false
 
     public init(script: LabScript, mode: Mode, verb: LabAgentVerb, since: Double, age: Double) {
         self.script = script
@@ -256,15 +259,55 @@ struct LabConversationView: View {
         case .pod:
             LabHeroView(frame: frame, config: config, diameter: 62)
         case .pill:
-            HStack(spacing: 10) {
-                LabHeroView(frame: frame, config: config, diameter: 44)
-                Text(c.status ?? (c.composing ? c.askShown(frame: frame) : c.script.answer))
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                    .contentTransition(.numericText())
-                Spacer(minLength: 0)
+            if c.field {
+                // The ask field: the pod became a field above the tab
+                // bar. Type, or switch to voice; send when there's
+                // something to send.
+                let ask = c.askShown(frame: frame)
+                HStack(spacing: 8) {
+                    if let actions, c.composing, c.mode == .text {
+                        TextField("Ask Nexus", text: actions.draft)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 17))
+                            .focused($fieldFocused)
+                            .onSubmit { actions.submit(actions.draft.wrappedValue) }
+                            .onAppear { fieldFocused = true }
+                    } else if c.mode == .voice {
+                        LabWaveformBars(frame: frame, bars: 22, height: 20)
+                    } else {
+                        Text(ask.isEmpty ? "Ask Nexus" : ask + (c.composing ? "▍" : ""))
+                            .font(.system(size: 17))
+                            .foregroundStyle(ask.isEmpty ? .secondary : .primary)
+                            .lineLimit(1)
+                            .contentTransition(.numericText())
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: c.mode == .voice ? "keyboard" : "mic.fill")
+                        .font(.system(size: 17))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28)
+                        .contentShape(Rectangle())
+                        .onTapGesture { actions?.toggleVoice() }
+                        .help("Switch to voice")
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(ask.isEmpty && (actions?.draft.wrappedValue.isEmpty ?? true) ? AnyShapeStyle(.tertiary) : AnyShapeStyle(primary))
+                        .contentShape(Circle())
+                        .onTapGesture { if let actions { actions.submit(actions.draft.wrappedValue) } }
+                        .help("Send")
+                }
+                .padding(.leading, 18).padding(.trailing, 10)
+            } else {
+                HStack(spacing: 10) {
+                    LabHeroView(frame: frame, config: config, diameter: 44)
+                    Text(c.status ?? (c.composing ? c.askShown(frame: frame) : c.script.answer))
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                        .contentTransition(.numericText())
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
             }
-            .padding(.horizontal, 12)
         case .card:
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 10) {
@@ -343,11 +386,9 @@ struct LabConversationView: View {
                 if c.showsFollowUps { followUps(size: 13).padding(.leading, 4) }
                 Spacer(minLength: 0)
                 inputBar(height: 44)
-                    .padding(.bottom, c.typing == nil ? 0 : LabKeyboardView.height - 20 + 8)
             }
             .padding(20)
             .modifier(QuidgetStageModifier(demo: quidgets, screen: size, quidget: quidget))
-            .overlay(alignment: .bottom) { keyboard(width: size.width) }
         case .fullScreen:
             VStack(spacing: 16) {
                 Spacer(minLength: 30)

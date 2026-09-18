@@ -26,6 +26,11 @@ public final class LabAppSession: ObservableObject {
     /// A surface opened by a hold takes the hold's shape (full screen,
     /// if the spec says so) — remembered past the release.
     @Published public var byHold = false
+    /// Opened as the ask field: a pill with the input in it, until the
+    /// ask is sent — then Ask's own container.
+    @Published public var asField = false
+    /// The field, switched to voice.
+    @Published public var fieldVoice = false
     /// The ask being typed, and the last keystroke.
     @Published public var draft = ""
     @Published public var keyAt = Date.distantPast
@@ -46,11 +51,12 @@ public final class LabAppSession: ObservableObject {
         let mode: LabConversation.Mode = surface == .talk ? .voice : .text
         let age = date.timeIntervalSince(surfaceAt)
         guard let askedAt, let script else {
-            var c = LabConversation(script: defaultScript, mode: mode, verb: .listening, since: age, age: age)
-            if mode == .text {
+            var c = LabConversation(script: defaultScript, mode: showingField && fieldVoice ? .voice : mode, verb: .listening, since: age, age: age)
+            if c.mode == .text {
                 c.typedAsk = draft
                 c.sinceKey = date.timeIntervalSince(keyAt)
             }
+            c.field = showingField
             return c
         }
         let t = date.timeIntervalSince(askedAt)
@@ -73,6 +79,7 @@ public final class LabAppSession: ObservableObject {
         switch spec.tap {
         case .menu: toggleMenu()
         case .nothing: break
+        case .field: open(.ask, asField: true)
         default: open(spec.tap.item ?? .ask)
         }
     }
@@ -88,14 +95,21 @@ public final class LabAppSession: ObservableObject {
         open(item)
     }
 
-    public func open(_ item: LabActionItem, byHold: Bool = false) {
+    public func open(_ item: LabActionItem, byHold: Bool = false, asField: Bool = false) {
         surface = item
         surfaceAt = Date()
         self.byHold = byHold
+        self.asField = asField
+        fieldVoice = false
         draft = ""
         script = nil
         askedAt = nil
     }
+    /// The field's mic / keyboard glyph.
+    public func toggleVoice() { fieldVoice.toggle() }
+    /// Whether the field is what's showing: opened as one, and nothing
+    /// sent yet.
+    public var showingField: Bool { asField && askedAt == nil && surface == .ask }
 
     /// Hold the pod: the long-press action, listening while held.
     public func beginHold(spec: LabSpec) {
@@ -165,6 +179,7 @@ struct LabConversationActions {
     var draft: Binding<String>
     var submit: (String) -> Void
     var close: () -> Void
+    var toggleVoice: () -> Void = {}
 }
 
 struct LabConversationActionsKey: EnvironmentKey {
@@ -201,6 +216,8 @@ struct LabAppView: View {
             guard let item else { return LabSurfaceSpec(kind: .pod) }
             var s = spec.resolvedSurface(for: item)
             if session.byHold, spec.longPress.isFullScreen { s.kind = .fullScreen }
+            // The field is a pill until the ask is sent.
+            if session.showingField { s.kind = .pill }
             return s
         }()
         let state = surface.morphState
@@ -217,7 +234,8 @@ struct LabAppView: View {
         let actions = LabConversationActions(
             draft: Binding(get: { session.draft }, set: { session.typed($0) }),
             submit: { session.submit($0, defaultScript: defaultScript) },
-            close: { session.close() })
+            close: { session.close() },
+            toggleVoice: { session.toggleVoice() })
         let menuSince = now.timeIntervalSince(session.menuAt)
 
         return ZStack {
@@ -270,9 +288,9 @@ struct LabAppView: View {
             #if os(iOS)
             let keyboardUp = false
             #else
-            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card)
+            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet)
             #endif
-            let lift: CGFloat = keyboardUp ? LabKeyboardView.height - 62 - LabPhone.bottom : 0
+            let (lift, sheetHeight) = LabPlayView.keyboardFit(kind: state.kind, up: keyboardUp, phone: phone)
             ZStack(alignment: .bottom) {
                 Color.clear
                 if let t = conversation?.typing, keyboardUp {
@@ -286,7 +304,8 @@ struct LabAppView: View {
                           sinceChange: state.kind == .pod ? .infinity : age,
                           untilChange: .infinity,
                           caption: verb.caption,
-                          conversation: conversation)
+                          conversation: conversation,
+                          height: sheetHeight)
                 .environment(\.labConversationActions, actions)
                 .position(home)
                 .offset(y: -lift)

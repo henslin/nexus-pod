@@ -125,16 +125,22 @@ public enum LabGestureResult: String, CaseIterable, Identifiable, Codable, Senda
     /// Talk, taking the whole screen whatever container Talk normally
     /// opens — the voice-forward hold (Chris, 2026-09-16).
     case fullScreen
+    /// The ask field: the pod morphs into a field above the tab bar —
+    /// type, or switch to voice, and send; the ask then opens Ask's
+    /// container (Chris, 2026-09-18).
+    case field
     public var id: String { rawValue }
     public var label: String {
         switch self {
         case .nothing: return "Nothing"
         case .menu: return "Open the menu"
         case .fullScreen: return "Talk, full screen"
+        case .field: return "Open the ask field"
         default: return item.map { "Open \($0.label)" } ?? rawValue
         }
     }
-    public var item: LabActionItem? { self == .fullScreen ? .talk : LabActionItem(rawValue: rawValue) }
+    public var item: LabActionItem? { self == .fullScreen ? .talk : self == .field ? .ask : LabActionItem(rawValue: rawValue) }
+    public var isField: Bool { self == .field }
     public var isFullScreen: Bool { self == .fullScreen }
 }
 

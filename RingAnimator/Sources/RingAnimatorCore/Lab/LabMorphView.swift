@@ -53,7 +53,7 @@ struct LabMorphView: View {
         switch kind {
         case .pod:        return CGPoint(x: LabPhone.inset + (phone.width - LabPhone.inset * 2) - pod / 2, y: phone.height - LabPhone.bottom - pod / 2)
         case .pill, .card: return CGPoint(x: phone.width / 2, y: phone.height - LabPhone.bottom - 62 - 12 - size.height / 2)
-        case .sheet:      return CGPoint(x: phone.width / 2, y: phone.height - size.height / 2)
+        case .sheet:      return CGPoint(x: phone.width / 2, y: phone.height - LabMorphPanel.sheetInset - size.height / 2)
         case .fullScreen: return CGPoint(x: phone.width / 2, y: phone.height / 2)
         }
     }
@@ -112,7 +112,14 @@ public struct LabMorphPanel: View {
     /// play, running a script through the states.
     var conversation: LabConversation? = nil
 
-    public init(state: LabMorphState, frame: LabFrame, config: RingConfig, sinceChange: Double = .infinity, untilChange: Double = .infinity, caption: String? = nil, conversation: LabConversation? = nil) {
+    /// A sheet's margin from the screen's sides and bottom.
+    static let sheetInset: CGFloat = 12
+    /// A height the stage insists on — the sheet, shortened to sit above
+    /// the keyboard.
+    var height: CGFloat? = nil
+
+    public init(state: LabMorphState, frame: LabFrame, config: RingConfig, sinceChange: Double = .infinity, untilChange: Double = .infinity, caption: String? = nil, conversation: LabConversation? = nil, height: CGFloat? = nil) {
+        self.height = height
         self.state = state
         self.frame = frame
         self.config = config
@@ -159,11 +166,18 @@ public struct LabMorphPanel: View {
         case .pod:        return CGSize(width: 62, height: 62)
         case .pill:       return CGSize(width: LabMorphView.phone.width - LabPhone.inset * 2, height: 62)
         case .card:       return CGSize(width: LabMorphView.phone.width - LabPhone.inset * 2, height: 176)
-        case .sheet:      return CGSize(width: LabMorphView.phone.width, height: 600)
+        // The sheet floats: inset from the sides and the bottom, every
+        // corner rounded — iOS 26's, not iOS 17's flush one (Chris,
+        // 2026-09-18: "the sheet itself should have a bit of a margin").
+        case .sheet:      return CGSize(width: LabMorphView.phone.width - LabMorphPanel.sheetInset * 2, height: 600)
         case .fullScreen: return LabMorphView.phone
         }
     }
-    private var size: CGSize { Self.size(of: state.kind) }
+    private var size: CGSize {
+        var s = Self.size(of: state.kind)
+        if let height { s.height = height }
+        return s
+    }
 
     private var cornerRadius: CGFloat {
         switch state.kind {

@@ -35,6 +35,8 @@ public enum LabStepPhase: String, Codable, CaseIterable, Identifiable, Sendable 
     case menu
     /// An action's container open, with the agent in a state.
     case surface
+    /// The ask field: the pod morphed into a field above the tab bar.
+    case field
     /// The app-wide Ask button on a screen that isn't the Nexus tab.
     case ask
     /// That button's menu open.
@@ -46,6 +48,7 @@ public enum LabStepPhase: String, Codable, CaseIterable, Identifiable, Sendable 
         case .rest: return "Pod"
         case .menu: return "Menu"
         case .surface: return "Surface"
+        case .field: return "Ask field"
         case .ask: return "Ask button"
         case .askMenu: return "Ask menu"
         }
@@ -55,6 +58,7 @@ public enum LabStepPhase: String, Codable, CaseIterable, Identifiable, Sendable 
         case .rest: return "circle"
         case .menu: return "circle.grid.2x1"
         case .surface: return "rectangle.portrait"
+        case .field: return "character.cursor.ibeam"
         case .ask: return "sparkles"
         case .askMenu: return "sparkles.rectangle.stack"
         }
@@ -66,13 +70,14 @@ public enum LabStepPhase: String, Codable, CaseIterable, Identifiable, Sendable 
 /// step should include." The type is the phase and the state together,
 /// named the way you'd say it; the inspector shows what the type has.
 public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
-    case idle, menu, listening, thinking, searching, speaking, done, error, askElsewhere, askMenu
+    case idle, menu, field, listening, thinking, searching, speaking, done, error, askElsewhere, askMenu
     public var id: String { rawValue }
 
     public var label: String {
         switch self {
         case .idle: return "Idle"
         case .menu: return "Menu"
+        case .field: return "Ask field"
         case .listening: return "Listening"
         case .thinking: return "Thinking"
         case .searching: return "Searching"
@@ -87,6 +92,7 @@ public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .idle: return "The pod at rest in the tab bar."
         case .menu: return "The pod's menu open."
+        case .field: return "Tap Nexus: a field morphs out of the pod above the tab bar — type, switch to voice, send."
         case .listening: return "The container open; the person asks."
         case .thinking: return "The agent working on it."
         case .searching: return "The agent doing named work — checking a device, reading a log."
@@ -101,6 +107,7 @@ public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .idle: return .rest
         case .menu: return .menu
+        case .field: return .field
         case .askElsewhere: return .ask
         case .askMenu: return .askMenu
         default: return .surface
@@ -108,7 +115,7 @@ public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
     }
     public var verb: LabAgentVerb {
         switch self {
-        case .listening: return .listening
+        case .listening, .field: return .listening
         case .thinking: return .thinking
         case .searching: return .searching
         case .speaking: return .speaking
@@ -122,7 +129,7 @@ public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
     public var seconds: Double {
         switch self {
         case .idle, .menu, .askElsewhere, .askMenu: return 2.5
-        case .listening: return 3
+        case .listening, .field: return 3
         case .thinking: return 2
         case .searching: return 3
         case .speaking: return 5
@@ -130,7 +137,7 @@ public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
         }
     }
     /// Whether this kind has a line to say.
-    public var speaks: Bool { [.listening, .searching, .speaking, .done, .error].contains(self) }
+    public var speaks: Bool { [.field, .listening, .searching, .speaking, .done, .error].contains(self) }
     /// Whether a reply of this kind can carry a quidget.
     public var carries: Bool { self == .speaking || self == .done }
     /// Whether this kind can act on the house.
@@ -138,7 +145,7 @@ public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
     /// A first line, so the type is legible before it's edited.
     public var sampleLine: String {
         switch self {
-        case .listening: return "Arm my system"
+        case .listening, .field: return "Arm my system"
         case .searching: return "Checking the cameras…"
         case .speaking: return "Your cameras are armed and your system is in Arm Away mode."
         case .done: return "Arm Away when you leave?\nDisarm when you arrive home?"
@@ -195,7 +202,7 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
         self.phase = kind.phase
         self.verb = kind.verb
         self.tab = tab.rawValue
-        self.item = kind.phase == .surface ? (item ?? .talk) : nil
+        self.item = kind.phase == .surface ? (item ?? .talk) : kind.phase == .field ? .ask : nil
         self.seconds = kind.seconds
         self.line = kind.sampleLine
         if kind == .askElsewhere || kind == .askMenu, tab == .dashboard { self.tab = NexusTab.devices.rawValue }
@@ -260,6 +267,7 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
             switch phase {
             case .rest: return .idle
             case .menu: return .menu
+            case .field: return .field
             case .ask: return .askElsewhere
             case .askMenu: return .askMenu
             case .surface:
@@ -279,6 +287,7 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
             phase = newValue.phase
             verb = newValue.verb
             if phase == .surface, item == nil { item = .talk }
+            if phase == .field { item = .ask }
             if seconds == was.seconds { seconds = newValue.seconds }
             if line.isEmpty || line == was.sampleLine { line = newValue.sampleLine }
             if !newValue.carries { carries = nil }
@@ -291,6 +300,7 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
         switch phase {
         case .rest: return "Idle"
         case .menu: return "Menu"
+        case .field: return "Ask field"
         case .surface:
             let i = item ?? .talk
             let v = i == .ask && verb == .listening ? "Typing" : verb.label
@@ -331,6 +341,14 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
         if let item {
             var verbs: [LabAgentVerb] = [.listening, .thinking, .searching, .speaking, .done]
             if withError { verbs.insert(.error, at: 3) }
+            // A tap that opens the ask field: the field is the listening
+            // step, and the ask opens Ask's container from Thinking on.
+            if spec.tap.isField {
+                var field = LabStep(kind: .field)
+                field.line = script.ask
+                out.append(field)
+                verbs.removeFirst()
+            }
             for verb in verbs {
                 var s = LabStep(.surface, item: item, verb: verb)
                 switch verb {
@@ -372,7 +390,7 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
     /// what the speaking step carries and does what it does.
     public var script: LabScript {
         func line(_ verb: LabAgentVerb) -> String? {
-            steps.first { $0.phase == .surface && $0.verb == verb && !$0.line.isEmpty }?.line
+            steps.first { ($0.phase == .surface || $0.phase == .field) && $0.verb == verb && !$0.line.isEmpty }?.line
         }
         let speaking = steps.first { $0.phase == .surface && $0.verb == .speaking }
         return LabScript(id: id.uuidString, title: name,
@@ -412,7 +430,7 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
     /// The first and last steps that show a surface — the conversation's
     /// span, for transitions that run from when it opened.
     public var surfaceRange: ClosedRange<Int>? {
-        let idx = steps.indices.filter { steps[$0].phase == .surface }
+        let idx = steps.indices.filter { steps[$0].phase == .surface || steps[$0].phase == .field }
         guard let a = idx.first, let b = idx.last else { return nil }
         return a...b
     }

@@ -48,14 +48,14 @@ struct LabStepInspector: View {
             // the agent in its container, or the pod at rest — so "how
             // do I change the idle animation?" is answered on the Idle
             // step (Chris, 2026-09-18).
-            LabRailSection("q.step.agent", step.phase == .surface ? "Agent" : "Pod", summary: step.look?.title ?? "Kit’s · \(kit.resolvedLook(for: step.verb)?.title ?? "the ring")") { agent }
+            LabRailSection("q.step.agent", step.phase == .surface || step.phase == .field ? "Agent" : "Pod", summary: step.look?.title ?? "Kit’s · \(kit.resolvedLook(for: step.verb)?.title ?? "the ring")") { agent }
             if step.phase == .menu || step.phase == .askMenu {
                 LabRailSection("q.step.menu", "Menu", summary: "\(kit.action.map { $0.experimentCase == .gooey ? "Gooey" : $0.title } ?? "Default goo") · \(kit.items.count) items") { menu }
             }
             if step.phase == .ask || step.phase == .askMenu {
                 LabRailSection("q.step.ask", "Ask Button", summary: "\((kit.askStyle ?? .goo).label) · \((kit.askPlacement ?? .floating).label)") { askButton }
             }
-            if step.phase == .surface, kind.speaks {
+            if (step.phase == .surface || step.phase == .field), kind.speaks {
                 LabRailSection("q.step.says", "Says", summary: step.line.isEmpty ? "Nothing" : "“\(step.line)”") { says }
             }
             LabRailSection("q.step.timing", "Timing", summary: "\(step.advance.label) · \(seconds(step.seconds))") { timing }

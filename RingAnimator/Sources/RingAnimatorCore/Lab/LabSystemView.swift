@@ -82,6 +82,7 @@ public struct LabPlayView: View {
             case .rest: self = .idle
             case .menu: self = .menu
             case .surface: self = .surface(step.item ?? .talk, step.verb == .idle ? .listening : step.verb)
+            case .field: self = .surface(.ask, .listening)
             case .ask: self = .askAnywhere
             case .askMenu: self = .askMenu
             }
@@ -90,6 +91,26 @@ public struct LabPlayView: View {
 
     /// For harnesses: how many steps a flow plays.
     public static func stepCount(of flow: LabFlow) -> Int { flow.steps.count }
+
+    /// The keyboard is the screen's, full width at the bottom. A floating
+    /// container lifts above it; the sheet shortens so it still floats,
+    /// with its margin, above the keyboard.
+    static func keyboardFit(kind: LabMorphKind, up: Bool, phone: CGSize) -> (lift: CGFloat, sheetHeight: CGFloat?) {
+        guard up else { return (0, nil) }
+        switch kind {
+        case .pill, .card: return (LabKeyboardView.height - 62 - LabPhone.bottom, nil)
+        case .sheet:
+            let full = LabMorphPanel.size(of: .sheet).height
+            let room = phone.height - LabKeyboardView.height - LabMorphPanel.sheetInset - 60
+            let h = min(full, room)
+            // Its home is set for the full height, so lifting by the
+            // keyboard puts its bottom a margin above the keys; a
+            // shorter sheet is centred, so its centre comes down by half
+            // the difference to keep that bottom where it is.
+            return (LabKeyboardView.height - (full - h) / 2, h)
+        default: return (0, nil)
+        }
+    }
 
     /// Where the play is: the step, how long it has been there, and how
     /// long until it moves on. On the clock, each step holds for its own
@@ -138,8 +159,11 @@ public struct LabPlayView: View {
             guard let item else { return LabSurfaceSpec(kind: .pod) }
             var s = held ? spec.resolvedSurface(for: item) : (current.surface ?? spec.resolvedSurface(for: item))
             if held, spec.longPress.isFullScreen { s.kind = .fullScreen }
+            // The ask field is a pill with the input in it.
+            if !held, current.phase == .field { s.kind = .pill }
             return s
         }()
+        let isField = !held && current.phase == .field
         let state = surface.morphState
         let look = held ? spec.resolvedLook(for: verb) : (current.look ?? spec.resolvedLook(for: verb))
         let panelFrame = frame.applying(look, config: config).applying(surface)
@@ -153,7 +177,11 @@ public struct LabPlayView: View {
             return sinceChange + (starts[index] - starts[r.lowerBound])
         }()
         let untilClose = (auto && index == surfaceRange?.upperBound) || frame.sinceHold < talk ? untilChange : .infinity
-        let conversation = item.map { LabConversation(script: script, mode: $0 == .talk ? .voice : .text, verb: verb, since: sinceChange, age: surfaceAge) }
+        let conversation: LabConversation? = item.map {
+            var c = LabConversation(script: script, mode: $0 == .talk ? .voice : .text, verb: verb, since: sinceChange, age: surfaceAge)
+            c.field = isField
+            return c
+        }
         let onAnotherScreen = step == .askAnywhere || step == .askMenu
         let tab: NexusTab = held ? .dashboard : current.tabCase
         let phone = LabMorphView.phone
@@ -205,8 +233,10 @@ public struct LabPlayView: View {
             // card — brings the keyboard up from the bottom of the phone
             // and lifts the container above it. The sheet and the full
             // screen hold their own.
-            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card) && !onAnotherScreen
-            let lift: CGFloat = keyboardUp ? LabKeyboardView.height - 62 - LabPhone.bottom : 0
+            // The field arrives alone for a beat; the keyboard comes up
+            // as the typing starts — the tap on the field, in effect.
+            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet) && !onAnotherScreen && !(isField && sinceChange < 0.7)
+            let (lift, sheetHeight) = Self.keyboardFit(kind: state.kind, up: keyboardUp, phone: phone)
             ZStack(alignment: .bottom) {
                 Color.clear
                 if let t = conversation?.typing, keyboardUp {
@@ -219,7 +249,8 @@ public struct LabPlayView: View {
                           sinceChange: state.kind == .pod ? .infinity : surfaceAge,
                           untilChange: untilClose,
                           caption: verb.caption,
-                          conversation: conversation)
+                          conversation: conversation,
+                          height: sheetHeight)
                 .position(onAnotherScreen ? podHome : home)
                 .offset(y: -lift)
                 .animation(spring, value: state.kind)
