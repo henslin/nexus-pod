@@ -2018,12 +2018,14 @@ public final class LabState: ObservableObject {
     /// Autoplay shows one (Chris, 2026-09-18: "when you select a step on
     /// the left, it renders on stage so you know what you're editing").
     public func go(to step: LabStep) {
+        LabTrace.log("go(to: \(step.title)) interact=\(qInteract) auto=\(autoRunning) taps=\(taps)")
         qSelection = .step(step.id)
         guard let i = flow.index(of: step.id) else { return }
         if qInteract { qInteract = false }
         values["system.auto"] = 0
         taps = i
         lastTap = Date()
+        LabTrace.log("  → interact=\(qInteract) auto=\(autoRunning) taps=\(taps) mode=\(values["system.mode"] ?? -1)")
     }
     /// When the stage's clock started — the stage sets it, so anything
     /// off the animation clock (the navigator) can still say where the
@@ -2076,6 +2078,7 @@ public final class LabState: ObservableObject {
     public func advance() {
         taps += 1
         lastTap = Date()
+        LabTrace.log("advance → taps=\(taps)")
         if experiment == .system, !autoRunning, !flow.steps.isEmpty {
             let n = flow.steps.count
             qSelection = .step(flow.steps[((taps % n) + n) % n].id)

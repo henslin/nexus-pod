@@ -20,11 +20,21 @@ public struct LabQBranchView: View {
     }
 
     public var body: some View {
-        if frame.p("mode", .system) >= 0.5 {
+        let interact = frame.p("mode", .system) >= 0.5
+        let _ = Self.trace(interact: interact, frame: frame)
+        if interact {
             LabAppView(frame: frame, config: config)
         } else {
             LabPlayView(frame: frame, config: config)
         }
+    }
+    nonisolated(unsafe) private static var last = ""
+    private static func trace(interact: Bool, frame: LabFrame) {
+        guard LabTrace.on else { return }
+        let auto = frame.p("auto", .system) >= 0.5
+        let pos = LabPlayView.position(in: frame.flow, frame: frame, auto: auto)
+        let line = "stage interact=\(interact) auto=\(auto) taps=\(frame.taps) index=\(pos.index) holding=\(frame.holding > 0) sinceHold<3=\(frame.sinceHold < 3)"
+        if line != last { last = line; LabTrace.log(line) }
     }
 }
 

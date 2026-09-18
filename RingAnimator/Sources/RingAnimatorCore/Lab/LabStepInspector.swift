@@ -43,10 +43,20 @@ struct LabStepInspector: View {
             LabRailSection("q.step.showing", "Showing", summary: showingSummary) { showing }
             if step.phase == .surface {
                 LabRailSection("q.step.container", "Container", summary: containerSummary) { container }
-                LabRailSection("q.step.agent", "Agent", summary: step.look?.title ?? "Kit’s · \(kit.resolvedLook(for: step.verb)?.title ?? "the ring")") { agent }
-                if kind.speaks {
-                    LabRailSection("q.step.says", "Says", summary: step.line.isEmpty ? "Nothing" : "“\(step.line)”") { says }
-                }
+            }
+            // Every step shows the look that's visible at that step —
+            // the agent in its container, or the pod at rest — so "how
+            // do I change the idle animation?" is answered on the Idle
+            // step (Chris, 2026-09-18).
+            LabRailSection("q.step.agent", step.phase == .surface ? "Agent" : "Pod", summary: step.look?.title ?? "Kit’s · \(kit.resolvedLook(for: step.verb)?.title ?? "the ring")") { agent }
+            if step.phase == .menu || step.phase == .askMenu {
+                LabRailSection("q.step.menu", "Menu", summary: "\(kit.action.map { $0.experimentCase == .gooey ? "Gooey" : $0.title } ?? "Default goo") · \(kit.items.count) items") { menu }
+            }
+            if step.phase == .ask || step.phase == .askMenu {
+                LabRailSection("q.step.ask", "Ask Button", summary: "\((kit.askStyle ?? .goo).label) · \((kit.askPlacement ?? .floating).label)") { askButton }
+            }
+            if step.phase == .surface, kind.speaks {
+                LabRailSection("q.step.says", "Says", summary: step.line.isEmpty ? "Nothing" : "“\(step.line)”") { says }
             }
             LabRailSection("q.step.timing", "Timing", summary: "\(step.advance.label) · \(seconds(step.seconds))") { timing }
         }
@@ -202,6 +212,11 @@ struct LabStepInspector: View {
     /// tune in place, the bench — and Use from the bench lands here, not
     /// in the kit. Clear it and the step wears the kit's again.
     @ViewBuilder private var agent: some View {
+        if step.phase != .surface {
+            Text("The pod at rest wears the kit's Idle look — or, if Idle is empty, the pod's own.")
+                .font(.caption).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         labelled("Wears") {
             Picker("", selection: Binding(get: { step.look != nil }, set: { own in
                 field(\.look).wrappedValue = own ? (kit.resolvedLook(for: step.verb) ?? LabLook(experiment: LabExperiment.orbKit.id)) : nil
@@ -222,6 +237,48 @@ struct LabStepInspector: View {
             Text("Editing here changes \(step.verb.label) in the kit — every step that wears it.")
                 .font(.caption).foregroundStyle(.tertiary)
         }
+    }
+
+    // MARK: Menu · Ask button (the kit's; shown where they're visible)
+
+    @ViewBuilder private var menu: some View {
+        LabSlotRow(lab: lab, config: config, clock: clock, frameAt: frameAt, title: "Goo", symbol: "circle.grid.2x1",
+                   look: kit.action, target: .action, set: { lab.spec.action = $0 }, isMenu: true, presets: presets)
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(LabActionItem.allCases) { item in
+                HStack(spacing: 8) {
+                    Toggle("", isOn: Binding(get: { kit.items.contains(item) }, set: { _ in lab.toggleItem(item) }))
+                        .labelsHidden().controlSize(.small)
+                    Image(systemName: item.symbol).font(.callout).frame(width: 20).foregroundStyle(.secondary)
+                    Text(item.label).font(.callout)
+                    Spacer(minLength: 0)
+                    if let i = kit.items.firstIndex(of: item) {
+                        Text("\(i + 1)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+        Text("The menu is the kit's — every Menu step shows the same one.")
+            .font(.caption).foregroundStyle(.tertiary)
+    }
+
+    @ViewBuilder private var askButton: some View {
+        LabSlotRow(lab: lab, config: config, clock: clock, frameAt: frameAt, title: "Button", symbol: "sparkles",
+                   look: kit.ask, target: .ask, set: { lab.spec.ask = $0 }, isMenu: true, presets: presets)
+        labelled("Placement") {
+            Picker("", selection: Binding(get: { kit.askPlacement ?? .floating }, set: { lab.spec.askPlacement = $0 })) {
+                ForEach(LabAskPlacement.allCases) { Text($0.label).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.menu).controlSize(.small)
+        }
+        labelled("Style") {
+            Picker("", selection: Binding(get: { kit.askStyle ?? .goo }, set: { lab.spec.askStyle = $0 })) {
+                ForEach(LabAskStyle.allCases) { Text($0.label).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.segmented).controlSize(.small)
+        }
+        Text("The Ask button is the kit's — it's the same button on every screen.")
+            .font(.caption).foregroundStyle(.tertiary)
     }
 
     // MARK: Says

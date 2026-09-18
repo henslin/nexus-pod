@@ -479,6 +479,7 @@ public struct LabListView: View {
                 }
             },
             set: {
+                LabTrace.log("sidebar set \(String(describing: $0))")
                 switch $0 {
                 case .room(let e): lab.experiment = e
                 case .flow: lab.experiment = .system; lab.qSelection = .flow
