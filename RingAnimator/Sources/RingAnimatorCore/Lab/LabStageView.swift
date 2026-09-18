@@ -872,7 +872,7 @@ struct LabPresetsMenu: View {
                 Label(defaults.has(lab.experiment) ? "Update Default" : "Make This the Default", systemImage: "pin")
             }
             if defaults.has(lab.experiment) {
-                Button("Forget Default (Factory)", role: .destructive) { defaults.forget(lab.experiment) }
+                Button("Forget Pin (Back to Baked)", role: .destructive) { defaults.forget(lab.experiment) }
             }
             Divider()
             if mine.isEmpty {
@@ -900,7 +900,7 @@ struct LabPresetsMenu: View {
             Button("Reset Everything", role: .destructive) { lab.resetEverything() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Every knob, every default you've set, the post stack, the hero and the Q Branch spec go back to the code's own. Presets and reviews stay.")
+            Text("Every knob, every pin you've made since the bake, the post stacks, the hero and the Q Branch spec go back to the baked defaults — your pass of 17 September. Presets and reviews stay.")
         }
     }
 }

@@ -300,7 +300,7 @@ struct LabKnobsSheet: View {
                     if lab.experiment.drawsHero {
                         Picker("Hero", selection: $lab.hero) {
                             Text("Ring").tag(LabExperiment?.none)
-                            ForEach(LabExperiment.allCases.filter(\.canBeHero)) { e in Text(e.name).tag(LabExperiment?.some(e)) }
+                            ForEach(LabExperiment.allCases.filter { $0.canBeHero && !$0.isHidden }) { e in Text(e.name).tag(LabExperiment?.some(e)) }
                         }
                     }
                 }

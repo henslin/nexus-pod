@@ -653,6 +653,9 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         // Chris, 2026-09-15: "Let's go with theirs." Libraries.dev's
         // Thinking Orbs is the one; the native sketch stays in code.
         case .thinkingOrbs: return true
+        // Chris, 2026-09-17, after the defaults pass: these seven are
+        // out. The code stays; the rooms are gone.
+        case .pour, .caustics, .slick, .globe, .swarm, .cascade, .volumetric: return true
         default: return false
         }
     }
@@ -1828,10 +1831,14 @@ public final class LabDefaultsStore: ObservableObject {
         }
     }
 
+    /// Whether you've pinned this experiment since the bake.
     public func has(_ e: LabExperiment) -> Bool { defaults[e.id] != nil }
 
-    /// A knob's default, if you've set one.
-    public func value(_ key: String, of e: LabExperiment) -> Double? { defaults[e.id]?.values[key] }
+    /// The experiment's default: your pin, or the baked one.
+    func `default`(of e: LabExperiment) -> Default? { defaults[e.id] ?? Self.baked[e.id] }
+
+    /// A knob's default, if one was set — pinned, or baked.
+    public func value(_ key: String, of e: LabExperiment) -> Double? { self.default(of: e)?.values[key] }
 
     /// Make the experiment as it is now its default.
     public func set(from lab: LabState) {
@@ -1859,7 +1866,7 @@ public final class LabDefaultsStore: ObservableObject {
 
     /// The experiment's post stack and hero, as you set them.
     func applyLook(of e: LabExperiment, to lab: LabState) {
-        guard let d = defaults[e.id] else { return }
+        guard let d = self.default(of: e) else { return }
         lab.posts[e] = d.post.compactMap(LabPostEffect.init(rawValue:))
         lab.disabledPosts[e] = []
         if let hero = d.hero.flatMap(LabExperiment.init(rawValue:)) { lab.hero = hero }
