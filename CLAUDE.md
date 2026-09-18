@@ -34,175 +34,75 @@ core library:
 ### The Lab (`RingAnimator/Sources/RingAnimatorCore/Lab/`)
 
 The Lab is the discovery-design studio for the AI agent's UI — "Sketch
-or Figma for designing an AI agent" (Chris, overnight 2026-09-15/16).
-Five rooms, in the order a designer meets the parts of an agent
-(`LabSection`): **Orb** (presence: ~60 bases on six shelves —
-`LabFamily` — plus post effects that stack over any), **Controls** (what
-you tap: Ask Button, Gooey, Metal, Border Beam), **Surfaces** (what
-opens: Morph — pill/card/sheet/full screen with adornments), **Flows**
-(how it moves: Journey, Agent States, Hold, Bloom Field), and **Q
-Branch** (where it comes together).
+or Figma for designing an AI agent" (Chris, overnight 2026-09-15/16). It
+leads with **Q Branch** and folds the experiments under it as its parts
+bin (Chris, 2026-09-17: "elevate Q Branch to the top and collapse the
+experiments"). `LabSection.sidebarOrder`: Q Branch, then **Orb** (some
+fifty bases on five shelves — `LabFamily` — plus post effects that stack
+over any), **Controls** (Ask Button, Gooey, Metal, Border Beam),
+**Containers** (Morph — pod / capsule / card / sheet / full screen, with
+adornments; Chris chose "Containers" over "Surfaces", which Apple's HIG
+doesn't use), and **Flows** (Journey, Agent States, Hold, Bloom Field).
+Seven rooms are hidden rather than deleted (`isHidden`: Pour, Caustics,
+Slick, Globe, Swarm, Cascade, Volumetric, plus the native Thinking Orbs
+sketch); the code stays.
 
-- `LabExperiment` is the catalogue; `LabParameter` its knobs; `LabState`
-  the bench (shared knobs, values keyed `experiment.param`, post stack,
-  hero, morph states, the working `spec`, a `target` slot); `LabFrame`
-  what a view is given each tick. `LabRailView` is the inspector: the
-  experiment's knobs first, then the post stack, then Stage / Colour /
-  Audio / Export as remembered disclosures.
-- **Q Branch** (`LabSpec.swift`, `LabSystemView.swift`): a `LabSpec`
-  assigns a `LabLook` (an experiment as tuned) to every slot the product
-  has — pod, a look per `LabAgentVerb`, the Ask button (`ask`,
-  `askPlacement`, `askStyle`), the menu and its `LabActionItem`s, a
-  `LabSurfaceSpec` per item, tap and long press. The board is the rail;
-  the stage plays the spec end to end (`LabPlayView`) with a step strip.
-  Slots fill from a menu (bench / preset / "Choose in the Lab…", which
-  sets `LabState.target` and puts a Use banner on the rail). Three
-  starters (`LabSpec.starters`); specs save by name (`LabSpecStore`) and
-  travel as JSON via the pasteboard to Nexus Lab's Paste Spec.
-- **Conversations** (`LabConversation.swift`): four `LabScript`s (quick
-  question, device help, onboarding & placement, battery life) run
-  through the states in text or voice — the ask typed/spoken, Thinking,
-  the named work, the answer streaming (`LabStreamWords`), follow-ups.
-  `LabConversationView` lays it out per surface kind; `LabMorphPanel`
-  takes a `conversation` in place of its sample copy. Journey's chat
-  uses the scripts too.
+- `LabExperiment` is the catalogue; `LabParameter` its knobs, each with a
+  `LabControlKind` (slider / segmented / popup / checkbox — Chris's rule:
+  segmented for a few equal choices, checkbox for on/off, popup for many);
+  `LabState` the bench (knobs keyed `experiment.param`, **post stacks per
+  experiment** with post knobs scoped `base>effect.param`, hero, the
+  working `spec`, a `target` slot); `LabFrame` what a view is given each
+  tick. `LabRailView` is the inspector: a licence banner for vendored
+  rooms, About folded, the experiment's knobs, its post stack, then Stage
+  / Colour / Audio / Export as remembered disclosures.
+- **Defaults.** `LabDefaultsStore`: pin a room ("Make This the Default"
+  in the presets menu) and it opens on that and Reset returns to it.
+  `LabBakedDefaults.swift` is Chris's pass of 2026-09-17 baked in as the
+  floor — re-bake from the pins (`nexus.lab.defaults` in UserDefaults),
+  don't hand-edit. "Reset Everything to Factory" returns to the bake.
+- **Q Branch, two lanes** (`LabSpec.swift`, `LabSystemView.swift`,
+  `LabAppView.swift`): a `LabSpec` assigns a `LabLook` (an experiment as
+  tuned) to every slot — pod, a look per `LabAgentVerb`, the Ask button,
+  the menu and its `LabActionItem`s, a `LabSurfaceSpec` per item (kind,
+  adornments, backdrop, hero scale, dim), tap and long press, which
+  quidgets replies may carry. *The Agent* (`LabPlayView`) plays it on the
+  clock with a step strip. *The App* (`LabAppView`, `LabAppSession`) is
+  the phone live: `NexusScreen` with `TabBarPreview`, the gooey menu's
+  items as targets, Ask opens a real `TextField` (the on-screen keyboard
+  follows the keys), Return matches the closest `LabScript`, hold the
+  pod to talk. Specs decode field by field (`init(from:)`), so an older
+  build's spec opens rather than vanishing. Three starters; specs save
+  by name (`LabSpecStore`) and travel as JSON to Nexus Lab's Paste Spec.
+- **Conversations** (`LabConversation.swift`): seven `LabScript`s; the
+  last three carry a quidget and an `effect` on the house (arm, dim).
+  `LabConversationView` lays a conversation out per container;
+  `LabKeyboardView` is the iPhone keyboard typing the ask by itself.
+- **Quidgets** (`Quidgets.swift`): quick widgets in replies, from the
+  Nexus Neue file to the pixel — light dimmer, arm bar, clip, lock,
+  thermostat. Tap is the quick action, press-and-hold pops the modal
+  (`QuidgetHold`, one press-watcher that is also the swipe-away),
+  `QuidgetStage` morphs one view between slot and modal and pans rows of
+  three. `QuidgetDemo.shared` is the one house the whole Lab plays in.
+- **The app's screens** (`Nexus/`): Dashboard, Feed, Emergency, Devices,
+  Routines built natively from the file's App Wide page, light and dark,
+  glyphs vendored as SVG paths (`NexusGlyphs.swift`, generated). They read
+  `QuidgetDemo.shared`, so arming in a reply arms the dashboard. The
+  Lab's phone backdrops are these; exports still use the screenshots.
 - **Live transcript**: `AudioSpectrumMonitor.transcribing` runs
-  `SFSpeechRecognizer` on the mic tap (one tap per input node);
-  `LabFrame.transcript` carries words with ages. `LabTranscriptView`.
+  `SFSpeechRecognizer` on the mic tap, on-device only — if the device
+  can't, it stays off and says so (`transcriptError`); `micError` says
+  why the mic isn't feeding anything.
 - **Verification**: `ImageRenderer` runs shaders and Canvas but not
   Liquid Glass — and drops what sits *inside* a glass effect. Harness
   renders set `.environment(\.labNoGlass, true)` so panels draw flat.
-  Harness helpers: `LabRailView.harness`, `LabPlayView.stepCount`,
-  `LabFrame.withTaps/withParams`. `ScrollView` and `List` don't
-  rasterise on the Mac either — render the content, not the container.
-- Vendored Libraries.dev kits (`Vendor/`): Thinking Orbs and Border
-  Beam; see `Vendor/README.md`.
-
-### Timeline (sequencing)
-
-`RingTimeline`/`TimelineSegment`/`TimelinePlayer` (Core) compose an
-animation out of ordered steps — "fade in, spin three times, go solid,
-fade out" — instead of one config looping forever. This is the general
-form of what `LEDPatternStyle` already carried as fixed cases
-(`.spinThenSolidFade`, `.rainbowThenWhiteFade`, ...); those stay put.
-
-- **A step is a `RingPreset` plus timing.** Reuses the existing snapshot
-  type rather than a parallel one, so anything savable to Saved
-  Animations can become a step.
-- **Editing is Keynote's model**: the timeline is the document and the
-  Controls panel is an inspector into the *selected step*. Selecting
-  loads that step's snapshot into the live `RingConfig`; every knob turn
-  writes back. No commit action. `TimelinePlayer.bind(to:)` sets this up;
-  `isApplyingSnapshot` is what stops selection from capturing itself
-  back.
-- **Length is authored as seconds *or* rotations** (`SegmentLength`), the
-  two sides of `rotations = seconds × speed`. Only the authored side is
-  stored so they can't drift when speed changes.
-- **Phase continuity is the load-bearing math.** `RingView` derives angle
-  as `elapsed × speed`, so playing each step from a local zero would
-  restart rotation at every boundary and visibly snap.
-  `RingTimeline.resolve(at:)` accumulates rotations across steps and
-  converts that into each step's own time base (`Resolved.phaseTime`),
-  which holds even when adjacent steps spin at different rates — and is
-  what makes "spin exactly three times, then go solid" land on a whole
-  rotation. Don't "simplify" phaseTime to the raw playhead.
-- **Everything is a pure function of time**, matching `RingView`'s
-  `overrideElapsed` contract. That's what lets `AnimationExporter` render
-  a timeline frame-by-frame with no live clock. Views take playback as a
-  `TimelinePlayback` *value* rather than observing the player.
-- **Playback renders through `TimelinePlayer.playbackConfig`**, a second
-  config, so playing can't write over the step being edited. Steps play
-  with `sequencePlaybackEnabled` forced off — the timeline owns fading,
-  and leaving the per-step envelope on double-fades.
-- **UI**: `TimelineStripView` (Core) under the canvas in the Mac app's
-  Preview tab, in `UseCaseDetailView`, and on iOS via `TimelineScreen`
-  from the Ring Settings sheet. One view, three hosts.
-- **Three separate timelines, three stores.** Nexus's is
-  `timeline.json`; each use case gets its own
-  `use-case-timeline-<uuid>.json` (see
-  `TimelinePlayer.useCaseFileName`), deleted with the use case in
-  `UseCaseListView` so it can't be orphaned.
-
-  A file per use case rather than a `timeline` property on `RingPreset`,
-  deliberately: `TimelineSegment.snapshot` *is* a `RingPreset`, so giving
-  `RingPreset` a timeline would let a step contain a timeline containing
-  steps. The type system would allow it and nothing would stop it.
-
-  The Cue Library has no timeline on purpose — a cue is one named
-  behavior from the spec sheet, and the multi-phase styles plus
-  sequencing in Nexus already cover composition. Adding per-cue
-  timelines would create two competing ways to express the same thing.
-
-Not built (deliberately): interpolation between steps, per-property
-keyframes, parallel tracks.
-
-### Pattern styles: primitives vs composites
-
-`LEDPatternStyle` now splits two ways, and `isComposite` is the test:
-
-- **Primitives** (`.spin`, `.pulseAccelerate`, `.rainbow`, plus `.solid`,
-  `.off`, `.flash`, `.quickFlash`, `.ripple`) do one thing and keep doing
-  it. Build new work from these and sequence them on the timeline.
-- **Composites** (`.spinThenSolidFade`, `.pulseAccelerateThenSolidFade`,
-  `.rainbowThenWhiteFade`, `.transitionToSolid`) are each a primitive
-  followed by a solid hold and a fade, welded into one case back when
-  there was no way to arrange phases yourself.
-
-**Don't delete the composites.** `LEDCueLibrary` transcribes the Ziris
-spec sheet and its rows reference them as ground truth, and saved cue
-JSON (`LEDCueStore`) decodes by these exact rawValues. They're grouped
-apart in the picker instead, and their renderers *delegate* to the
-primitives so the drawing code exists once.
-
-**`.spin` turns at exactly `speed` revolutions/second — that's a
-contract.** `SegmentLength.rotations` converts a step's length via
-`rotations = seconds × speed`, so a spin at any other rate makes "spin
-three times" untrue. The composite `.spinThenSolidFade` scales the
-primitive's clock by `3 / 1.1` to reproduce the three turns its
-spec-sheet cues were transcribed against — note the factor has no `speed`
-in it, since `spinDuration` already carries that dependence.
-
-### Diode mode
-
-`RingConfig.diodeModeEnabled` renders *any* animation as a fixed ring of
-diodes that only change brightness and color — how addressable LED
-hardware works. Every continuous renderer draws the opposite way (arcs
-rotating, gradients sweeping, rings scaling), so none of them is reusable
-here; `RingView.diodeIntensity` restates each animation as a scalar field
-over ring position instead.
-
-- Alternating, Sparkle, Equalizer and Multi Chase translate **exactly** —
-  their mappings are the same expressions their own renderers use, so
-  diode mode doesn't change how they look. Keep it that way.
-- Ripple and Wobble are **interpretations**, not translations: both are
-  radial effects and a fixed pixel ring has no radius to vary, so they
-  become a travelling front and a standing wave. That's deliberate.
-- `DiodeShape` has two structurally different kinds, which is why
-  `dividesTheRing` exists. Round/Square/Bar are *objects positioned on*
-  the ring (square and bar rotated tangent to it — axis-aligned ones read
-  as scattered dots, not hardware), sized by `diodeScale` and cropped to
-  the band. `.segment` *is* the ring, sliced into equal wedges — the
-  donut-chart look — so it ignores `diodeScale` and uses `diodeGap`
-  instead. `RingView.diodeLayer` is the single place that branches
-  between them; all four diode animations go through it.
-
-**Not in the code generators.** They draw each animation the continuous
-way, and neither diode mode nor diode shape is reflected there — twelve
-animations across four backends is its own piece of work. `ExportView`
-says so on screen when either is active rather than silently exporting
-something that doesn't match the preview. If you do that work, that
-notice is what should come out.
-
-Adding a style means four generator backends: SwiftUI, Compose and JS in
-`CodeGenerators.swift` (exhaustive switches, so the compiler finds them)
-and `BlenderCodeGenerator.swift`, which **dispatches on strings and won't
-fail to compile** — it now has an explicit fallback that draws a solid
-ring and prints the unhandled style name rather than silently rendering
-something else.
-
-Both apps display as **"Nexus Pod"** (rebranded from "RingAnimator"/"Ring
-Pod" — display name only, internal identifiers/executable/module names are
-still `RingAnimator` throughout, intentionally, see Packaging section).
+  A windowed harness that dumps the CALayer tree mid-animation is how the
+  quidget morph was debugged when nothing could be screenshotted.
+- Vendored: Libraries.dev's Thinking Orbs and Border Beam (`Vendor/`, MIT),
+  and three ported orbs in `LabOrbKitsView.swift` — Matrix Orb (rareui,
+  free incl. commercial), Voice Orb (assistant-ui, MIT), Orb 21 (shadercn;
+  **XorDev's shader, non-commercial only** — explore, don't ship). Each
+  room's `licence` shows in its rail.
 
 ## Deployment target — read this before "the UI looks dated"
 
