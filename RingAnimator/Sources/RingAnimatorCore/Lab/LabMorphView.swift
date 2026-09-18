@@ -195,14 +195,19 @@ public struct LabMorphPanel: View {
         // Their beam wraps the glass: it draws outside the shape by
         // design (the bloom), reading the Border Beam · Kit knobs.
         .modifier(LabBeamWrap(enabled: state.adornments.contains(.borderBeam), frame: frame, cornerRadius: cornerRadius, envelope: env))
-        .background {
+        .overlay {
             // Edge glow *inside* the container's edge, clipped by it — the
-            // iOS 18 Siri construction — and under the glass so the glass
-            // refracts it. It arrives and leaves with the content, and a
-            // flare entrance overshoots then settles.
+            // iOS 18 Siri construction — and over the content: it's
+            // chrome, and reads as the container's edge lit, not as a
+            // wash behind the words (Chris, 2026-09-18: "the border/edge
+            // animation should render on top of the container"). It used
+            // to sit under the glass so the glass refracted it. It
+            // arrives and leaves with the content, and a flare entrance
+            // overshoots then settles.
             if state.adornments.contains(.edgeGlow) {
                 LabEdgeGlowAdornment(frame: frame, shape: shape, size: size, envelope: env, flare: flare)
                     .clipShape(shape)
+                    .allowsHitTesting(false)
             }
         }
     }

@@ -14,6 +14,8 @@ struct LabStepInspector: View {
     /// A live frame for the look's thumbnail.
     let frameAt: (Date) -> LabFrame
     @StateObject private var clock = LabThumbClock()
+    @StateObject private var presets = LabPresetStore()
+    @State private var editingSurface = false
     #if os(macOS)
     @Environment(\.controlActiveState) private var activeState
     #endif
@@ -34,13 +36,17 @@ struct LabStepInspector: View {
         #else
         let live = true
         #endif
+        let kind = step.kind
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
             LabRailSection("q.step.showing", "Showing", summary: showingSummary) { showing }
             if step.phase == .surface {
-                LabRailSection("q.step.agent", "Agent", summary: step.verb.label) { agent }
-                LabRailSection("q.step.says", "Says", summary: step.line.isEmpty ? "Nothing" : "“\(step.line)”") { says }
+                LabRailSection("q.step.container", "Container", summary: containerSummary) { container }
+                LabRailSection("q.step.agent", "Agent", summary: step.look?.title ?? "Kit’s · \(kit.resolvedLook(for: step.verb)?.title ?? "the ring")") { agent }
+                if kind.speaks {
+                    LabRailSection("q.step.says", "Says", summary: step.line.isEmpty ? "Nothing" : "“\(step.line)”") { says }
+                }
             }
             LabRailSection("q.step.timing", "Timing", summary: "\(step.advance.label) · \(seconds(step.seconds))") { timing }
         }
@@ -72,8 +78,20 @@ struct LabStepInspector: View {
             .buttonStyle(.borderless)
             HStack(spacing: 8) {
                 Image(systemName: step.symbol).foregroundStyle(.secondary)
-                Text(step.title).font(.headline)
+                // The type: what this step is for. It's the phase and the
+                // state named together; changing it brings the type's
+                // defaults where the step has nothing of its own.
+                Picker("", selection: field(\.kind)) {
+                    ForEach(LabStepKind.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu)
+                .font(.headline)
+                .fixedSize()
+                .help(step.kind.caption)
             }
+            Text(step.kind.caption)
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
     }
@@ -83,7 +101,6 @@ struct LabStepInspector: View {
     private var showingSummary: String {
         var parts = [step.tabCase.label, step.phase.label]
         if step.phase == .surface { parts.append((step.item ?? .talk).label) }
-        if let c = step.container { parts.append(c.label) }
         return parts.joined(separator: " · ")
     }
 
@@ -94,13 +111,6 @@ struct LabStepInspector: View {
             }
             .labelsHidden().pickerStyle(.menu).controlSize(.small)
         }
-        labelled("Showing") {
-            Picker("", selection: field(\.phase)) {
-                ForEach(LabStepPhase.allCases) { Text($0.label).tag($0) }
-            }
-            .labelsHidden().pickerStyle(.menu).controlSize(.small)
-        }
-        .help("The pod at rest; its menu open; an action's container with the agent in a state; the app-wide Ask button on another screen; that button's menu.")
         if step.phase == .surface {
             labelled("Action") {
                 Picker("", selection: Binding(get: { step.item ?? .talk }, set: { field(\.item).wrappedValue = $0 })) {
@@ -109,48 +119,108 @@ struct LabStepInspector: View {
                 .labelsHidden().pickerStyle(.menu).controlSize(.small)
             }
             .help("Which action opened this container — the kit says what each one opens.")
-            labelled("Container") {
-                Picker("", selection: Binding(get: { step.container }, set: { field(\.container).wrappedValue = $0 })) {
-                    Text("Kit’s · \(kit.resolvedSurface(for: step.item ?? .talk).kind.label)").tag(LabMorphKind?.none)
-                    Divider()
-                    ForEach(LabMorphKind.allCases) { Text($0.label).tag(LabMorphKind?.some($0)) }
+        }
+    }
+
+    // MARK: Container
+
+    private var item: LabActionItem { step.item ?? .talk }
+    private var kitSurface: LabSurfaceSpec { kit.resolvedSurface(for: item) }
+    private var containerSummary: String {
+        if let s = step.surface { return "This step’s · \(s.kind.label)" + (s.adornments.isEmpty ? "" : " · " + s.adornments.map(\.label).joined(separator: ", ")) }
+        return "Kit’s · \(kitSurface.kind.label)"
+    }
+    /// The step's own surface, starting from the kit's the moment it's
+    /// touched.
+    private var surfaceBinding: Binding<LabSurfaceSpec> {
+        Binding(get: { step.surface ?? kitSurface }, set: { field(\.surface).wrappedValue = $0 })
+    }
+
+    @ViewBuilder private var container: some View {
+        labelled("Uses") {
+            Picker("", selection: Binding(get: { step.surface != nil }, set: { own in field(\.surface).wrappedValue = own ? kitSurface : nil })) {
+                Text("Kit’s").tag(false)
+                Text("This step’s").tag(true)
+            }
+            .labelsHidden().pickerStyle(.segmented).controlSize(.small)
+        }
+        .help("The kit's container for \(item.label), or one this step insists on — its own kind, adornments, transitions and morph knobs. Starts as a copy of the kit's.")
+        if step.surface != nil {
+            let surface = surfaceBinding
+            labelled("Kind") {
+                Picker("", selection: Binding(get: { surface.wrappedValue.kind }, set: { surface.wrappedValue.kind = $0 })) {
+                    ForEach(LabMorphKind.allCases) { Text($0.label).tag($0) }
                 }
                 .labelsHidden().pickerStyle(.menu).controlSize(.small)
             }
-            .help("The kit's container for this action, or one this step insists on.")
+            labelled("Carries") {
+                Menu {
+                    ForEach(LabMorphAdornment.allCases) { a in
+                        let on = surface.wrappedValue.adornments.contains(a)
+                        Button {
+                            var v = surface.wrappedValue
+                            if on { v.adornments.removeAll { $0 == a } } else { v.adornments.append(a) }
+                            surface.wrappedValue = v
+                        } label: { Label(a.label, systemImage: on ? "checkmark" : a.symbol) }
+                    }
+                } label: {
+                    Text(surface.wrappedValue.adornments.isEmpty ? "Nothing" : surface.wrappedValue.adornments.map(\.label).joined(separator: ", "))
+                        .font(.callout).lineLimit(1)
+                        .foregroundStyle(surface.wrappedValue.adornments.isEmpty ? .tertiary : .primary)
+                }
+                .menuStyle(.borderlessButton).controlSize(.small)
+            }
+            .help("Edge glow, waveform, caption, transcript, border beam — what rides on the container at this step.")
+            labelled("In · Out") {
+                Picker("", selection: Binding(get: { surface.wrappedValue.enter }, set: { surface.wrappedValue.enter = $0 })) {
+                    ForEach(LabMorphTransition.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).controlSize(.small)
+                Picker("", selection: Binding(get: { surface.wrappedValue.exit }, set: { surface.wrappedValue.exit = $0 })) {
+                    ForEach(LabMorphTransition.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).controlSize(.small)
+            }
+            HStack {
+                Button { editingSurface = true } label: { Label("Tune the Container…", systemImage: "slider.horizontal.3") }
+                    .controlSize(.small)
+                    .popover(isPresented: $editingSurface, arrowEdge: .leading) {
+                        LabContainerEditor(item: item, surface: surface, frameAt: frameAt, config: config)
+                    }
+                    .help("Backdrop, hero size, dim, and every knob of the morph and its adornments — for this step only.")
+                Spacer()
+                Button("Back to Kit’s") { field(\.surface).wrappedValue = nil }
+                    .controlSize(.small)
+            }
         }
     }
 
     // MARK: Agent
 
+    /// The look the agent wears here: the kit's for the state, or this
+    /// step's own. The step's row is a slot like the kit's — gallery,
+    /// tune in place, the bench — and Use from the bench lands here, not
+    /// in the kit. Clear it and the step wears the kit's again.
     @ViewBuilder private var agent: some View {
-        labelled("State") {
-            Picker("", selection: field(\.verb)) {
-                ForEach(LabAgentVerb.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
+        labelled("Wears") {
+            Picker("", selection: Binding(get: { step.look != nil }, set: { own in
+                field(\.look).wrappedValue = own ? (kit.resolvedLook(for: step.verb) ?? LabLook(experiment: LabExperiment.orbKit.id)) : nil
+            })) {
+                Text("Kit’s").tag(false)
+                Text("This step’s").tag(true)
             }
-            .labelsHidden().pickerStyle(.menu).controlSize(.small)
+            .labelsHidden().pickerStyle(.segmented).controlSize(.small)
         }
-        let look = kit.look(for: step.verb)
-        HStack(spacing: 10) {
-            Group {
-                if let l = kit.resolvedLook(for: step.verb) {
-                    LabLiveThumb(clock: clock, look: l, config: config, size: 36)
-                } else {
-                    Circle().fill(.quaternary)
-                }
-            }
-            .frame(width: 36, height: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(look?.title ?? "The pod’s look")
-                    .font(.callout)
-                Text(step.verb.caption)
-                    .font(.caption).foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 0)
-            Button(look == nil ? "Choose" : "Edit") { lab.edit(look, for: .state(step.verb)) }
-                .controlSize(.small)
-                .help(look == nil ? "Choose a look for \(step.verb.label) in the Lab; Use puts it in the kit." : "Tune \(step.verb.label)'s look on the bench; Use puts it back.")
+        .help("The kit's look for \(step.verb.label), or a look of this step's own — starting as a copy of the kit's, then dialled in here.")
+        if step.look != nil {
+            LabSlotRow(lab: lab, config: config, clock: clock, frameAt: frameAt, title: "Look", symbol: step.verb.symbol,
+                       look: step.look, target: .step(step.id), set: { field(\.look).wrappedValue = $0 }, presets: presets)
+        } else {
+            let look = kit.look(for: step.verb)
+            LabSlotRow(lab: lab, config: config, clock: clock, frameAt: frameAt, title: step.verb.label, symbol: step.verb.symbol,
+                       look: look, target: .state(step.verb), set: { lab.spec.states[step.verb.rawValue] = $0 }, presets: presets)
+            Text("Editing here changes \(step.verb.label) in the kit — every step that wears it.")
+                .font(.caption).foregroundStyle(.tertiary)
         }
     }
 
@@ -173,7 +243,7 @@ struct LabStepInspector: View {
             .lineLimit(1...5)
             .disabled(!step.speaks)
             .help(linePrompt)
-        if step.verb == .speaking || step.verb == .done {
+        if step.kind.carries {
             labelled("Carries") {
                 Picker("", selection: Binding(get: { step.carries }, set: { field(\.carries).wrappedValue = $0 })) {
                     Text("Nothing").tag(QuidgetKind?.none)
@@ -184,7 +254,7 @@ struct LabStepInspector: View {
             }
             .help("A quick widget the reply carries — the thing asked about, as a control.")
         }
-        if step.verb == .speaking || step.verb == .listening {
+        if step.kind.acts {
             labelled("Does") {
                 Picker("", selection: Binding(get: { effectChoice }, set: { setEffect($0) })) {
                     Text("Nothing").tag("none")

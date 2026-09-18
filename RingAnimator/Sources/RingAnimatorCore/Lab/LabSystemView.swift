@@ -126,13 +126,12 @@ public struct LabPlayView: View {
         // insists on. A hold that asks for the whole screen gets it.
         let surface: LabSurfaceSpec = {
             guard let item else { return LabSurfaceSpec(kind: .pod) }
-            var s = spec.resolvedSurface(for: item)
-            if !held, let override = current.container { s.kind = override }
+            var s = held ? spec.resolvedSurface(for: item) : (current.surface ?? spec.resolvedSurface(for: item))
             if held, spec.longPress.isFullScreen { s.kind = .fullScreen }
             return s
         }()
         let state = surface.morphState
-        let look = spec.resolvedLook(for: verb)
+        let look = held ? spec.resolvedLook(for: verb) : (current.look ?? spec.resolvedLook(for: verb))
         let panelFrame = frame.applying(look, config: config).applying(surface)
         // The content's transition clock runs from when the surface
         // opened, not from each verb — the verbs change inside it.

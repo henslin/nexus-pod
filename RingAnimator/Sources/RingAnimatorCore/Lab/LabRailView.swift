@@ -178,9 +178,9 @@ public struct LabRailView: View {
     /// the one gesture that finishes the errand.
     private func targetBanner(_ target: LabSlotTarget) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(lab.spec.has(target) ? "Editing \(target.label)" : "Choosing for \(target.label)", systemImage: "wrench.and.screwdriver")
+            Label(lab.targetFilled ? "Editing \(target.label)" : "Choosing for \(target.label)", systemImage: "wrench.and.screwdriver")
                 .font(.subheadline.weight(.semibold))
-            Text(lab.spec.has(target) ? "Tune it here. Use puts it back in Q Branch as it is now." : target.hint)
+            Text(lab.targetFilled ? "Tune it here. Use puts it back in Q Branch as it is now." : target.hint)
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {

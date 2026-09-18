@@ -40,7 +40,7 @@ public struct LabStageView: View {
             controls
                 .frame(width: lab.experiment.isQBranch ? 420 : 300)
         }
-        .onAppear { appeared = Date() }
+        .onAppear { appeared = Date(); lab.stageStart = appeared }
         .onChange(of: lab.audioReactive, initial: true) { _, on in
             if on { audio.start() } else { audio.stop() }
         }
@@ -497,19 +497,33 @@ public struct LabListView: View {
             flowRow
             ForEach(lab.flow.steps) { step in stepRow(step) }
                 .onMove { from, to in lab.flow.steps.move(fromOffsets: from, toOffset: to) }
-            Button {
-                let id = lab.flow.addStep(after: lab.selectedStep?.id)
-                if let step = lab.flow.steps.first(where: { $0.id == id }) { lab.go(to: step) }
+            // Add Step: a type, each with its own defaults, after the
+            // selected step — or a copy of the selected one.
+            Menu {
+                ForEach(LabStepKind.allCases) { kind in
+                    Button {
+                        let id = lab.flow.addStep(kind: kind, after: lab.selectedStep?.id)
+                        if let step = lab.flow.steps.first(where: { $0.id == id }) { lab.go(to: step) }
+                    } label: { Label(kind.label, systemImage: kind.symbol) }
+                }
+                Divider()
+                Button {
+                    let id = lab.flow.addStep(after: lab.selectedStep?.id)
+                    if let step = lab.flow.steps.first(where: { $0.id == id }) { lab.go(to: step) }
+                } label: { Label("Duplicate Selected", systemImage: "plus.square.on.square") }
+                    .disabled(lab.selectedStep == nil)
             } label: {
                 Label("Add Step", systemImage: "plus")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .padding(.leading, 30)
             .padding(.vertical, 2)
             .selectionDisabled()
-            .help("A new step after the selected one — a copy of it, to change one thing on.")
+            .help("A new step after the selected one: a type with its defaults, or a copy of the selected step.")
             kitRow
             ForEach(LabSection.sidebarOrder.filter { $0 != .qBranch }) { section in
                 Section(isExpanded: expanded(section)) {
@@ -549,6 +563,13 @@ public struct LabListView: View {
         #if os(macOS)
         .listStyle(.sidebar)
         #endif
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                let id = lab.autoRunning && !lab.qInteract ? lab.playingStep()?.id : nil
+                if id != playing { withAnimation { playing = id } }
+            }
+        }
     }
 
     /// The experiments fold, and start folded.
@@ -559,6 +580,9 @@ public struct LabListView: View {
     }
     /// A tick so the list re-reads the folds.
     @State private var open: (Bool, String) = (false, "")
+    /// The step the play is on, polled twice a second while Auto runs —
+    /// the list isn't on the animation clock.
+    @State private var playing: UUID? = nil
 
     private func row(_ experiment: LabExperiment) -> some View {
         HStack(spacing: 10) {
@@ -616,6 +640,14 @@ public struct LabListView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            // With the clock running, the step the phone is on.
+            if playing == step.id {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.tint)
+                    .transition(.opacity)
             }
         }
         .padding(.vertical, 1)

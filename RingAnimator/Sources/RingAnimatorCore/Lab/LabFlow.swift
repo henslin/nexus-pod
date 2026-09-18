@@ -61,6 +61,93 @@ public enum LabStepPhase: String, Codable, CaseIterable, Identifiable, Sendable 
     }
 }
 
+/// A step's type: what a step of this kind is for, and what it comes
+/// with. Chris, 2026-09-18: "step types to help shape what a Listening
+/// step should include." The type is the phase and the state together,
+/// named the way you'd say it; the inspector shows what the type has.
+public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
+    case idle, menu, listening, thinking, searching, speaking, done, error, askElsewhere, askMenu
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .idle: return "Idle"
+        case .menu: return "Menu"
+        case .listening: return "Listening"
+        case .thinking: return "Thinking"
+        case .searching: return "Searching"
+        case .speaking: return "Speaking"
+        case .done: return "Done"
+        case .error: return "Error"
+        case .askElsewhere: return "Ask, elsewhere"
+        case .askMenu: return "Ask menu"
+        }
+    }
+    public var caption: String {
+        switch self {
+        case .idle: return "The pod at rest in the tab bar."
+        case .menu: return "The pod's menu open."
+        case .listening: return "The container open; the person asks."
+        case .thinking: return "The agent working on it."
+        case .searching: return "The agent doing named work — checking a device, reading a log."
+        case .speaking: return "The answer arriving, with what it carries and does."
+        case .done: return "Answered; the follow-ups it offers."
+        case .error: return "What it says when the thing can't be reached."
+        case .askElsewhere: return "The app-wide Ask button on another screen."
+        case .askMenu: return "That button's menu open."
+        }
+    }
+    public var phase: LabStepPhase {
+        switch self {
+        case .idle: return .rest
+        case .menu: return .menu
+        case .askElsewhere: return .ask
+        case .askMenu: return .askMenu
+        default: return .surface
+        }
+    }
+    public var verb: LabAgentVerb {
+        switch self {
+        case .listening: return .listening
+        case .thinking: return .thinking
+        case .searching: return .searching
+        case .speaking: return .speaking
+        case .done: return .done
+        case .error: return .error
+        default: return .idle
+        }
+    }
+    public var symbol: String { phase == .surface ? verb.symbol : phase.symbol }
+    /// How long a step of this kind holds, to begin with.
+    public var seconds: Double {
+        switch self {
+        case .idle, .menu, .askElsewhere, .askMenu: return 2.5
+        case .listening: return 3
+        case .thinking: return 2
+        case .searching: return 3
+        case .speaking: return 5
+        case .done, .error: return 3
+        }
+    }
+    /// Whether this kind has a line to say.
+    public var speaks: Bool { [.listening, .searching, .speaking, .done, .error].contains(self) }
+    /// Whether a reply of this kind can carry a quidget.
+    public var carries: Bool { self == .speaking || self == .done }
+    /// Whether this kind can act on the house.
+    public var acts: Bool { self == .speaking || self == .listening }
+    /// A first line, so the type is legible before it's edited.
+    public var sampleLine: String {
+        switch self {
+        case .listening: return "Arm my system"
+        case .searching: return "Checking the cameras…"
+        case .speaking: return "Your cameras are armed and your system is in Arm Away mode."
+        case .done: return "Arm Away when you leave?\nDisarm when you arrive home?"
+        case .error: return "I couldn’t reach the doorbell."
+        default: return ""
+        }
+    }
+}
+
 /// What moves a step on.
 public enum LabStepAdvance: String, Codable, CaseIterable, Identifiable, Sendable {
     case timer, tap, hold
@@ -84,8 +171,12 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
     public var item: LabActionItem? = nil
     /// The agent's state. `.idle` at rest.
     public var verb: LabAgentVerb = .idle
-    /// A container this step insists on; `nil` lets the kit decide.
-    public var container: LabMorphKind? = nil
+    /// A container this step insists on — kind, adornments, transitions,
+    /// the morph's knobs; `nil` lets the kit decide.
+    public var surface: LabSurfaceSpec? = nil
+    /// The agent's look at this step; `nil` wears the kit's look for the
+    /// state. Chris, 2026-09-18: "really dial in each step."
+    public var look: LabLook? = nil
     /// What's said here: the person's ask when listening, the named work
     /// when searching, the agent's answer when speaking, the follow-ups
     /// when done (one per line).
@@ -99,6 +190,16 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
     public var effect: LabScriptEffect? = nil
 
     public init() {}
+    /// A step of a kind, with the kind's defaults.
+    public init(kind: LabStepKind, tab: NexusTab = .dashboard, item: LabActionItem? = nil) {
+        self.phase = kind.phase
+        self.verb = kind.verb
+        self.tab = tab.rawValue
+        self.item = kind.phase == .surface ? (item ?? .talk) : nil
+        self.seconds = kind.seconds
+        self.line = kind.sampleLine
+        if kind == .askElsewhere || kind == .askMenu, tab == .dashboard { self.tab = NexusTab.devices.rawValue }
+    }
     public init(_ phase: LabStepPhase, tab: NexusTab = .dashboard, item: LabActionItem? = nil, verb: LabAgentVerb = .idle,
                 line: String = "", carries: QuidgetKind? = nil, seconds: Double = 3, effect: LabScriptEffect? = nil) {
         self.phase = phase
@@ -111,7 +212,7 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
         self.effect = effect
     }
 
-    private enum CodingKeys: String, CodingKey { case id, phase, tab, item, verb, container, line, carries, advance, seconds, effect }
+    private enum CodingKeys: String, CodingKey { case id, phase, tab, item, verb, container, surface, look, line, carries, advance, seconds, effect }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
@@ -119,15 +220,67 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
         tab = try c.decodeIfPresent(String.self, forKey: .tab) ?? "dashboard"
         item = try? c.decodeIfPresent(LabActionItem.self, forKey: .item)
         verb = (try? c.decodeIfPresent(LabAgentVerb.self, forKey: .verb)) ?? .idle
-        container = try? c.decodeIfPresent(LabMorphKind.self, forKey: .container)
+        surface = try? c.decodeIfPresent(LabSurfaceSpec.self, forKey: .surface)
+        // An older build's bare kind override, as a surface of that kind.
+        if surface == nil, let kind = try? c.decodeIfPresent(LabMorphKind.self, forKey: .container) { surface = LabSurfaceSpec(kind: kind) }
+        look = try? c.decodeIfPresent(LabLook.self, forKey: .look)
         line = try c.decodeIfPresent(String.self, forKey: .line) ?? ""
         carries = try? c.decodeIfPresent(QuidgetKind.self, forKey: .carries)
         advance = (try? c.decodeIfPresent(LabStepAdvance.self, forKey: .advance)) ?? .timer
         seconds = try c.decodeIfPresent(Double.self, forKey: .seconds) ?? 3
         effect = try? c.decodeIfPresent(LabScriptEffect.self, forKey: .effect)
     }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(phase, forKey: .phase)
+        try c.encode(tab, forKey: .tab)
+        try c.encodeIfPresent(item, forKey: .item)
+        try c.encode(verb, forKey: .verb)
+        try c.encodeIfPresent(surface, forKey: .surface)
+        try c.encodeIfPresent(look, forKey: .look)
+        try c.encode(line, forKey: .line)
+        try c.encodeIfPresent(carries, forKey: .carries)
+        try c.encode(advance, forKey: .advance)
+        try c.encode(seconds, forKey: .seconds)
+        try c.encodeIfPresent(effect, forKey: .effect)
+    }
 
     public var tabCase: NexusTab { NexusTab(rawValue: tab) ?? .dashboard }
+
+    /// The step's type — the phase and state read together; setting it
+    /// sets both and brings the type's defaults where the step has none
+    /// of its own yet.
+    public var kind: LabStepKind {
+        get {
+            switch phase {
+            case .rest: return .idle
+            case .menu: return .menu
+            case .ask: return .askElsewhere
+            case .askMenu: return .askMenu
+            case .surface:
+                switch verb {
+                case .listening: return .listening
+                case .thinking: return .thinking
+                case .searching: return .searching
+                case .speaking: return .speaking
+                case .done: return .done
+                case .error: return .error
+                case .idle: return .listening
+                }
+            }
+        }
+        set {
+            let was = kind
+            phase = newValue.phase
+            verb = newValue.verb
+            if phase == .surface, item == nil { item = .talk }
+            if seconds == was.seconds { seconds = newValue.seconds }
+            if line.isEmpty || line == was.sampleLine { line = newValue.sampleLine }
+            if !newValue.carries { carries = nil }
+            if !newValue.acts { effect = nil }
+        }
+    }
 
     /// The step's name in the navigator: what's showing, and the state.
     public var title: String {
@@ -145,7 +298,7 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
     /// The state's glyph, or the phase's when there's no state to show.
     public var symbol: String { phase == .surface ? verb.symbol : phase.symbol }
     /// Whether the line means anything here.
-    public var speaks: Bool { phase == .surface && [.listening, .searching, .speaking, .done, .error].contains(verb) }
+    public var speaks: Bool { kind.speaks }
 }
 
 /// A use case: the steps, and the kit they draw on.
@@ -267,6 +420,15 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
     public mutating func addStep(after id: UUID?) -> UUID {
         var s = id.flatMap { i in steps.first { $0.id == i } } ?? steps.last ?? LabStep(.rest)
         s.id = UUID()
+        if let id, let i = steps.firstIndex(where: { $0.id == id }) { steps.insert(s, at: i + 1) } else { steps.append(s) }
+        return s.id
+    }
+    /// A new step of a kind after another: the kind's defaults, on the
+    /// screen and action of the step before it.
+    public mutating func addStep(kind: LabStepKind, after id: UUID?) -> UUID {
+        let before = id.flatMap { i in steps.first { $0.id == i } } ?? steps.last
+        var s = LabStep(kind: kind, tab: before?.tabCase ?? .dashboard, item: before?.item)
+        if kind.phase == .surface, s.item == nil { s.item = kit.items.contains(.talk) ? .talk : kit.items.first }
         if let id, let i = steps.firstIndex(where: { $0.id == id }) { steps.insert(s, at: i + 1) } else { steps.append(s) }
         return s.id
     }

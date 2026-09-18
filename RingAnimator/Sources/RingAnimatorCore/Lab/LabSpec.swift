@@ -322,6 +322,7 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
         case .state(let v): return states[v.rawValue] != nil
         case .action: return action != nil
         case .ask: return ask != nil
+        case .step: return false
         }
     }
 
@@ -498,6 +499,8 @@ public enum LabSlotTarget: Equatable, Sendable {
     case state(LabAgentVerb)
     case action
     case ask
+    /// One step's own look, over the kit's.
+    case step(UUID)
 
     public var label: String {
         switch self {
@@ -505,6 +508,7 @@ public enum LabSlotTarget: Equatable, Sendable {
         case .state(let v): return v.label
         case .action: return "the Menu"
         case .ask: return "the Ask button"
+        case .step: return "this step"
         }
     }
     public var hint: String {
@@ -512,11 +516,12 @@ public enum LabSlotTarget: Equatable, Sendable {
         case .pod, .state: return "Tune any orb, then Use. The knobs, post stack and palette come with it."
         case .action: return "Tune Gooey, then Use."
         case .ask: return "Tune the Ask Button — placement, style, and the goo — then Use."
+        case .step: return "Tune any orb, then Use. It becomes this step's own look; the kit's stays as it is."
         }
     }
     public func accepts(_ e: LabExperiment) -> Bool {
         switch self {
-        case .pod, .state: return e.canBeHero
+        case .pod, .state, .step: return e.canBeHero
         case .action: return e == .gooey
         case .ask: return e == .gooey || e == .askButton
         }
@@ -524,7 +529,7 @@ public enum LabSlotTarget: Equatable, Sendable {
     /// Where to start looking.
     public var startingExperiment: LabExperiment {
         switch self {
-        case .pod, .state: return .orbKit
+        case .pod, .state, .step: return .orbKit
         case .action: return .gooey
         case .ask: return .askButton
         }
@@ -556,9 +561,18 @@ extension LabState {
         case .state(let v): useCurrentLook(for: v)
         case .action: useCurrentGooeyAsAction()
         case .ask: useCurrentAskButton()
+        case .step(let id):
+            if let i = flow.index(of: id) { flow.steps[i].look = LabLook(from: self) }
+            qSelection = .step(id)
         }
         self.target = nil
         experiment = .system
+    }
+    /// Whether the errand's slot already holds something.
+    public var targetFilled: Bool {
+        guard let target else { return false }
+        if case .step(let id) = target { return flow.steps.first { $0.id == id }?.look != nil }
+        return spec.has(target)
     }
 }
 

@@ -2013,13 +2013,32 @@ public final class LabState: ObservableObject {
         return nil
     }
     /// Go to a step: select it, and put the play on it with the clock
-    /// stopped, so what you're inspecting is what's on the phone.
+    /// stopped, so what you're inspecting is what's on the phone. Out of
+    /// Interact if need be — a step is a thing to look at, and only
+    /// Autoplay shows one (Chris, 2026-09-18: "when you select a step on
+    /// the left, it renders on stage so you know what you're editing").
     public func go(to step: LabStep) {
         qSelection = .step(step.id)
         guard let i = flow.index(of: step.id) else { return }
+        if qInteract { qInteract = false }
         values["system.auto"] = 0
         taps = i
         lastTap = Date()
+    }
+    /// When the stage's clock started — the stage sets it, so anything
+    /// off the animation clock (the navigator) can still say where the
+    /// play is.
+    public var stageStart = Date()
+    /// Whether Autoplay's clock is running the steps.
+    public var autoRunning: Bool { value(LabExperiment.system.parameters.first { $0.id == "auto" }!, of: .system) >= 0.5 }
+    /// The step the play is on right now.
+    public func playingStep(at date: Date = Date()) -> LabStep? {
+        guard experiment == .system, !flow.steps.isEmpty else { return nil }
+        let n = flow.steps.count
+        let auto = autoRunning
+        let time = date.timeIntervalSince(stageStart) * speed
+        let i = auto ? ((flow.position(at: time).index + taps) % n + n) % n : ((taps % n) + n) % n
+        return flow.steps[i]
     }
     /// The slot Q Branch sent you to the Lab to fill — see `LabSlotTarget`.
     @Published public var target: LabSlotTarget? = nil
@@ -2052,9 +2071,15 @@ public final class LabState: ObservableObject {
     public func endHold() { if holdStart != nil { holdStart = nil; holdEnd = Date() } }
 
     /// "What happens when I tap on the Nexus tab?" — answered by tapping.
+    /// In Q Branch with the clock stopped, the navigator follows: the
+    /// step the tap lands on is the one selected.
     public func advance() {
         taps += 1
         lastTap = Date()
+        if experiment == .system, !autoRunning, !flow.steps.isEmpty {
+            let n = flow.steps.count
+            qSelection = .step(flow.steps[((taps % n) + n) % n].id)
+        }
     }
 
     public func togglePost(_ effect: LabPostEffect) {
