@@ -1387,15 +1387,12 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("textGlow", "Glow", 0...1, 0.4, "On each arriving word.", group: "Transcript"),
         ]
         case .system: return [
-            .init("mode", "Mode", 0...1, 0, "Autoplay runs the spec on the clock; Interact hands you the app to drive.", "%.0f", group: "Mode", choices: ["Autoplay", "Interact"], kind: .popup),
-            .init("script", "Conversation", 0...6, 4, "Which ask the play runs through the states. The last three carry a quidget.", "%.0f", group: "Play", choices: LabScript.all.map(\.title), kind: .popup),
-            .init("hold", "Hold", 0.5...8, 3, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
-            .init("auto", "Auto-advance", 0...1, 1, "Steps on the clock; off, only a tap or the strip does.", "%.0f", group: "Play", choices: ["Off", "On"]),
-            .init("spring", "Spring", 0.2...1.2, 0.55, "Response of the morph between surfaces.", group: "Play"),
-            .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Play"),
-            .init("talk", "Talk Time", 1...8, 3, "Seconds it speaks after a hold is released.", "%.1f s", group: "Play"),
-            .init("chrome", "Labels", 0...1, 1, "The step name and hint over the phone.", "%.0f", group: "Play", choices: ["Off", "On"]),
-            .init("error", "Include Error", 0...1, 0, "Play the Error state after Searching — what it looks like when the doorbell can't be reached.", "%.0f", group: "Play", choices: ["Off", "On"]),
+            .init("mode", "Mode", 0...1, 0, "Autoplay runs the flow on the clock; Interact hands you the app to drive.", "%.0f", group: "Mode", choices: ["Autoplay", "Interact"], kind: .popup),
+            .init("auto", "Auto-advance", 0...1, 1, "Steps on the clock, each for its own seconds; off, only a tap, the arrows or the navigator do.", "%.0f", group: "Autoplay", choices: ["Off", "On"]),
+            .init("spring", "Spring", 0.2...1.2, 0.55, "Response of the morph between surfaces.", group: "Autoplay"),
+            .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Autoplay"),
+            .init("talk", "Talk Time", 1...8, 3, "Seconds it speaks after a hold is released.", "%.1f s", group: "Autoplay"),
+            .init("chrome", "Labels", 0...1, 1, "The step name and hint over the phone.", "%.0f", group: "Autoplay", choices: ["Off", "On"]),
             .init("voiceAsk", "Voice Ask", 0...6, 5, "Interact: what a hold on the pod asks, when there's no transcript to hear.", "%.0f", group: "Interact", choices: LabScript.all.map(\.title), kind: .popup),
         ]
         case .caption: return [
@@ -1999,8 +1996,30 @@ public final class LabState: ObservableObject {
     /// The System's working spec — every slot's assignment. Autosaved,
     /// so the board survives a relaunch; named copies live in
     /// `LabSpecStore`.
-    @Published public var spec: LabSpec = LabSpecStore.loadCurrent() {
-        didSet { LabSpecStore.autosave(spec) }
+    @Published public var flow: LabFlow = LabFlowStore.loadCurrent() {
+        didSet { LabFlowStore.autosave(flow) }
+    }
+    /// The flow's kit — the reusable parts. Everything that assigned into
+    /// "the spec" still does; it lands in the flow's kit.
+    public var spec: LabSpec {
+        get { flow.kit }
+        set { flow.kit = newValue }
+    }
+    /// What Q Branch's inspector shows: the flow, its kit, or a step.
+    @Published public var qSelection: LabQSelection = .flow
+    /// The step the navigator has selected, if one.
+    public var selectedStep: LabStep? {
+        if case .step(let id) = qSelection { return flow.steps.first { $0.id == id } }
+        return nil
+    }
+    /// Go to a step: select it, and put the play on it with the clock
+    /// stopped, so what you're inspecting is what's on the phone.
+    public func go(to step: LabStep) {
+        qSelection = .step(step.id)
+        guard let i = flow.index(of: step.id) else { return }
+        values["system.auto"] = 0
+        taps = i
+        lastTap = Date()
     }
     /// The slot Q Branch sent you to the Lab to fill — see `LabSlotTarget`.
     @Published public var target: LabSlotTarget? = nil
@@ -2148,8 +2167,9 @@ public struct LabFrame {
     public var morphStates: [LabMorphState] = []
     /// See `LabState.pointer`.
     public var pointer: CGPoint? = nil
-    /// See `LabState.spec`.
-    public var spec: LabSpec = LabSpec()
+    /// See `LabState.flow`; `spec` is its kit.
+    public var flow: LabFlow = LabFlow()
+    public var spec: LabSpec { flow.kit }
     /// The live transcript's words with their age in seconds, newest
     /// last. Empty when the transcript is off or nothing has been said.
     public var transcript: [(text: String, age: Double)] = []
@@ -2166,7 +2186,7 @@ public struct LabFrame {
                 taps: Int = 0, sinceTap: Double = .infinity,
                 hero: LabExperiment? = nil, heroPost: [LabPostEffect] = [], fill: Double = 1,
                 holding: Double = 0, sinceHold: Double = .infinity, morphStates: [LabMorphState] = [], pointer: CGPoint? = nil,
-                spec: LabSpec = LabSpec()) {
+                flow: LabFlow = LabFlow()) {
         self.time = time
         self.intensity = intensity
         self.audio = audio
@@ -2185,7 +2205,7 @@ public struct LabFrame {
         self.sinceHold = sinceHold
         self.morphStates = morphStates
         self.pointer = pointer
-        self.spec = spec
+        self.flow = flow
     }
 
     /// A knob's value, or its declared default when the frame was built
@@ -2276,7 +2296,7 @@ extension LabState {
                         sinceHold: date.timeIntervalSince(holdEnd),
                         morphStates: morphStates,
                         pointer: pointer,
-                        spec: spec)
+                        flow: flow)
             .withTranscript(audio.words.map { ($0.text, date.timeIntervalSince($0.at)) }, on: audioReactive && transcribe)
             .withAppUI(appUI)
     }

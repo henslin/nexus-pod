@@ -28,29 +28,15 @@ public struct LabQBranchView: View {
     }
 }
 
-/// Under the phone on the Mac: the Autoplay / Interact switch, and — in
-/// Autoplay — the steps.
+/// Under the phone on the Mac: the transport in Autoplay; in Interact
+/// the same transport, since the flow is also the checklist you're
+/// driving through.
 struct LabQBranchStrip: View {
     @ObservedObject var lab: LabState
     let frame: LabFrame
 
     var body: some View {
-        VStack(spacing: 10) {
-            Picker("Mode", selection: Binding(get: { lab.qInteract }, set: { lab.qInteract = $0 })) {
-                Text("Autoplay").tag(false)
-                Text("Interact").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 220)
-            if lab.qInteract {
-                Text("Tap the pod · type an ask or hold to talk · tap off to close")
-                    .font(.caption2).foregroundStyle(.tertiary)
-            } else {
-                LabPlayStrip(lab: lab, frame: frame)
-            }
-        }
-        .animation(.default, value: lab.qInteract)
+        LabTransport(lab: lab, frame: frame)
     }
 }
 
@@ -73,80 +59,75 @@ public struct LabPlayView: View {
         self.config = config
     }
 
+    /// What a frame of the play shows — the flow's step, resolved.
     enum Step: Equatable {
         case idle, menu
         case surface(LabActionItem, LabAgentVerb)
         /// The Ask button on a screen that isn't the Nexus tab.
         case askAnywhere
         case askMenu
-    }
 
-    /// The tap-driven sequence this spec plays.
-    static func steps(of spec: LabSpec, withError: Bool = false) -> [Step] {
-        var steps: [Step] = [.idle]
-        let item: LabActionItem? = spec.tap.item ?? (spec.tap == .menu ? (spec.items.contains(.talk) ? .talk : spec.items.first) : nil)
-        if spec.tap == .menu { steps.append(.menu) }
-        if let item {
-            var verbs: [LabAgentVerb] = [.listening, .thinking, .searching, .speaking, .done]
-            if withError { verbs.insert(.error, at: 3) }
-            for verb in verbs { steps.append(.surface(item, verb)) }
-        }
-        steps.append(.askAnywhere)
-        steps.append(.askMenu)
-        return steps
-    }
-
-    /// For harnesses: how many steps the spec plays.
-    public static func stepCount(of spec: LabSpec) -> Int { steps(of: spec).count }
-
-    static func title(of step: Step) -> String {
-        switch step {
-        case .idle: return "Idle"
-        case .menu: return "Menu"
-        case .surface(let item, let verb):
-            let v = item == .ask && verb == .listening ? "Typing" : verb.label
-            return "\(item.label) · \(v)"
-        case .askAnywhere: return "Ask · Devices"
-        case .askMenu: return "Ask · Menu"
-        }
-    }
-
-    /// Where the play is: the step, and the clock within it. A hold
-    /// overrides the sequence — the long-press action, listening while
-    /// held, speaking for `talk` seconds after.
-    private func situation(_ spec: LabSpec, steps: [Step], index: Int, hold: Double, auto: Bool, talk: Double) -> (step: Step, since: Double, until: Double) {
-        var step = steps[index]
-        var sinceChange = min(frame.sinceTap, auto ? frame.time.truncatingRemainder(dividingBy: hold) : .infinity)
-        var untilChange = auto ? hold - sinceChange : .infinity
-        if let held = spec.longPress.item ?? (spec.longPress == .menu ? .talk : nil) {
-            if frame.holding > 0 {
-                step = .surface(held, .listening); sinceChange = frame.holding; untilChange = .infinity
-            } else if frame.sinceHold < talk {
-                step = .surface(held, .speaking); sinceChange = frame.sinceHold; untilChange = talk - frame.sinceHold
+        init(_ step: LabStep) {
+            switch step.phase {
+            case .rest: self = .idle
+            case .menu: self = .menu
+            case .surface: self = .surface(step.item ?? .talk, step.verb)
+            case .ask: self = .askAnywhere
+            case .askMenu: self = .askMenu
             }
         }
-        return (step, sinceChange, untilChange)
+    }
+
+    /// For harnesses: how many steps a flow plays.
+    public static func stepCount(of flow: LabFlow) -> Int { flow.steps.count }
+
+    /// Where the play is: the step, how long it has been there, and how
+    /// long until it moves on. On the clock, each step holds for its own
+    /// seconds; a tap moves on from wherever the clock has it. A hold
+    /// overrides the sequence — the long-press action, listening while
+    /// held, speaking for `talk` seconds after.
+    static func position(in flow: LabFlow, frame: LabFrame, auto: Bool) -> (index: Int, since: Double, until: Double) {
+        let n = max(flow.steps.count, 1)
+        if auto {
+            let (i, since) = flow.position(at: frame.time)
+            let index = ((i + frame.taps) % n + n) % n
+            let step = flow.steps.indices.contains(index) ? flow.steps[index] : LabStep()
+            let s = min(since, frame.sinceTap)
+            return (index, s, flow.duration(of: step) - s)
+        }
+        let index = ((frame.taps % n) + n) % n
+        return (index, frame.sinceTap, .infinity)
     }
 
     public var body: some View {
-        let spec = frame.spec
-        let steps = Self.steps(of: spec, withError: frame.p("error", .system) >= 0.5)
-        let hold = max(frame.p("hold", .system), 0.2)
+        let flow = frame.flow
+        let spec = flow.kit
+        let steps = flow.steps.isEmpty ? [LabStep(.rest)] : flow.steps
         let auto = frame.p("auto", .system) >= 0.5
         let talk = frame.p("talk", .system)
-        let script = LabScript.named(Int(frame.p("script", .system)))
+        let script = flow.script
         let spring = Animation.spring(response: frame.p("spring", .system), dampingFraction: 1 - frame.p("bounce", .system) * 0.45)
-        let index = frame.stage(of: .system, count: steps.count)
-        let (step, sinceChange, untilChange) = situation(spec, steps: steps, index: index, hold: hold, auto: auto, talk: talk)
+        var (index, sinceChange, untilChange) = Self.position(in: flow, frame: frame, auto: auto)
+        index = min(index, steps.count - 1)
+        let current = steps[index]
+        var step = Step(current)
+        var held = false
+        if let heldItem = spec.longPress.item ?? (spec.longPress == .menu ? .talk : nil) {
+            if frame.holding > 0 {
+                step = .surface(heldItem, .listening); sinceChange = frame.holding; untilChange = .infinity; held = true
+            } else if frame.sinceHold < talk {
+                step = .surface(heldItem, .speaking); sinceChange = frame.sinceHold; untilChange = talk - frame.sinceHold; held = true
+            }
+        }
         // What the panel is: the pod, or the action's surface.
         let item: LabActionItem? = { if case .surface(let i, _) = step { return i } else { return nil } }()
         let verb: LabAgentVerb = { if case .surface(_, let v) = step { return v } else { return .idle } }()
-        // A hold that asks for the whole screen gets it, whatever Talk's
-        // container is — same adornments, full-screen shape.
-        let held = frame.holding > 0 || frame.sinceHold < talk
+        // The kit's container for the action — or the one this step
+        // insists on. A hold that asks for the whole screen gets it.
         let surface: LabSurfaceSpec = {
             guard let item else { return LabSurfaceSpec(kind: .pod) }
             var s = spec.resolvedSurface(for: item)
+            if !held, let override = current.container { s.kind = override }
             if held, spec.longPress.isFullScreen { s.kind = .fullScreen }
             return s
         }()
@@ -155,27 +136,38 @@ public struct LabPlayView: View {
         let panelFrame = frame.applying(look, config: config).applying(surface)
         // The content's transition clock runs from when the surface
         // opened, not from each verb — the verbs change inside it.
-        let firstSurface = steps.firstIndex { if case .surface = $0 { return true } else { return false } } ?? index
-        let surfaceAge = held ? sinceChange
-            : (auto && index >= firstSurface ? sinceChange + Double(index - firstSurface) * hold : sinceChange)
-        let lastSurface = steps.lastIndex { if case .surface = $0 { return true } else { return false } } ?? index
-        let untilClose = (auto && index == lastSurface) || frame.sinceHold < talk ? untilChange : .infinity
+        let starts = flow.starts
+        let surfaceRange = flow.surfaceRange
+        let surfaceAge: Double = {
+            if held { return sinceChange }
+            guard auto, let r = surfaceRange, r.contains(index), starts.indices.contains(index), starts.indices.contains(r.lowerBound) else { return sinceChange }
+            return sinceChange + (starts[index] - starts[r.lowerBound])
+        }()
+        let untilClose = (auto && index == surfaceRange?.upperBound) || frame.sinceHold < talk ? untilChange : .infinity
         let conversation = item.map { LabConversation(script: script, mode: $0 == .talk ? .voice : .text, verb: verb, since: sinceChange, age: surfaceAge) }
         let onAnotherScreen = step == .askAnywhere || step == .askMenu
+        let tab: NexusTab = held ? .dashboard : current.tabCase
         let phone = LabMorphView.phone
         let home = LabMorphView.home(of: state.kind)
         let podHome = LabMorphView.home(of: .pod)
         let placement = spec.askPlacement ?? .floating
         let showChrome = frame.p("chrome", .system) >= 0.5
+        // The menu's own clock: open on its step, closing from when the
+        // step after it began.
+        let menuIndex = steps.firstIndex { $0.phase == .menu }
+        let menuSince: Double = {
+            guard step != .menu, auto, let m = menuIndex, index > m, starts.indices.contains(index), starts.indices.contains(m + 1) else { return sinceChange }
+            return sinceChange + (starts[index] - starts[m + 1])
+        }()
 
         return ZStack {
-            LabPhoneBackdrop(frame: frame, tab: onAnotherScreen ? .devices : .dashboard, size: phone)
-                .animation(.easeInOut(duration: 0.25), value: onAnotherScreen)
+            LabPhoneBackdrop(frame: frame, tab: tab.demoTab, size: phone)
+                .animation(.easeInOut(duration: 0.25), value: tab)
             Color.black.opacity(state.kind == .sheet ? 0.4 : state.kind == .fullScreen ? state.dim : state.kind == .pod ? 0 : 0.15)
                 .animation(spring, value: state.kind)
             VStack {
                 Spacer()
-                TabBarPreview(config: config, selectedTab: .constant(onAnotherScreen ? .devices : .dashboard), width: phone.width - LabPhone.inset * 2, hidesPodContent: true)
+                TabBarPreview(config: config, selectedTab: .constant(tab.demoTab), width: phone.width - LabPhone.inset * 2, hidesPodContent: true)
                     .allowsHitTesting(false)
                     .padding(.bottom, LabPhone.bottom)
                     .opacity(state.kind == .fullScreen ? 0 : 1)
@@ -186,7 +178,7 @@ public struct LabPlayView: View {
             if spec.tap == .menu, !onAnotherScreen {
                 LabGooeyMenu(frame: frame.applying(spec.action, config: config),
                              center: podHome, open: step == .menu,
-                             since: step == .menu ? sinceChange : (index > 1 && auto ? sinceChange + Double(index - 2) * hold : sinceChange),
+                             since: menuSince,
                              icons: spec.items.map(\.symbol), drawsButton: false)
                     .opacity(state.kind == .pod ? 1 : 0)
                     .animation(spring, value: state.kind)
@@ -225,11 +217,11 @@ public struct LabPlayView: View {
                 .animation(spring, value: keyboardUp)
             if showChrome {
                 VStack(spacing: 3) {
-                    Text(Self.title(of: step))
+                    Text(held ? (frame.holding > 0 ? "Listening" : "Speaking") : current.title)
                         .font(.system(size: 13, weight: .semibold))
                         .contentTransition(.numericText())
                         .animation(spring, value: step)
-                    Text("\(index + 1) of \(steps.count) · \(script.title)")
+                    Text("\(index + 1) of \(steps.count) · \(flow.name)")
                         .font(.caption2)
                         .opacity(0.6)
                 }
@@ -246,78 +238,59 @@ public struct LabPlayView: View {
     }
 }
 
-// MARK: - The stage: play, with a strip of steps
+// MARK: - The transport
 
-/// Q Branch's stage: the phone, and the steps under it. The board is
-/// the rail (see `LabSpecBoard`), so this is only the thing being
-/// played and the way to move through it.
-struct LabSystemStage: View {
+/// Under the phone: the transport. Previous, next, restart, the step
+/// you're on and how many there are, the Auto switch — and nothing to
+/// edit, because the steps live in the navigator now (Chris,
+/// 2026-09-18). Slim enough to keep during a demo with the sidebar
+/// folded away.
+struct LabTransport: View {
     @ObservedObject var lab: LabState
-    @ObservedObject var config: RingConfig
     let frame: LabFrame
 
     var body: some View {
-        let scale = frame.diameter * 1.9 / LabMorphView.phone.height
-        VStack(spacing: 18) {
-            LabPlayView(frame: frame, config: config)
-                .scaleEffect(scale)
-                .frame(width: LabMorphView.phone.width * scale, height: LabMorphView.phone.height * scale)
-                .contentShape(Rectangle())
-                .onTapGesture { lab.advance() }
-                .gesture(DragGesture(minimumDistance: 0)
-                    .onChanged { _ in lab.beginHold() }
-                    .onEnded { _ in lab.endHold() })
-            LabPlayStrip(lab: lab, frame: frame)
+        let flow = frame.flow
+        let auto = frame.p("auto", .system) >= 0.5
+        let n = max(flow.steps.count, 1)
+        let index = min(LabPlayView.position(in: flow, frame: frame, auto: auto).index, n - 1)
+        let current = flow.steps.indices.contains(index) ? flow.steps[index] : nil
+        HStack(spacing: 14) {
+            HStack(spacing: 2) {
+                Button { go(index - 1) } label: { Image(systemName: "backward.end.fill") }
+                    .help("Previous step")
+                Button { lab.taps = 0; lab.lastTap = Date() } label: { Image(systemName: "arrow.counterclockwise") }
+                    .help("Restart")
+                Button { go(index + 1) } label: { Image(systemName: "forward.end.fill") }
+                    .help("Next step")
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 6) {
+                if let current {
+                    Image(systemName: current.symbol).font(.caption).foregroundStyle(.secondary).frame(width: 16)
+                    Text(current.title).font(.callout.weight(.semibold)).lineLimit(1)
+                }
+                Text("\(index + 1) of \(n)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 180, alignment: .leading)
+            .contentTransition(.numericText())
+            .animation(.default, value: index)
+            Toggle("Auto", isOn: Binding(get: { auto }, set: { lab.values["system.auto"] = $0 ? 1 : 0; lab.taps = 0; lab.lastTap = Date() }))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .help("Steps on the clock — each step for its own seconds. Off, only the arrows, a tap on the phone, or the navigator move it.")
+            Text(lab.qInteract ? "Tap the pod · type or hold to talk" : "Tap the phone to step · hold it to talk")
+                .font(.caption2).foregroundStyle(.tertiary)
         }
     }
-}
 
-/// The steps of the play as chips — click any to go there — with the
-/// auto/tap switch and a restart.
-struct LabPlayStrip: View {
-    @ObservedObject var lab: LabState
-    let frame: LabFrame
-
-    var body: some View {
-        let steps = LabPlayView.steps(of: frame.spec, withError: frame.p("error", .system) >= 0.5)
-        let current = frame.stage(of: .system, count: steps.count)
-        let auto = frame.p("auto", .system) >= 0.5
-        VStack(spacing: 10) {
-            LabWrap(spacing: 6) {
-                ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
-                    Button {
-                        // Tap mode, at this step: the clock stops, taps count.
-                        lab.values["system.auto"] = 0
-                        lab.taps = i
-                        lab.lastTap = Date()
-                    } label: {
-                        HStack(spacing: 4) {
-                            if i > 0 { Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold)).foregroundStyle(.tertiary) }
-                            Text(LabPlayView.title(of: step))
-                                .font(.caption.weight(i == current ? .semibold : .regular))
-                        }
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Capsule().fill(i == current ? AnyShapeStyle(.fill.secondary) : AnyShapeStyle(.fill.quaternary)))
-                        .overlay(Capsule().strokeBorder(i == current ? Color.primary.opacity(0.25) : .clear))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .frame(maxWidth: 560)
-            HStack(spacing: 14) {
-                Toggle("Auto", isOn: Binding(get: { auto }, set: { lab.values["system.auto"] = $0 ? 1 : 0; lab.taps = 0 }))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                Button {
-                    lab.taps = 0
-                    lab.lastTap = Date()
-                } label: { Label("Restart", systemImage: "arrow.counterclockwise") }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                Text("Tap the phone to step · hold it to talk")
-                    .font(.caption2).foregroundStyle(.tertiary)
-            }
-        }
+    /// Stop the clock at a step, and select it in the navigator.
+    private func go(_ i: Int) {
+        let n = max(lab.flow.steps.count, 1)
+        let j = ((i % n) + n) % n
+        guard lab.flow.steps.indices.contains(j) else { return }
+        lab.go(to: lab.flow.steps[j])
     }
 }
 
@@ -329,20 +302,26 @@ struct LabPlayStrip: View {
 /// rail there shows the errand and a Use button), containers edited in
 /// place, sections that fold and still say what they hold.
 public struct LabSpecBoard: View {
+    /// Which half of the board: the flow's own settings (the document),
+    /// or the kit (the parts). The navigator picks.
+    public enum Mode { case flow, kit }
+
     @ObservedObject var lab: LabState
     @ObservedObject var config: RingConfig
     let frame: LabFrame
-    @ObservedObject var specs: LabSpecStore
+    @ObservedObject var flows: LabFlowStore
+    let mode: Mode
     /// A live frame for the thumbnails and the popovers.
     let frameAt: (Date) -> LabFrame
     @StateObject private var presets = LabPresetStore()
     @State private var pasteFailed = false
 
-    public init(lab: LabState, config: RingConfig, frame: LabFrame, specs: LabSpecStore, frameAt: ((Date) -> LabFrame)? = nil) {
+    public init(lab: LabState, config: RingConfig, frame: LabFrame, flows: LabFlowStore, mode: Mode = .flow, frameAt: ((Date) -> LabFrame)? = nil) {
         self.lab = lab
         self.config = config
         self.frame = frame
-        self.specs = specs
+        self.flows = flows
+        self.mode = mode
         self.frameAt = frameAt ?? { _ in frame }
     }
 
@@ -370,9 +349,43 @@ public struct LabSpecBoard: View {
             .onDisappear { clock.run(false) }
     }
 
+    @ViewBuilder
     private func board(_ frame: LabFrame) -> some View {
+        switch mode {
+        case .flow: flowBoard
+        case .kit: kitBoard(frame)
+        }
+    }
+
+    /// The document: its name, the flows menu, how it moves through
+    /// the app, what replies may carry, and the play's own knobs. The
+    /// steps themselves are in the navigator.
+    private var flowBoard: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            Divider()
+            LabRailSection("q.quidgets", "Quidgets", summary: "\(spec.quidgetKinds.map(\.label).joined(separator: ", ")) · \(spec.quidgetInlineSize.label)") {
+                quidgetsSection
+            }
+            LabRailSection("q.gestures", "Gestures", summary: "Tap · \(spec.tap.label) · Hold · \(spec.longPress.label)") {
+                gesturesSection
+            }
+            LabRailSection("q.play", "Autoplay · Interact", defaultOpen: false) {
+                LabKnobList(lab: lab, experiment: .system)
+            }
+        }
+    }
+
+    /// The parts: the pod, a look per agent state, the Ask button and
+    /// its menu, a container per action.
+    private func kitBoard(_ frame: LabFrame) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Kit").font(.headline)
+                Text("\(spec.filled) of \(spec.total) slots · the parts every step draws on")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(14)
             Divider()
             LabRailSection("q.pod", "Pod", summary: spec.pod?.title ?? "Empty") {
                 slotRow(frame, title: "At rest", look: spec.pod, target: .pod, set: { lab.spec.pod = $0 })
@@ -444,53 +457,53 @@ public struct LabSpecBoard: View {
             LabRailSection("q.containers", "Containers", summary: spec.items.map { "\($0.label) · \(spec.resolvedSurface(for: $0).kind.label)" }.joined(separator: ", ")) {
                 containerTable
             }
-            LabRailSection("q.quidgets", "Quidgets", summary: "\(spec.quidgetKinds.map(\.label).joined(separator: ", ")) · \(spec.quidgetInlineSize.label)") {
-                Text("Quick widgets a reply can carry — the thing you asked about, as a control. Play a conversation that has one: Dim the patio light, Arm the house, Packages today.")
-                    .font(.caption).foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(QuidgetKind.allCases) { kind in
-                    HStack(spacing: 8) {
-                        Toggle("", isOn: Binding(get: { spec.quidgetKinds.contains(kind) }, set: { on in
-                            var kinds = spec.quidgetKinds
-                            if on { if !kinds.contains(kind) { kinds.append(kind) } } else { kinds.removeAll { $0 == kind } }
-                            lab.spec.quidgets = kinds
-                        }))
-                        .labelsHidden()
-                        Image(systemName: kind.symbol)
-                            .font(.callout).frame(width: 20).foregroundStyle(.secondary)
-                        Text(kind.label).font(.callout)
-                        Spacer(minLength: 0)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("In the reply").font(.callout).foregroundStyle(.secondary)
-                    Picker("", selection: Binding(get: { spec.quidgetInlineSize }, set: { lab.spec.quidgetSize = $0.rawValue })) {
-                        Text("Small").tag(QuidgetSize.small)
-                        Text("Medium").tag(QuidgetSize.medium)
-                    }
-                    .labelsHidden().pickerStyle(.segmented).controlSize(.small)
-                }
-                .help("How a quidget sits in the reply. Clips are always medium. Tap one to expand it.")
-                Button("Open the Quidgets Lab") { lab.experiment = .quidgets }
-                    .controlSize(.small)
+        }
+    }
+
+    // MARK: Flow sections
+
+    @ViewBuilder private var quidgetsSection: some View {
+        Text("Quick widgets a reply can carry — the thing you asked about, as a control. Play a conversation that has one: Dim the patio light, Arm the house, Packages today.")
+            .font(.caption).foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+        ForEach(QuidgetKind.allCases) { kind in
+            HStack(spacing: 8) {
+                Toggle("", isOn: Binding(get: { spec.quidgetKinds.contains(kind) }, set: { on in
+                    var kinds = spec.quidgetKinds
+                    if on { if !kinds.contains(kind) { kinds.append(kind) } } else { kinds.removeAll { $0 == kind } }
+                    lab.spec.quidgets = kinds
+                }))
+                .labelsHidden()
+                Image(systemName: kind.symbol)
+                    .font(.callout).frame(width: 20).foregroundStyle(.secondary)
+                Text(kind.label).font(.callout)
+                Spacer(minLength: 0)
             }
-            LabRailSection("q.gestures", "Gestures", summary: "Tap · \(spec.tap.label) · Hold · \(spec.longPress.label)") {
-                labelled("Tap") {
-                    Picker("", selection: Binding(get: { lab.spec.tap }, set: { lab.spec.tap = $0 })) {
-                        ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
-                    }
-                    .labelsHidden().pickerStyle(.menu).controlSize(.small)
-                }
-                labelled("Long press") {
-                    Picker("", selection: Binding(get: { lab.spec.longPress }, set: { lab.spec.longPress = $0 })) {
-                        ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
-                    }
-                    .labelsHidden().pickerStyle(.menu).controlSize(.small)
-                }
+        }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("In the reply").font(.callout).foregroundStyle(.secondary)
+            Picker("", selection: Binding(get: { spec.quidgetInlineSize }, set: { lab.spec.quidgetSize = $0.rawValue })) {
+                Text("Small").tag(QuidgetSize.small)
+                Text("Medium").tag(QuidgetSize.medium)
             }
-            LabRailSection("q.play", "Autoplay · Interact", defaultOpen: false) {
-                LabKnobList(lab: lab, experiment: .system)
+            .labelsHidden().pickerStyle(.segmented).controlSize(.small)
+        }
+        .help("How a quidget sits in the reply. Clips are always medium. Tap one to expand it.")
+        Button("Open the Quidgets Lab") { lab.experiment = .quidgets }
+            .controlSize(.small)
+    }
+    @ViewBuilder private var gesturesSection: some View {
+        labelled("Tap") {
+            Picker("", selection: Binding(get: { lab.spec.tap }, set: { lab.spec.tap = $0 })) {
+                ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
             }
+            .labelsHidden().pickerStyle(.menu).controlSize(.small)
+        }
+        labelled("Long press") {
+            Picker("", selection: Binding(get: { lab.spec.longPress }, set: { lab.spec.longPress = $0 })) {
+                ForEach(LabGestureResult.allCases) { Text($0.label).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.menu).controlSize(.small)
         }
     }
 
@@ -499,57 +512,58 @@ public struct LabSpecBoard: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                TextField("Spec name", text: Binding(get: { lab.spec.name }, set: { lab.spec.name = $0 }))
+                TextField("Flow name", text: Binding(get: { lab.flow.name }, set: { lab.flow.name = $0; lab.flow.kit.name = $0 }))
                     .textFieldStyle(.roundedBorder)
                     .font(.headline)
-                specsMenu
+                flowsMenu
             }
             HStack(spacing: 10) {
-                Text("\(spec.filled) of \(spec.total) slots")
+                Text("\(lab.flow.steps.count) steps · \(spec.filled) of \(spec.total) slots")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Copy JSON") { LabSpecStore.copy(spec) }
-                    .help("The spec as JSON, for Nexus Lab's Paste Spec on the phone.")
+                Button("Copy JSON") { LabFlowStore.copy(lab.flow) }
+                    .help("The flow as JSON, for Nexus Lab's Paste on the phone.")
                 Button("Paste") {
-                    if let s = LabSpecStore.paste() { lab.spec = s; pasteFailed = false } else { pasteFailed = true }
+                    if let f = LabFlowStore.paste() { lab.flow = f; lab.qSelection = .flow; pasteFailed = false } else { pasteFailed = true }
                 }
-                .help("A spec from the pasteboard.")
+                .help("A flow — or an older spec — from the pasteboard.")
             }
             .font(.caption)
             .buttonStyle(.borderless)
             if pasteFailed {
-                Text("The pasteboard doesn't hold a spec.").font(.caption).foregroundStyle(.red)
+                Text("The pasteboard doesn't hold a flow.").font(.caption).foregroundStyle(.red)
             }
         }
         .padding(14)
     }
 
-    private var specsMenu: some View {
+    private var flowsMenu: some View {
         Menu {
-            if specs.specs.isEmpty {
-                Text("No saved specs")
+            if flows.flows.isEmpty {
+                Text("No saved flows")
             } else {
                 Section("Load") {
-                    ForEach(specs.specs) { s in Button(s.name) { lab.spec = s } }
+                    ForEach(flows.flows) { f in Button(f.name) { lab.flow = f; lab.qSelection = .flow } }
                 }
                 Menu("Delete") {
-                    ForEach(specs.specs) { s in Button(s.name, role: .destructive) { specs.delete(s) } }
+                    ForEach(flows.flows) { f in Button(f.name, role: .destructive) { flows.delete(f) } }
                 }
             }
             Section("Starters") {
-                ForEach(LabSpec.starters) { s in Button(s.name) { lab.spec = s } }
+                ForEach(LabFlow.starters) { f in Button(f.name) { lab.flow = f; lab.qSelection = .flow } }
             }
             Divider()
-            Button("Save “\(spec.name)”") { specs.save(spec) }
-            Button("Save a Copy") { var s = spec; s.id = UUID(); s.name += " copy"; specs.save(s); lab.spec = s }
-            Button("New Spec", role: .destructive) { lab.spec = LabSpec() }
+            Button("Save “\(lab.flow.name)”") { flows.save(lab.flow) }
+            Button("Save a Copy") { var f = lab.flow; f.id = UUID(); f.name += " copy"; f.kit.name = f.name; flows.save(f); lab.flow = f }
+            Button("New Flow with This Kit") { lab.flow = LabFlow(name: "Untitled", kit: spec, steps: [LabStep(.rest)]); lab.qSelection = .flow }
+            Button("New Flow", role: .destructive) { lab.flow = LabFlow(name: "Untitled", kit: LabSpec(), steps: [LabStep(.rest)]); lab.qSelection = .flow }
         } label: {
             Image(systemName: "square.stack")
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Saved specs and starters")
+        .help("Saved flows and starters")
     }
 
     /// Label · control, on the rail's grid.

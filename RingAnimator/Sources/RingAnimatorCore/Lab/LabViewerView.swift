@@ -184,13 +184,13 @@ public struct LabViewerView: View {
                         }
                         .pickerStyle(.inline)
                         Section("Starters") {
-                            ForEach(LabSpec.starters) { s in Button(s.name) { lab.spec = s; pasteMessage = nil } }
+                            ForEach(LabFlow.starters) { f in Button(f.name) { lab.flow = f; pasteMessage = nil } }
                         }
                         Button {
-                            if let s = LabSpecStore.paste() { lab.spec = s; pasteMessage = "Loaded “\(s.name)”" } else { pasteMessage = "No spec on the pasteboard" }
-                        } label: { Label("Paste Spec from the Mac", systemImage: "doc.on.clipboard") }
+                            if let f = LabFlowStore.paste() { lab.flow = f; pasteMessage = "Loaded “\(f.name)”" } else { pasteMessage = "No flow on the pasteboard" }
+                        } label: { Label("Paste Flow from the Mac", systemImage: "doc.on.clipboard") }
                     } label: {
-                        Label(lab.spec.name, systemImage: "wrench.and.screwdriver")
+                        Label(lab.flow.name, systemImage: "wrench.and.screwdriver")
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
                     }

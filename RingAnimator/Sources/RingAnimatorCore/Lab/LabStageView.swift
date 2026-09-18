@@ -18,7 +18,7 @@ public struct LabStageView: View {
     @ObservedObject var config: RingConfig
     @StateObject private var audio = AudioSpectrumMonitor()
     @StateObject private var presets = LabPresetStore()
-    @StateObject private var specs = LabSpecStore()
+    @StateObject private var flows = LabFlowStore()
     @State private var appeared = Date()
     @State private var savedFrameMessage: String?
     @State private var stageSize: CGSize = .zero
@@ -173,6 +173,17 @@ public struct LabStageView: View {
             Toggle("App UI", isOn: $lab.appUI)
                 .toggleStyle(.switch)
                 .fixedSize()
+            // Q Branch's switch is a stage control, like Light/Dark
+            // (Chris, 2026-09-18): Autoplay runs the flow on the clock;
+            // Interact hands you the app.
+            if lab.experiment.isQBranch {
+                Picker("Mode", selection: Binding(get: { lab.qInteract }, set: { lab.qInteract = $0 })) {
+                    Text("Autoplay").tag(false)
+                    Text("Interact").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -190,12 +201,6 @@ public struct LabStageView: View {
                         // The workbench: hero on top, every state below.
                         ScrollView(.vertical) {
                             LabMorphStage(lab: lab, config: config, frame: f)
-                                .padding(.vertical, 24)
-                                .frame(maxWidth: .infinity)
-                        }
-                    } else if lab.experiment == .system {
-                        ScrollView(.vertical) {
-                            LabSystemStage(lab: lab, config: config, frame: f)
                                 .padding(.vertical, 24)
                                 .frame(maxWidth: .infinity)
                         }
@@ -271,8 +276,21 @@ public struct LabStageView: View {
     private var controls: some View {
         if lab.experiment.isQBranch {
             ScrollView {
-                LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: 360), specs: specs,
-                             frameAt: { frame(at: $0, diameter: 360) })
+                switch lab.qSelection {
+                case .flow:
+                    LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: 360), flows: flows, mode: .flow,
+                                 frameAt: { frame(at: $0, diameter: 360) })
+                case .kit:
+                    LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: 360), flows: flows, mode: .kit,
+                                 frameAt: { frame(at: $0, diameter: 360) })
+                case .step:
+                    if let step = lab.selectedStep {
+                        LabStepInspector(lab: lab, config: config, step: step, frameAt: { frame(at: $0, diameter: 360) })
+                    } else {
+                        LabSpecBoard(lab: lab, config: config, frame: frame(at: Date(), diameter: 360), flows: flows, mode: .flow,
+                                     frameAt: { frame(at: $0, diameter: 360) })
+                    }
+                }
             }
         } else {
             LabRailView(lab: lab, config: config, audio: audio, presets: presets, bands: bands,
@@ -439,18 +457,60 @@ public struct LabListView: View {
 
     public init(lab: LabState) { self.lab = lab }
 
+    /// A row in the navigator: a room, or — under Q Branch — the flow,
+    /// one of its steps, or its kit.
+    enum Item: Hashable {
+        case room(LabExperiment)
+        case flow, kit
+        case step(UUID)
+    }
+
     public var body: some View {
-        // A `Binding<LabExperiment?>` rather than the non-optional
-        // selection: that initializer is macOS-only, and this list is
-        // meant to reach the iOS app too.
-        let selection = Binding<LabExperiment?>(
-            get: { lab.experiment },
-            set: { if let it = $0 { lab.experiment = it } }
+        // A `Binding<Item?>` rather than the non-optional selection: that
+        // initializer is macOS-only, and this list is meant to reach the
+        // iOS app too.
+        let selection = Binding<Item?>(
+            get: {
+                guard lab.experiment == .system else { return .room(lab.experiment) }
+                switch lab.qSelection {
+                case .flow: return .flow
+                case .kit: return .kit
+                case .step(let id): return .step(id)
+                }
+            },
+            set: {
+                switch $0 {
+                case .room(let e): lab.experiment = e
+                case .flow: lab.experiment = .system; lab.qSelection = .flow
+                case .kit: lab.experiment = .system; lab.qSelection = .kit
+                case .step(let id):
+                    lab.experiment = .system
+                    if let step = lab.flow.steps.first(where: { $0.id == id }) { lab.go(to: step) }
+                case nil: break
+                }
+            }
         )
         List(selection: selection) {
             // Q Branch is the one row on top — the room everything under
-            // it serves — not a section with a header to fold.
-            ForEach(LabSection.qBranch.experiments) { row($0) }
+            // it serves — and its flow unfolds beneath it: the steps, in
+            // order, like Keynote's slide navigator; then the kit.
+            flowRow
+            ForEach(lab.flow.steps) { step in stepRow(step) }
+                .onMove { from, to in lab.flow.steps.move(fromOffsets: from, toOffset: to) }
+            Button {
+                let id = lab.flow.addStep(after: lab.selectedStep?.id)
+                if let step = lab.flow.steps.first(where: { $0.id == id }) { lab.go(to: step) }
+            } label: {
+                Label("Add Step", systemImage: "plus")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 30)
+            .padding(.vertical, 2)
+            .selectionDisabled()
+            .help("A new step after the selected one — a copy of it, to change one thing on.")
+            kitRow
             ForEach(LabSection.sidebarOrder.filter { $0 != .qBranch }) { section in
                 Section(isExpanded: expanded(section)) {
                     if section == .orb {
@@ -513,8 +573,83 @@ public struct LabListView: View {
             }
         }
         .padding(.vertical, 2)
-        .tag(experiment)
+        .tag(Item.room(experiment))
         .help(experiment.summary)
+    }
+
+    /// The flow: the use case being built. Its name and length as the
+    /// caption, so the row reads as the document it is.
+    private var flowRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: LabExperiment.system.symbol)
+                .frame(width: 22)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Q Branch")
+                Text("\(lab.flow.name) · \(lab.flow.steps.count) steps")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 2)
+        .tag(Item.flow)
+        .help(LabExperiment.system.summary)
+    }
+
+    /// One step: its number, its state's glyph, its name — and what's
+    /// said there, or which screen, underneath.
+    private func stepRow(_ step: LabStep) -> some View {
+        let index = (lab.flow.index(of: step.id) ?? 0) + 1
+        return HStack(spacing: 8) {
+            Text("\(index)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(width: 16, alignment: .trailing)
+            Image(systemName: step.symbol)
+                .font(.callout)
+                .frame(width: 20)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(step.title)
+                Text(step.speaks && !step.line.isEmpty ? "“\(step.line)”" : step.tabCase.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 1)
+        .padding(.leading, 6)
+        .tag(Item.step(step.id))
+        .contextMenu {
+            Button("Duplicate") {
+                let id = lab.flow.addStep(after: step.id)
+                if let s = lab.flow.steps.first(where: { $0.id == id }) { lab.go(to: s) }
+            }
+            Button("Delete", role: .destructive) {
+                lab.flow.remove(step.id)
+                if lab.selectedStep == nil { lab.qSelection = .flow }
+            }
+        }
+    }
+
+    /// The kit: the parts every step draws on.
+    private var kitRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "shippingbox")
+                .frame(width: 22)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Kit")
+                Text("\(lab.spec.filled) of \(lab.spec.total) slots · pod, states, ask, containers")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 2)
+        .tag(Item.kit)
+        .help("The reusable parts a step points at: the pod, a look per agent state, the Ask button, the menu, a container per action.")
     }
 }
 

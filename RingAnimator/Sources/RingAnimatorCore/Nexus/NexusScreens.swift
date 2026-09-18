@@ -34,6 +34,16 @@ public enum NexusTab: String, CaseIterable, Identifiable, Sendable {
         case .routines: return (.tabRoutines, .tabRoutinesOutline)
         }
     }
+    /// This tab in the app's older four-tab model — Emergency has no
+    /// counterpart there and shows as the dashboard's bar.
+    public var demoTab: DemoTab {
+        switch self {
+        case .dashboard, .emergency: return .dashboard
+        case .feed: return .feed
+        case .devices: return .devices
+        case .routines: return .routines
+        }
+    }
     /// The app's older four-tab model, mapped.
     public init(_ tab: DemoTab) {
         switch tab {
