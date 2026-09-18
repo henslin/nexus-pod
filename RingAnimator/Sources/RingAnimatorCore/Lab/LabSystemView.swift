@@ -1,7 +1,58 @@
 import SwiftUI
 
-// The System room: the spec played on a phone, and the board of slots
-// beside it. See `LabSpec.swift` for the model and the why.
+// Q Branch: the spec on a phone — autoplayed, or in your hand — and the
+// board of slots beside it. See `LabSpec.swift` for the model and the
+// why.
+
+// MARK: - The room
+
+/// Q Branch's stage: one switch. Autoplay is `LabPlayView`, the spec on
+/// the clock; Interact is `LabAppView`, the same spec live, driven by
+/// you. The mode is the room's first knob, so it rides with the frame
+/// and reaches the phone with the rest.
+public struct LabQBranchView: View {
+    let frame: LabFrame
+    @ObservedObject var config: RingConfig
+
+    public init(frame: LabFrame, config: RingConfig) {
+        self.frame = frame
+        self.config = config
+    }
+
+    public var body: some View {
+        if frame.p("mode", .system) >= 0.5 {
+            LabAppView(frame: frame, config: config)
+        } else {
+            LabPlayView(frame: frame, config: config)
+        }
+    }
+}
+
+/// Under the phone on the Mac: the Autoplay / Interact switch, and — in
+/// Autoplay — the steps.
+struct LabQBranchStrip: View {
+    @ObservedObject var lab: LabState
+    let frame: LabFrame
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Picker("Mode", selection: Binding(get: { lab.qInteract }, set: { lab.qInteract = $0 })) {
+                Text("Autoplay").tag(false)
+                Text("Interact").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 220)
+            if lab.qInteract {
+                Text("Tap the pod · type an ask or hold to talk · tap off to close")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            } else {
+                LabPlayStrip(lab: lab, frame: frame)
+            }
+        }
+        .animation(.default, value: lab.qInteract)
+    }
+}
 
 // MARK: - Play
 
@@ -437,7 +488,7 @@ public struct LabSpecBoard: View {
                     .labelsHidden().pickerStyle(.menu).controlSize(.small)
                 }
             }
-            LabRailSection("q.play", "Play", defaultOpen: false) {
+            LabRailSection("q.play", "Autoplay · Interact", defaultOpen: false) {
                 LabKnobList(lab: lab, experiment: .system)
             }
         }

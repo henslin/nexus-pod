@@ -115,10 +115,10 @@ public struct LabViewerView: View {
                 .clipped()
         }
         .contentShape(Rectangle())
-        .onTapGesture { if experiment.isTappable { lab.advance() } }
+        .onTapGesture { if lab.stageTappable { lab.advance() } }
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { g in
-                if experiment.isHoldable { lab.beginHold() }
+                if lab.stageHoldable { lab.beginHold() }
                 if experiment.usesPointer { lab.pointer = CGPoint(x: g.location.x - size.width / 2, y: g.location.y - size.height / 2) }
             }
             .onEnded { _ in lab.endHold(); if experiment.usesPointer { lab.pointer = nil } })
@@ -178,6 +178,11 @@ public struct LabViewerView: View {
                 // arrives as JSON on the pasteboard.
                 if lab.experiment.isQBranch {
                     Menu {
+                        Picker("Mode", selection: Binding(get: { lab.qInteract }, set: { lab.qInteract = $0 })) {
+                            Label("Autoplay", systemImage: "play.fill").tag(false)
+                            Label("Interact", systemImage: "hand.tap").tag(true)
+                        }
+                        .pickerStyle(.inline)
                         Section("Starters") {
                             ForEach(LabSpec.starters) { s in Button(s.name) { lab.spec = s; pasteMessage = nil } }
                         }

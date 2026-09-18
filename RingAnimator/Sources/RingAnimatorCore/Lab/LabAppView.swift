@@ -192,7 +192,7 @@ struct LabAppView: View {
         let spec = frame.spec
         let now = Date()
         let phone = LabMorphView.phone
-        let defaultScript = LabScript.named(Int(frame.p("script", .app)))
+        let defaultScript = LabScript.named(Int(frame.p("voiceAsk", .system)))
         let transcript = frame.transcribing && !frame.transcript.isEmpty ? frame.transcript.map(\.text).joined(separator: " ") : nil
         let conversation = session.conversation(at: now, defaultScript: defaultScript, transcript: transcript)
         let item = session.surface

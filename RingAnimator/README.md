@@ -83,13 +83,13 @@ timeline sequences them.
 the firmware's own recordings, with a live preview of every style. Edits
 autosave to `~/Library/Application Support/RingAnimator/`.
 
-**Lab.** The discovery studio for the agent, led by **Q Branch**: *The
-Agent* plays a specification — a look for every agent state, the menu, the
-container each action opens, tap and long press — end to end on the clock;
-*The App* is the same specification live, in your hand: the real screens,
-the pod in the tab bar, type an ask or hold to talk, and the agent answers
-with quick widgets in its reply and does the thing to the house. Under it,
-folded, the parts bin: some fifty orb bases with post effects, the
+**Lab.** The discovery studio for the agent, led by **Q Branch**: a
+specification — a look for every agent state, the menu, the container each
+action opens, tap and long press — with one switch. *Autoplay* plays it
+end to end on the clock; *Interact* puts the same specification live in
+your hand: the real screens, the pod in the tab bar, type an ask or hold
+to talk, and the agent answers with quick widgets in its reply and does
+the thing to the house. Under it, folded, the parts bin: some fifty orb bases with post effects, the
 controls (Ask button, gooey menu, metal, beams), the containers (pod,
 capsule, card, sheet, full screen) and the flows. Every option opens on
 the defaults set in the pass of 17 September 2026; pin a room to change

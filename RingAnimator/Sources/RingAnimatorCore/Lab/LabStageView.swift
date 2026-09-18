@@ -62,7 +62,7 @@ public struct LabStageView: View {
 
     /// Flows, controls on a phone, and Q Branch draw on a real device;
     /// orbs on the disc stage.
-    private var onDevice: Bool { lab.experiment.usesPhoneCanvas || lab.experiment == .system }
+    private var onDevice: Bool { lab.experiment.usesPhoneCanvas }
 
     @ViewBuilder
     private var stage: some View {
@@ -90,23 +90,17 @@ public struct LabStageView: View {
                 TimelineView(.animation) { timeline in
                     let f = frame(at: timeline.date, diameter: 360).onScreen(screen)
                     Group {
-                        if lab.experiment == .system {
-                            LabPlayView(frame: f, config: config)
-                        } else if lab.experiment == .app {
-                            LabAppView(frame: f, config: config)
-                        } else {
-                            LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.activePost)
-                        }
+                        LabExperimentView(experiment: lab.experiment, frame: f, config: config, post: lab.activePost)
                     }
                     .id(lab.experiment)
                 }
                 .frame(width: screen.width, height: screen.height)
                 .clipShape(RoundedRectangle(cornerRadius: AnimationExporter.phoneScreenCornerRadius, style: .continuous))
                 .contentShape(Rectangle())
-                .onTapGesture { if lab.experiment.isTappable { lab.advance() } }
+                .onTapGesture { if lab.stageTappable { lab.advance() } }
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { g in
-                        if lab.experiment.isHoldable { lab.beginHold() }
+                        if lab.stageHoldable { lab.beginHold() }
                         if lab.experiment.usesPointer { lab.pointer = CGPoint(x: g.location.x - screen.width / 2, y: g.location.y - screen.height / 2) }
                     }
                     .onEnded { _ in lab.endHold() })
@@ -139,7 +133,7 @@ public struct LabStageView: View {
         .overlay(alignment: .bottom) {
             if lab.experiment == .system {
                 TimelineView(.animation) { timeline in
-                    LabPlayStrip(lab: lab, frame: frame(at: timeline.date, diameter: 360))
+                    LabQBranchStrip(lab: lab, frame: frame(at: timeline.date, diameter: 360))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -454,7 +448,10 @@ public struct LabListView: View {
             set: { if let it = $0 { lab.experiment = it } }
         )
         List(selection: selection) {
-            ForEach(LabSection.sidebarOrder) { section in
+            // Q Branch is the one row on top — the room everything under
+            // it serves — not a section with a header to fold.
+            ForEach(LabSection.qBranch.experiments) { row($0) }
+            ForEach(LabSection.sidebarOrder.filter { $0 != .qBranch }) { section in
                 Section(isExpanded: expanded(section)) {
                     if section == .orb {
                         // Sixty bases read as six shelves.
@@ -494,10 +491,10 @@ public struct LabListView: View {
         #endif
     }
 
-    /// Q Branch stays open; the experiments fold, and start folded.
+    /// The experiments fold, and start folded.
     private func expanded(_ section: LabSection) -> Binding<Bool> {
         Binding(
-            get: { section == .qBranch || UserDefaults.standard.object(forKey: "nexus.lab.side.\(section.id)") as? Bool ?? false },
+            get: { UserDefaults.standard.object(forKey: "nexus.lab.side.\(section.id)") as? Bool ?? false },
             set: { open = ($0, section.id); UserDefaults.standard.set($0, forKey: "nexus.lab.side.\(section.id)") })
     }
     /// A tick so the list re-reads the folds.
@@ -697,9 +694,7 @@ public struct LabExperimentView: View {
         case .caption:
             LabCaptionView(frame: frame, config: config)
         case .system:
-            LabPlayView(frame: frame, config: config)
-        case .app:
-            LabAppView(frame: frame, config: config)
+            LabQBranchView(frame: frame, config: config)
         case .askButton:
             LabAskButtonView(frame: frame, config: config)
         case .quidgets:

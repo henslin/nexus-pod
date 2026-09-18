@@ -61,19 +61,27 @@ sketch); the code stays.
   `LabBakedDefaults.swift` is Chris's pass of 2026-09-17 baked in as the
   floor — re-bake from the pins (`nexus.lab.defaults` in UserDefaults),
   don't hand-edit. "Reset Everything to Factory" returns to the bake.
-- **Q Branch, two lanes** (`LabSpec.swift`, `LabSystemView.swift`,
-  `LabAppView.swift`): a `LabSpec` assigns a `LabLook` (an experiment as
-  tuned) to every slot — pod, a look per `LabAgentVerb`, the Ask button,
-  the menu and its `LabActionItem`s, a `LabSurfaceSpec` per item (kind,
-  adornments, backdrop, hero scale, dim), tap and long press, which
-  quidgets replies may carry. *The Agent* (`LabPlayView`) plays it on the
-  clock with a step strip. *The App* (`LabAppView`, `LabAppSession`) is
-  the phone live: `NexusScreen` with `TabBarPreview`, the gooey menu's
-  items as targets, Ask opens a real `TextField` (the on-screen keyboard
-  follows the keys), Return matches the closest `LabScript`, hold the
-  pod to talk. Specs decode field by field (`init(from:)`), so an older
-  build's spec opens rather than vanishing. Three starters; specs save
-  by name (`LabSpecStore`) and travel as JSON to Nexus Lab's Paste Spec.
+- **Q Branch, one room, one switch** (`LabSpec.swift`,
+  `LabSystemView.swift`, `LabAppView.swift`): a `LabSpec` assigns a
+  `LabLook` (an experiment as tuned) to every slot — pod, a look per
+  `LabAgentVerb`, the Ask button, the menu and its `LabActionItem`s, a
+  `LabSurfaceSpec` per item (kind, adornments, backdrop, hero scale,
+  dim), tap and long press, which quidgets replies may carry. The room
+  is `LabExperiment.system`, the single row on top of the sidebar;
+  `LabQBranchView` switches on its `mode` knob (`lab.qInteract`, the
+  segmented control under the phone; on the phone, in the spec menu).
+  *Autoplay* (`LabPlayView`) plays it on the clock with a step strip.
+  *Interact* (`LabAppView`, `LabAppSession`) is the phone live:
+  `NexusScreen` with `TabBarPreview`, the gooey menu's items as targets,
+  Ask opens a real `TextField` (the on-screen keyboard follows the
+  keys), Return matches the closest `LabScript`, hold the pod to talk.
+  In Interact the stage's own tap and hold stand down
+  (`lab.stageTappable`/`stageHoldable`) so the app gets them. The two
+  were separate rows, The Agent and The App, until 2026-09-18 ("merge
+  those two … and just call it Q Branch"). Specs decode field by field
+  (`init(from:)`), so an older build's spec opens rather than vanishing.
+  Three starters; specs save by name (`LabSpecStore`) and travel as JSON
+  to Nexus Lab's Paste Spec.
 - **Conversations** (`LabConversation.swift`): seven `LabScript`s; the
   last three carry a quidget and an `effect` on the house (arm, dim).
   `LabConversationView` lays a conversation out per container;

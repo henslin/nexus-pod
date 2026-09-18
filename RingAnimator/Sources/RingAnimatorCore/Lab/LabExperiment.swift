@@ -102,9 +102,11 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     case waveform
     case edgeGlow
     case caption
+    /// Q Branch: the spec assembled from the Lab, autoplayed on the clock
+    /// or handed to you to drive (Chris, 2026-09-18: "merge those two
+    /// sections and just call it Q Branch … simply select autoplay or
+    /// interact with it").
     case system
-    /// Q Branch's second lane: the app, live, driven by you.
-    case app
     case sunflower
     case askButton
     case quidgets
@@ -194,8 +196,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "Waveform"
         case .edgeGlow:   return "Edge Glow"
         case .caption:    return "Caption"
-        case .system:     return "The Agent"
-        case .app:        return "The App"
+        case .system:     return "Q Branch"
         case .sunflower:  return "Bloom Field"
         case .askButton:  return "Ask Button"
         case .quidgets:   return "Quidgets"
@@ -275,8 +276,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "SwiftUI · Canvas"
         case .edgeGlow:   return "SwiftUI · blur + gradient"
         case .caption:    return "SwiftUI · text transitions"
-        case .system:     return "Assembly · every slot, played"
-        case .app:        return "Live · in your hand"
+        case .system:     return "Autoplay · or in your hand"
         case .sunflower:  return "SwiftUI · Canvas + Speech"
         case .askButton:  return "SwiftUI · Liquid Glass + Canvas filters"
         case .quidgets:   return "SwiftUI · Liquid Glass + matched geometry"
@@ -366,8 +366,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "waveform"
         case .edgeGlow:   return "iphone.gen3.radiowaves.left.and.right"
         case .caption:    return "text.bubble"
-        case .system:     return "square.grid.2x2"
-        case .app:        return "iphone"
+        case .system:     return "wrench.and.screwdriver"
         case .sunflower:  return "sun.max.fill"
         case .askButton:  return "sparkles"
         case .quidgets:   return "square.grid.2x2.fill"
@@ -545,9 +544,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .sunflower:
             return "The Bloom app, brought in: a sunflower’s seed spiral filling the screen, and blooms of colour opening across it — on the clock, on a tap, and on your voice. A full-screen, ethereal way to talk to the agent: the field is the agent. A live transcript, natively animated, sits at the bottom when Audio Reactive is on."
         case .system:
-            return "The product, assembled. Every slot the Nexus surface needs — the pod, a look per agent state, the menu a tap reveals, the surface each action opens, what tap and long press do — filled from the Lab and played end to end. Tap to step; hold to talk."
-        case .app:
-            return "The same assembly, in your hand. The app’s real screens with the pod in the tab bar; tap a tab, tap the pod for the menu, pick Ask and type (the on-screen keyboard follows your keys) or tap a suggestion; hold the pod to talk. The agent answers with the closest script and does the thing — arm the house and the dashboard arms. Tap off to close."
+            return "The product, assembled. Every slot the Nexus surface needs — the pod, a look per agent state, the menu a tap reveals, the surface each action opens, what tap and long press do — filled from the Lab. Autoplay runs it end to end on the clock (tap to step, hold to talk). Interact hands you the app: the real screens with the pod in the tab bar; tap a tab, tap the pod for the menu, pick Ask and type (the keyboard follows your keys) or tap a suggestion; hold the pod to talk. The agent answers with the closest script and does the thing — arm the house and the dashboard arms."
         }
     }
 
@@ -625,7 +622,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
     /// which are about the whole screen.
     public var usesPhoneCanvas: Bool {
         switch self {
-        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system, .app, .sunflower, .askButton, .quidgets: return true
+        case .journey, .agentStates, .waveform, .edgeGlow, .caption, .buttonGlow, .sheet, .hold, .system, .sunflower, .askButton, .quidgets: return true
         default: return false
         }
     }
@@ -638,8 +635,8 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
 
     /// Responds to press-and-hold — see `LabState.hold`.
     public var isHoldable: Bool { self == .hold || self == .system }
-    /// Q Branch's lanes: the play, and the app.
-    public var isQBranch: Bool { self == .system || self == .app }
+    /// Q Branch — the one room the parts bin serves.
+    public var isQBranch: Bool { self == .system }
 
     /// Libraries.dev's nine orb verbs, for the flows' per-state chips.
     public static let orbVerbs = ["Working", "Searching", "Solving", "Listening", "Connecting", "Weaving", "Composing", "Breathing", "Shaping"]
@@ -666,7 +663,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .journey, .agentStates, .hold, .sunflower: return .flows
         case .askButton, .beamKit, .gooey, .metal, .buttonGlow: return .controls
         case .waveform, .edgeGlow, .caption, .morph, .sheet, .quidgets: return .surfaces
-        case .system, .app: return .qBranch
+        case .system: return .qBranch
         default: return .orb
         }
     }
@@ -1390,6 +1387,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("textGlow", "Glow", 0...1, 0.4, "On each arriving word.", group: "Transcript"),
         ]
         case .system: return [
+            .init("mode", "Mode", 0...1, 0, "Autoplay runs the spec on the clock; Interact hands you the app to drive.", "%.0f", group: "Mode", choices: ["Autoplay", "Interact"], kind: .popup),
             .init("script", "Conversation", 0...6, 4, "Which ask the play runs through the states. The last three carry a quidget.", "%.0f", group: "Play", choices: LabScript.all.map(\.title), kind: .popup),
             .init("hold", "Hold", 0.5...8, 3, "Seconds in each step when advancing on the clock.", "%.1f s", group: "Play"),
             .init("auto", "Auto-advance", 0...1, 1, "Steps on the clock; off, only a tap or the strip does.", "%.0f", group: "Play", choices: ["Off", "On"]),
@@ -1398,9 +1396,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("talk", "Talk Time", 1...8, 3, "Seconds it speaks after a hold is released.", "%.1f s", group: "Play"),
             .init("chrome", "Labels", 0...1, 1, "The step name and hint over the phone.", "%.0f", group: "Play", choices: ["Off", "On"]),
             .init("error", "Include Error", 0...1, 0, "Play the Error state after Searching — what it looks like when the doorbell can't be reached.", "%.0f", group: "Play", choices: ["Off", "On"]),
-        ]
-        case .app: return [
-            .init("script", "Voice Ask", 0...6, 5, "What a hold on the pod asks, when there's no transcript to hear.", "%.0f", group: "Live", choices: LabScript.all.map(\.title), kind: .popup),
+            .init("voiceAsk", "Voice Ask", 0...6, 5, "Interact: what a hold on the pod asks, when there's no transcript to hear.", "%.0f", group: "Interact", choices: LabScript.all.map(\.title), kind: .popup),
         ]
         case .caption: return [
             .init("style", "Style", 0...2, 1, "How words arrive.", "%.0f", choices: ["Fade", "Blur in", "Typed"]),
@@ -1543,7 +1539,7 @@ public enum LabSection: String, CaseIterable, Identifiable, Sendable {
         case .controls: return "What you tap. The Ask button, buttons, beams."
         case .surfaces: return "What opens. Pod, capsule, card, sheet, full screen — and what rides on them."
         case .flows: return "How it moves. Tap, hold, listen, talk — voice-forward and full screen."
-        case .qBranch: return "Where it comes together: the Agent, played; the App, in your hand. Everything below serves this."
+        case .qBranch: return "Where it comes together. Everything below serves this."
         }
     }
     public var symbol: String {
@@ -2008,10 +2004,23 @@ public final class LabState: ObservableObject {
     }
     /// The slot Q Branch sent you to the Lab to fill — see `LabSlotTarget`.
     @Published public var target: LabSlotTarget? = nil
-    /// The last experiment tuned on the bench (anything but The Agent),
+    /// The last experiment tuned on the bench (anything but Q Branch),
     /// so Q Branch can offer "the bench, as it is".
     public var lastBench: LabExperiment? { experiment.isQBranch ? benchBefore : experiment }
     var benchBefore: LabExperiment? = nil
+
+    /// Q Branch's switch: Autoplay (the play, on the clock) or Interact
+    /// (the app, driven by you). A knob, so it rides with the frame,
+    /// pins and the phone like everything else.
+    public static let qMode = LabExperiment.system.parameters.first { $0.id == "mode" }!
+    public var qInteract: Bool {
+        get { value(Self.qMode, of: .system) >= 0.5 }
+        set { values[Self.key(Self.qMode, of: .system)] = newValue ? 1 : 0 }
+    }
+    /// Whether the stage's own tap and hold apply: not when Q Branch has
+    /// handed the phone to you — the app takes them itself.
+    public var stageTappable: Bool { experiment.isTappable && !(experiment == .system && qInteract) }
+    public var stageHoldable: Bool { experiment.isHoldable && !(experiment == .system && qInteract) }
 
     /// Press-and-hold, for the Hold flow: when the press began, or nil.
     @Published public var holdStart: Date? = nil
