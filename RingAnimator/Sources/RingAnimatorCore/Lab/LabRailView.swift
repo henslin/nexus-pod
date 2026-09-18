@@ -243,7 +243,7 @@ public struct LabRailView: View {
                 LabPresetsMenu(presets: presets, lab: lab, saving: $savingPreset, name: $presetName)
                 Button {
                     lab.resetParameters(of: lab.experiment)
-                } label: { Image(systemName: "arrow.counterclockwise") }
+                } label: { Image(systemName: "arrow.counterclockwise").accessibilityLabel("Reset the knobs") }
                     .buttonStyle(.borderless)
                     .font(.caption)
                     .help("Reset the knobs")
@@ -318,7 +318,7 @@ public struct LabRailView: View {
                         lab.disabledPost.remove(effect)
                         if openPost == effect { openPost = nil }
                     }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("More") }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
                     .fixedSize()

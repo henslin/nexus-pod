@@ -411,8 +411,15 @@ struct LabConversationView: View {
     /// gone when the ask is sent.
     @ViewBuilder
     private func keyboard(width: CGFloat) -> some View {
+        // Live on a phone, the phone's own keyboard comes up — the drawn
+        // one would be a second keyboard under it.
+        #if os(iOS)
+        let drawn = actions == nil
+        #else
+        let drawn = true
+        #endif
         ZStack(alignment: .bottom) {
-            if let t = c.typing {
+            if let t = c.typing, drawn {
                 LabKeyboardView(text: c.typedAsk ?? c.script.ask, typed: t.typed, phase: t.phase, width: width)
                     .transition(.move(edge: .bottom))
             }

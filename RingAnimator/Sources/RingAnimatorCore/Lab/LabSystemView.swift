@@ -340,7 +340,7 @@ public struct LabSpecBoard: View {
                         }
                     }
                     Button("Clear All", role: .destructive) { lab.spec.states = [:] }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("More") }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             }
             LabRailSection("q.ask", "Ask", summary: "\((spec.askStyle ?? .goo).label) · \((spec.askPlacement ?? .floating).label) · \(spec.items.count) items") {
@@ -615,7 +615,7 @@ struct LabContainerRow: View {
             }
             .labelsHidden().pickerStyle(.menu).controlSize(.small)
             .frame(width: 58, alignment: .leading)
-            Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
+            Button { editing = true } label: { Image(systemName: "slider.horizontal.3").accessibilityLabel("Tune") }
                 .buttonStyle(.borderless)
                 .font(.caption)
                 .help("Backdrop, hero size, dim, the morph's knobs")
@@ -681,7 +681,7 @@ struct LabSlotRow: View {
                 LabOrbGallery(frameAt: frameAt, config: config, current: look) { set($0) }
             }
             if look != nil || isMenu {
-                Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
+                Button { editing = true } label: { Image(systemName: "slider.horizontal.3").accessibilityLabel("Tune") }
                     .buttonStyle(.borderless)
                     .font(.caption)
                     .help("Tune this look in place")
@@ -691,7 +691,7 @@ struct LabSlotRow: View {
             }
             Menu {
                 actions
-            } label: { Image(systemName: "ellipsis.circle") }
+            } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("More") }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()

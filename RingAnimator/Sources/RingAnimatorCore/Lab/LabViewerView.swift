@@ -60,6 +60,10 @@ public struct LabViewerView: View {
                 .padding(.bottom, 12)
             }
         }
+        // The phone's keyboard, when The App's field is up, must not squash
+        // the stage into the space above it — the reader itself would
+        // shrink, so this goes outside it.
+        .ignoresSafeArea(.keyboard)
         .environment(\.colorScheme, lab.darkStage ? .dark : .light)
         .onAppear {
             appeared = Date()
@@ -97,11 +101,16 @@ public struct LabViewerView: View {
         let diameter = experiment.usesPhoneCanvas
             ? size.width / 0.85 * 0.98                 // the phone canvas is 85% of `diameter`
             : min(size.width, size.height) * 0.78
+        // Q Branch draws a whole phone; on a phone that would sit under
+        // this viewer's own header and footer, with the pod — the thing
+        // you tap — beneath the footer. Fit it between them instead.
+        let fit: CGFloat = experiment.isQBranch ? min(1, (size.height - 210) / LabMorphView.phone.height) : 1
         return TimelineView(.animation) { timeline in
             let frame = lab.frame(at: timeline.date, since: appeared, diameter: diameter, config: config, audio: audio)
             LabExperimentView(experiment: experiment, frame: frame, config: config, post: lab.activePost)
                 // The flows draw their own phone; on a real phone that is
                 // the screen, so scale the canvas up to fill it.
+                .scaleEffect(fit)
                 .frame(width: size.width, height: size.height)
                 .clipped()
         }
@@ -154,6 +163,7 @@ public struct LabViewerView: View {
                 Button { lab.audioReactive.toggle() } label: {
                     Image(systemName: lab.audioReactive ? "mic.fill" : "mic.slash")
                         .frame(width: 22)
+                        .accessibilityLabel(lab.audioReactive ? "Microphone on" : "Microphone off")
                 }
                 if lab.audioReactive {
                     LabMeter(level: min(audio.level * lab.audioSensitivity, 1))
@@ -162,6 +172,7 @@ public struct LabViewerView: View {
                 }
                 Button { lab.darkStage.toggle() } label: {
                     Image(systemName: lab.darkStage ? "moon.fill" : "sun.max.fill").frame(width: 22)
+                        .accessibilityLabel(lab.darkStage ? "Dark stage" : "Light stage")
                 }
                 // The System plays what the Mac assembled: its spec
                 // arrives as JSON on the pasteboard.
@@ -180,8 +191,8 @@ public struct LabViewerView: View {
                     }
                 }
                 Spacer()
-                Button { showingKnobs = true } label: { Image(systemName: "slider.horizontal.3").frame(width: 22) }
-                Button { showingReviews = true } label: { Image(systemName: "list.star").frame(width: 22) }
+                Button { showingKnobs = true } label: { Image(systemName: "slider.horizontal.3").frame(width: 22).accessibilityLabel("Knobs") }
+                Button { showingReviews = true } label: { Image(systemName: "list.star").frame(width: 22).accessibilityLabel("Ratings") }
                 Button { withAnimation { lab.experiment = Self.order[(index + 1) % Self.order.count] } } label: {
                     Image(systemName: "chevron.right").frame(width: 22)
                 }

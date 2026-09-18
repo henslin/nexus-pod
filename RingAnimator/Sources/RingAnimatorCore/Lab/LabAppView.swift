@@ -265,8 +265,13 @@ struct LabAppView: View {
                     onHoldBegin: { session.beginHold(spec: spec) },
                     onHoldEnd: { session.endHold(transcript: transcript, defaultScript: defaultScript) }))
                 .allowsHitTesting(state.kind == .pod)
-            // The keyboard under a floating container, as in the play.
+            // The keyboard under a floating container, as in the play — on
+            // the Mac; a phone brings its own.
+            #if os(iOS)
+            let keyboardUp = false
+            #else
             let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card)
+            #endif
             let lift: CGFloat = keyboardUp ? LabKeyboardView.height - 62 - LabPhone.bottom : 0
             ZStack(alignment: .bottom) {
                 Color.clear

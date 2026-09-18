@@ -262,7 +262,7 @@ struct LabLookEditor: View {
                         Button {
                             look.post.removeAll { $0 == effect.rawValue }
                             if openPost == effect { openPost = nil }
-                        } label: { Image(systemName: "xmark") }
+                        } label: { Image(systemName: "xmark").accessibilityLabel("Remove") }
                             .buttonStyle(.borderless).font(.caption)
                     }
                     if openPost == effect {
