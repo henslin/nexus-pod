@@ -138,23 +138,28 @@ struct NexusNavBar: View {
         VStack(spacing: 0) {
             // The status bar sits either side of the Dynamic Island —
             // measured in the frame at x 139–263, y 15–50 on the 402-wide
-            // screen — the time centred in the left ear, the icons in the
-            // right, both on the island's centre line. The time is the
-            // real time (Chris, 2026-09-18), on a clock that ticks each
+            // screen — on the island's centre line. Apple doesn't centre
+            // the two in the ears: on a 16 Pro the time is centred at
+            // x ≈ 76 and the icon cluster at ≈ 338, each about 6 pt
+            // outward of its ear's centre (the ears' inner margin). The
+            // time is the real time (Chris, 2026-09-18), ticking each
             // minute.
-            let ear = Self.islandX * width / 402
+            let k = width / 402
+            let ear = Self.islandX * k
             HStack(spacing: 0) {
                 TimelineView(.everyMinute) { t in
                     Text(Self.clock.string(from: t.date)).font(.system(size: 17, weight: .semibold))
                 }
-                .frame(width: ear)
+                .frame(width: ear - 12 * k)
+                .padding(.leading, 12 * k)
                 Spacer(minLength: 0)
                 HStack(spacing: 7) {
                     Image(systemName: "cellularbars").font(.system(size: 14, weight: .semibold))
                     Image(systemName: "wifi").font(.system(size: 14, weight: .semibold))
                     Image(systemName: "battery.100percent").font(.system(size: 17, weight: .regular))
                 }
-                .frame(width: ear)
+                .frame(width: ear - 11 * k)
+                .padding(.leading, 11 * k)
             }
             .foregroundStyle(ink.dark ? .white : .black)
             .frame(height: Self.islandCenterY * 2)

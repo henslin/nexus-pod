@@ -1392,7 +1392,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("spring", "Spring", 0.2...1.2, 0.55, "Response of the morph between surfaces.", group: "Autoplay"),
             .init("bounce", "Bounce", 0...1, 0.2, "Damping headroom.", group: "Autoplay"),
             .init("talk", "Talk Time", 1...8, 3, "Seconds it speaks after a hold is released.", "%.1f s", group: "Autoplay"),
-            .init("chrome", "Labels", 0...1, 1, "The step name and hint over the phone.", "%.0f", group: "Autoplay", choices: ["Off", "On"]),
+            .init("chrome", "Labels", 0...1, 0, "The step name and count over the phone — the transport under it says the same.", "%.0f", group: "Autoplay", choices: ["Off", "On"]),
             .init("voiceAsk", "Voice Ask", 0...6, 5, "Interact: what a hold on the pod asks, when there's no transcript to hear.", "%.0f", group: "Interact", choices: LabScript.all.map(\.title), kind: .popup),
         ]
         case .caption: return [

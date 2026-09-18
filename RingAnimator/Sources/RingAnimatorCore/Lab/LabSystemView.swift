@@ -268,7 +268,8 @@ public struct LabPlayView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12).padding(.vertical, 7)
                 .background(Capsule().fill(.black.opacity(0.4)))
-                .padding(.top, 14)
+                // Under the toolbar, not under the Dynamic Island.
+                .padding(.top, NexusNavBar.height + 8)
                 .frame(maxHeight: .infinity, alignment: .top)
             }
         }
