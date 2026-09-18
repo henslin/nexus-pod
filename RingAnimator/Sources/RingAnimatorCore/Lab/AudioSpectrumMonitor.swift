@@ -35,6 +35,8 @@ public final class AudioSpectrumMonitor: ObservableObject, @unchecked Sendable {
     @Published public private(set) var words: [LabTranscriptWord] = []
     /// Why the transcript isn't running, when it isn't.
     @Published public private(set) var transcriptError: String?
+    /// Why the microphone isn't feeding the meters, when it isn't.
+    @Published public private(set) var micError: String?
     /// Turn recognition on or off; takes effect while the tap runs.
     public var transcribing: Bool = false {
         didSet {
@@ -68,8 +70,11 @@ public final class AudioSpectrumMonitor: ObservableObject, @unchecked Sendable {
     public func start() {
         guard !isRunning else { return }
         AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-            guard granted else { return }
-            DispatchQueue.main.async { self?.beginTap() }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard granted else { self.micError = MicrophoneAccess.problem ?? "Microphone access wasn't granted."; return }
+                self.beginTap()
+            }
         }
     }
 
@@ -162,11 +167,11 @@ public final class AudioSpectrumMonitor: ObservableObject, @unchecked Sendable {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch { return }
+        } catch { micError = "The audio session couldn't start: \(error.localizedDescription)"; return }
         #endif
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else { return }
+        guard format.sampleRate > 0, format.channelCount > 0 else { micError = "No microphone input is available."; return }
         let sampleRate = format.sampleRate
 
         input.installTap(onBus: 0, bufferSize: AVAudioFrameCount(fftSize), format: format) { [weak self] buffer, _ in
@@ -234,9 +239,11 @@ public final class AudioSpectrumMonitor: ObservableObject, @unchecked Sendable {
         do {
             try engine.start()
             isRunning = true
+            micError = nil
             if transcribing { beginRecognition() }
         } catch {
             isRunning = false
+            micError = "The microphone couldn't start: \(error.localizedDescription)"
         }
     }
 }

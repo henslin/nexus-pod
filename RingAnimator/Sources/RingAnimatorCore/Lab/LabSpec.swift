@@ -160,6 +160,22 @@ public struct LabLook: Codable, Equatable, Sendable {
         self.palette = palette
     }
 
+    // Persisted values decode field by field, with the defaults above for
+    // anything a build before that field wrote — a synthesized decoder
+    // would refuse the whole look, and with it the spec it sits in.
+    private enum CodingKeys: String, CodingKey { case experiment, values, post, palette, intensity, speed, fill, glyph }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        experiment = try c.decode(String.self, forKey: .experiment)
+        values = try c.decodeIfPresent([String: Double].self, forKey: .values) ?? [:]
+        post = try c.decodeIfPresent([String].self, forKey: .post) ?? []
+        palette = try c.decodeIfPresent(String.self, forKey: .palette) ?? LabPalette.nexus.rawValue
+        intensity = try c.decodeIfPresent(Double.self, forKey: .intensity) ?? 0.5
+        speed = try c.decodeIfPresent(Double.self, forKey: .speed) ?? 1
+        fill = try c.decodeIfPresent(Double.self, forKey: .fill) ?? 1
+        glyph = try c.decodeIfPresent(String.self, forKey: .glyph) ?? ""
+    }
+
     /// The Lab as it stands: the current experiment, its knobs, the post
     /// stack's knobs, the palette and the shared knobs.
     @MainActor
@@ -204,6 +220,20 @@ public struct LabSurfaceSpec: Codable, Equatable, Sendable {
     public var dim: Double?
 
     public init(kind: LabMorphKind) { self.kind = kind }
+
+    private enum CodingKeys: String, CodingKey { case kind, adornments, enter, exit, values, backdrop, heroScale, dim }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decodeIfPresent(LabMorphKind.self, forKey: .kind) ?? .sheet
+        // An adornment a build no longer knows is dropped, not fatal.
+        adornments = (try? c.decodeIfPresent([String].self, forKey: .adornments))??.compactMap(LabMorphAdornment.init(rawValue:)) ?? []
+        enter = try c.decodeIfPresent(LabMorphTransition.self, forKey: .enter) ?? .fade
+        exit = try c.decodeIfPresent(LabMorphTransition.self, forKey: .exit) ?? .fade
+        values = try c.decodeIfPresent([String: Double].self, forKey: .values) ?? [:]
+        backdrop = try c.decodeIfPresent(LabLook.self, forKey: .backdrop)
+        heroScale = try c.decodeIfPresent(Double.self, forKey: .heroScale)
+        dim = try c.decodeIfPresent(Double.self, forKey: .dim)
+    }
 
     @MainActor
     public init(_ state: LabMorphState, from lab: LabState) {
@@ -253,6 +283,25 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
     public var quidgetSize: String?
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey { case id, name, pod, states, action, items, surfaces, tap, longPress, ask, askPlacement, askStyle, quidgets, quidgetSize }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Untitled"
+        pod = try c.decodeIfPresent(LabLook.self, forKey: .pod)
+        states = try c.decodeIfPresent([String: LabLook].self, forKey: .states) ?? [:]
+        action = try c.decodeIfPresent(LabLook.self, forKey: .action)
+        items = (try? c.decodeIfPresent([String].self, forKey: .items))??.compactMap(LabActionItem.init(rawValue:)) ?? [.ask, .talk, .show]
+        surfaces = try c.decodeIfPresent([String: LabSurfaceSpec].self, forKey: .surfaces) ?? [:]
+        tap = (try? c.decodeIfPresent(LabGestureResult.self, forKey: .tap)) ?? .menu
+        longPress = (try? c.decodeIfPresent(LabGestureResult.self, forKey: .longPress)) ?? .talk
+        ask = try c.decodeIfPresent(LabLook.self, forKey: .ask)
+        askPlacement = try? c.decodeIfPresent(LabAskPlacement.self, forKey: .askPlacement)
+        askStyle = try? c.decodeIfPresent(LabAskStyle.self, forKey: .askStyle)
+        quidgets = (try? c.decodeIfPresent([String].self, forKey: .quidgets))??.compactMap(QuidgetKind.init(rawValue:))
+        quidgetSize = try c.decodeIfPresent(String.self, forKey: .quidgetSize)
+    }
 
     public var quidgetKinds: [QuidgetKind] { quidgets ?? QuidgetKind.allCases }
     public var quidgetInlineSize: QuidgetSize { QuidgetSize(rawValue: quidgetSize ?? "small") ?? .small }

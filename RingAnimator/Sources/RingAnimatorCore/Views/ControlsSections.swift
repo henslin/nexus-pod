@@ -235,6 +235,12 @@ struct VoiceSection: View {
     var body: some View {
         Toggle("Voice Reactive", isOn: $config.voiceReactiveEnabled)
         if config.voiceReactiveEnabled {
+            if let problem = MicrophoneAccess.problem {
+                Text(problem)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             LabeledSlider(title: "Sensitivity", value: $config.voiceReactiveSensitivity, range: 0.2...3.0, format: "%.1fx")
             Text("Boosts glow and scale live — from the ElevenLabs assistant below if connected, otherwise the microphone (asked for on first use).")
                 .font(.caption)

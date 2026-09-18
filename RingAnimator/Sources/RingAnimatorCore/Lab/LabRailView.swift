@@ -406,6 +406,9 @@ public struct LabRailView: View {
                 LabSlider(title: "Release", value: $lab.audioRelease, range: 0.05...2, format: "%.2f s", help: "How slowly a fall is followed. Long release is the ‘breathing’ look.")
                 LabBandMeters(bands: bands)
                 checkboxRow("Live transcript", $lab.transcribe, help: "Speech recognition on the mic — Bloom Field, the Transcript adornment and the Talk container show your words as you say them.")
+                if let error = audio.micError {
+                    Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                }
                 if let error = audio.transcriptError {
                     Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
                 }

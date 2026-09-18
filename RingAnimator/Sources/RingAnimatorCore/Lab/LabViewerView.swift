@@ -143,6 +143,12 @@ public struct LabViewerView: View {
             if let pasteMessage, lab.experiment.isQBranch {
                 Text(pasteMessage).font(.caption2).foregroundStyle(.secondary)
             }
+            // The mic is on by default here — say so when it can't be.
+            if lab.audioReactive, let error = audio.micError {
+                Text(error).font(.caption2).foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             LabStarRating(stars: reviews.binding(for: lab.experiment).stars)
             HStack(spacing: 12) {
                 Button { lab.audioReactive.toggle() } label: {
