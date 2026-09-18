@@ -148,6 +148,57 @@ public final class LabAppSession: ObservableObject {
         keyAt = Date()
     }
 
+    /// Put the live app into a step's state, to drive on from there:
+    /// the tab, the menu open, the field up, the container at that
+    /// state with the flow's own words. Selecting a step in Interact
+    /// means this, not a switch to Autoplay (Chris, 2026-09-18: a tap
+    /// after selecting a step stepped the play instead of the app).
+    public func jump(to step: LabStep, flow: LabFlow) {
+        let now = Date()
+        tab = step.tabCase.demoTab
+        menuOpen = false
+        surface = nil
+        asField = false
+        fieldVoice = false
+        byHold = false
+        draft = ""
+        script = nil
+        askedAt = nil
+        holding = false
+        switch step.phase {
+        case .rest, .ask:
+            break
+        case .menu, .askMenu:
+            menuOpen = true
+            menuAt = now
+        case .field:
+            open(.ask, asField: true)
+            typed(step.line)
+        case .surface:
+            let item = step.item ?? .talk
+            open(item)
+            surfaceAt = now.addingTimeInterval(-1)
+            let script = flow.script
+            switch step.verb {
+            case .idle, .listening:
+                if item == .ask { typed(step.line) }
+            default:
+                // The ask is made; when, so the answer is at this state.
+                self.script = script
+                draft = script.ask
+                let words = Double(script.answer.split(separator: " ").count)
+                let t: Double
+                switch step.verb {
+                case .thinking: t = 0.2
+                case .searching, .error: t = Self.thinking + 0.2
+                case .speaking: t = Self.thinking + Self.searching + 0.2
+                default: t = Self.thinking + Self.searching + words / 9 + 0.6
+                }
+                askedAt = now.addingTimeInterval(-t)
+            }
+        }
+    }
+
     public func close() {
         surface = nil
         surfaceAt = Date()

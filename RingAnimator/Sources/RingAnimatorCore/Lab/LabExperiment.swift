@@ -2021,7 +2021,9 @@ public final class LabState: ObservableObject {
         LabTrace.log("go(to: \(step.title)) interact=\(qInteract) auto=\(autoRunning) taps=\(taps)")
         qSelection = .step(step.id)
         guard let i = flow.index(of: step.id) else { return }
-        if qInteract { qInteract = false }
+        // In Interact the live app goes to the step's state and stays
+        // live; in Autoplay the play goes there with the clock stopped.
+        if qInteract { LabAppSession.shared.jump(to: step, flow: flow) }
         values["system.auto"] = 0
         taps = i
         lastTap = Date()
