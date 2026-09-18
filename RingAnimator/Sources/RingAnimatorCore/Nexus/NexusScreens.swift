@@ -167,7 +167,8 @@ struct NexusNavBar: View {
             .traceFrame("status band")
             .frame(height: 62, alignment: .top)
             // The toolbar, 4 pt further from the island than the status
-            // band alone leaves.
+            // band alone leaves. One glass container, as the tab bar is.
+            GlassEffectContainer(spacing: 8) {
             HStack(alignment: .top, spacing: 0) {
                 NexusGlassPill(ink: ink) {
                     Group {
@@ -205,6 +206,7 @@ struct NexusNavBar: View {
             .padding(.top, 4)
             .padding(.bottom, 10)
             .frame(height: 58)
+            }
         }
         .frame(width: width, height: Self.height)
     }
@@ -218,16 +220,19 @@ struct NexusGlassPill<Content: View>: View {
     @Environment(\.labNoGlass) private var noGlass
 
     var body: some View {
+        // Apple's toolbar buttons: untinted regular glass, the same
+        // material as the tab bar, and no shadow of their own — the
+        // material carries it. The file's chrome tint at 60% read as
+        // painted next to the bar (Chris, 2026-09-18).
         Group {
             if noGlass {
                 content().background(Capsule().fill(ink.chrome))
             } else if #available(iOS 26.0, macOS 26.0, *) {
-                content().glassEffect(.regular.tint(ink.chrome.opacity(0.6)), in: Capsule())
+                content().glassEffect(.regular, in: Capsule())
             } else {
                 content().background(.regularMaterial, in: Capsule())
             }
         }
-        .shadow(color: .black.opacity(0.04), radius: 20)
     }
 }
 
