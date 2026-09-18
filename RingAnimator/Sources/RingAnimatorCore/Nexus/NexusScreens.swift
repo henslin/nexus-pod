@@ -122,24 +122,45 @@ struct NexusNavBar: View {
     let ink: NexusInk
     let width: CGFloat
     var avatar = false
-    static let height: CGFloat = 116
+    static let height: CGFloat = 120
+    /// The Dynamic Island's left edge and centre line, in points on the
+    /// 402-wide screen — measured off the device frame's image.
+    static let islandX: CGFloat = 139
+    static let islandCenterY: CGFloat = 32
+    /// "12:27" — the status bar shows no AM/PM.
+    static let clock: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm"
+        return f
+    }()
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("9:41").font(.system(size: 17, weight: .semibold))
-                    .frame(maxWidth: .infinity)
+            // The status bar sits either side of the Dynamic Island —
+            // measured in the frame at x 139–263, y 15–50 on the 402-wide
+            // screen — the time centred in the left ear, the icons in the
+            // right, both on the island's centre line. The time is the
+            // real time (Chris, 2026-09-18), on a clock that ticks each
+            // minute.
+            let ear = Self.islandX * width / 402
+            HStack(spacing: 0) {
+                TimelineView(.everyMinute) { t in
+                    Text(Self.clock.string(from: t.date)).font(.system(size: 17, weight: .semibold))
+                }
+                .frame(width: ear)
+                Spacer(minLength: 0)
                 HStack(spacing: 7) {
                     Image(systemName: "cellularbars").font(.system(size: 14, weight: .semibold))
                     Image(systemName: "wifi").font(.system(size: 14, weight: .semibold))
                     Image(systemName: "battery.100percent").font(.system(size: 17, weight: .regular))
                 }
-                .frame(maxWidth: .infinity)
+                .frame(width: ear)
             }
             .foregroundStyle(ink.dark ? .white : .black)
-            .padding(.horizontal, 24)
-            .padding(.top, 21).padding(.bottom, 19)
-            .frame(height: 62)
+            .frame(height: Self.islandCenterY * 2)
+            .frame(height: 62, alignment: .top)
+            // The toolbar, 4 pt further from the island than the status
+            // band alone leaves.
             HStack(alignment: .top, spacing: 0) {
                 NexusGlassPill(ink: ink) {
                     Group {
@@ -174,8 +195,9 @@ struct NexusNavBar: View {
             }
             .foregroundStyle(ink.textPrimary)
             .padding(.horizontal, 16)
+            .padding(.top, 4)
             .padding(.bottom, 10)
-            .frame(height: 54)
+            .frame(height: 58)
         }
         .frame(width: width, height: Self.height)
     }

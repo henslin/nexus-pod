@@ -87,7 +87,9 @@ public enum AnimationExporter {
     /// Matches `PhoneMockupView.screen`: the bar is inset 21pt on each
     /// side and sits 21pt off the bottom.
     private static let tabBarInset: CGFloat = 42
-    private static let tabBarBottomPadding: CGFloat = 21
+    /// The floating tab bar's bottom edge: above the home indicator's safe
+    /// area, 34 pt on a 16/17 Pro (was 21; Chris, 2026-09-18: too low).
+    public static let tabBarBottomPadding: CGFloat = 34
     /// The device frame artwork's own size, in points.
     ///
     /// Measured from the assets rather than assumed: the PNGs are

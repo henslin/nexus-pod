@@ -299,7 +299,7 @@ struct PhoneMockupView: View {
 
                 TabBarPreview(config: config, selectedTab: $selectedTab, width: screenWidth - 42, playback: playback)
             }
-            .padding(.bottom, 21)
+            .padding(.bottom, AnimationExporter.tabBarBottomPadding)
             .onAppear {
                 // Sync without animating in case the loop is already active
                 // when this view first appears.

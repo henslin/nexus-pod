@@ -13,7 +13,10 @@ import SwiftUI
 /// slot measures from here.
 enum LabPhone {
     static let inset: CGFloat = 21
-    static let bottom: CGFloat = 21
+    /// The floating tab bar's bottom edge sits above the home indicator's
+    /// safe area — 34 pt on a 16/17 Pro. It was 21 and read as too low
+    /// (Chris, 2026-09-18).
+    static let bottom: CGFloat = 34
 }
 
 /// A phone-shaped canvas with the demo app's dashboard screenshot behind
