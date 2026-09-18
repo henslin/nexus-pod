@@ -131,9 +131,22 @@ NOTARY_ZIP="$STAGE_DIR/$BUNDLE_NAME-notarize.zip"
 ditto -c -k --keepParent "$APP_BUNDLE" "$NOTARY_ZIP"
 
 echo "→ Submitting to Apple notary service (this can take a few minutes)..."
-xcrun notarytool submit "$NOTARY_ZIP" \
-    --keychain-profile "$NOTARY_PROFILE" \
-    --wait
+# The keychain profile is per Mac; where it isn't stored, the App Store
+# Connect API key in ~/.appstoreconnect does the same job (the 3.8.0
+# release was notarized that way, 2026-09-17). Either works; neither
+# needs a password typed.
+API_KEY="${NOTARY_API_KEY:-$HOME/.appstoreconnect/private_keys/AuthKey_F9M7X93PZ9.p8}"
+API_KEY_ID="${NOTARY_API_KEY_ID:-F9M7X93PZ9}"
+API_ISSUER="${NOTARY_API_ISSUER:-69a6de7f-0695-47e3-e053-5b8c7c11a4d1}"
+if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+    xcrun notarytool submit "$NOTARY_ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+elif [ -f "$API_KEY" ]; then
+    echo "   (no keychain profile '$NOTARY_PROFILE' here — using the App Store Connect API key)"
+    xcrun notarytool submit "$NOTARY_ZIP" --key "$API_KEY" --key-id "$API_KEY_ID" --issuer "$API_ISSUER" --wait
+else
+    echo "No notary credentials: store a keychain profile named '$NOTARY_PROFILE' or put the API key at $API_KEY." >&2
+    exit 1
+fi
 
 echo "→ Stapling notarization ticket to the app..."
 xcrun stapler staple "$APP_BUNDLE"
