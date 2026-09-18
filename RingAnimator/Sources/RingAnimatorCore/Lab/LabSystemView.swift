@@ -71,7 +71,7 @@ public struct LabPlayView: View {
             switch step.phase {
             case .rest: self = .idle
             case .menu: self = .menu
-            case .surface: self = .surface(step.item ?? .talk, step.verb)
+            case .surface: self = .surface(step.item ?? .talk, step.verb == .idle ? .listening : step.verb)
             case .ask: self = .askAnywhere
             case .askMenu: self = .askMenu
             }

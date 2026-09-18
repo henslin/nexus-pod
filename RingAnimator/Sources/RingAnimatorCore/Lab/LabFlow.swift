@@ -205,7 +205,7 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
         self.phase = phase
         self.tab = tab.rawValue
         self.item = item
-        self.verb = verb
+        self.verb = phase == .surface && verb == .idle ? .listening : verb
         self.line = line
         self.carries = carries
         self.seconds = seconds
@@ -229,6 +229,10 @@ public struct LabStep: Codable, Identifiable, Equatable, Sendable {
         advance = (try? c.decodeIfPresent(LabStepAdvance.self, forKey: .advance)) ?? .timer
         seconds = try c.decodeIfPresent(Double.self, forKey: .seconds) ?? 3
         effect = try? c.decodeIfPresent(LabScriptEffect.self, forKey: .effect)
+        // A surface with the agent idle shows nothing — no ask, no
+        // suggestions, no answer. An earlier build's pickers could make
+        // one; it's a Listening step.
+        if phase == .surface, verb == .idle { verb = .listening }
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
