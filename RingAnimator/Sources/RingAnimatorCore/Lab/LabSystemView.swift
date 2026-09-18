@@ -227,7 +227,7 @@ public struct LabPlayView: View {
                 let askFrame = frame.applying(spec.ask ?? spec.action, config: config).applying(spec.resolvedLook(for: .idle), config: config)
                 LabAskButton(frame: askFrame, config: config, size: phone, placement: placement, style: spec.askStyle ?? .goo,
                              open: step == .askMenu, since: sinceChange, items: spec.items,
-                             suggestions: LabAskContext.devices)
+                             suggestions: (spec.askOffers ?? .actions) == .suggestions ? LabAskContext.devices : [])
             }
             // A typed ask in a container that floats — the pill, the
             // card — brings the keyboard up from the bottom of the phone
@@ -465,6 +465,14 @@ public struct LabSpecBoard: View {
                     .labelsHidden().pickerStyle(.segmented).controlSize(.small)
                 }
                 .help("What the Ask button is. In the pod, the pod is the button.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Offers").font(.callout).foregroundStyle(.secondary)
+                    Picker("", selection: Binding(get: { lab.spec.askOffers ?? .actions }, set: { lab.spec.askOffers = $0 })) {
+                        ForEach(LabAskOffers.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.segmented).controlSize(.small)
+                }
+                .help("What the menu holds: the actions below, or suggestions about the screen you’re on. One or the other, not both.")
                 // The menu's items: checked is in, in this order.
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {

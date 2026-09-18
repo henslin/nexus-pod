@@ -268,7 +268,7 @@ struct LabAppView: View {
                 let askFrame = frame.applying(spec.ask ?? spec.action, config: config).applying(spec.resolvedLook(for: .idle), config: config)
                 LabAskButton(frame: askFrame, config: config, size: phone, placement: placement, style: spec.askStyle ?? .goo,
                              open: session.menuOpen, since: menuSince, items: spec.items,
-                             suggestions: session.tab == .devices ? LabAskContext.devices : [])
+                             suggestions: (spec.askOffers ?? .actions) == .suggestions && session.tab == .devices ? LabAskContext.devices : [])
                     .allowsHitTesting(false)
                     .opacity(state.kind == .pod ? 1 : 0)
                     .animation(.easeInOut(duration: 0.2), value: session.tab)

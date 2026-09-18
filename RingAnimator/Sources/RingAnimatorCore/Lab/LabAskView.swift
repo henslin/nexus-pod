@@ -44,6 +44,9 @@ struct LabAskButton: View {
     /// Seconds since it last opened or closed.
     let since: Double
     let items: [LabActionItem]
+    /// Suggestions about the screen. For the goo and the orb they stand
+    /// in for the actions — the menu offers one or the other; the pill
+    /// and the bar are built around suggestions.
     var suggestions: [String] = []
     var label: String = "Ask"
     var buttonSize: CGFloat = 52
@@ -88,7 +91,10 @@ struct LabAskButton: View {
             case .goo, .orb:
                 // The goo's menu comes out of the button; the orb wears
                 // the hero instead of the goo's disc.
-                LabGooeyMenu(frame: frame, center: home, open: open, since: since,
+                // Offering suggestions, the goo stays a button and the
+                // chips are the menu; offering actions, it opens.
+                let offersSuggestions = !suggestions.isEmpty
+                LabGooeyMenu(frame: frame, center: home, open: open && !offersSuggestions, since: since,
                              icons: items.map(\.symbol), drawsButton: style == .goo && placement != .tabBar)
                 if style == .orb, placement != .tabBar {
                     LabHeroView(frame: frame, config: config, diameter: buttonSize)
@@ -233,6 +239,7 @@ struct LabAskButtonView: View {
         let open = (frame.taps % 2 == 1) != autoOpen
         let since = min(frame.sinceTap, auto ? frame.time.truncatingRemainder(dividingBy: 3.5) : .infinity)
         let suggestions = context ? LabAskContext.devices : (style == .goo || style == .orb ? [] : LabAskContext.generic)
+        // The lab's Context knob: the goo offers suggestions, or its actions.
         LabPhoneCanvas(frame: frame) { size in
             ZStack {
                 LabPhoneBackdrop(frame: frame, tab: .devices, size: size)

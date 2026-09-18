@@ -1358,7 +1358,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("label", "Label", 0...2, 0, "The word on the pill.", "%.0f", group: "Appearance", choices: ["Ask", "Ask Nexus", "Nexus"], kind: .popup),
             .init("size", "Size", 36...64, 52, "Points.", "%.0f pt", group: "Appearance"),
             .init("glow", "Glow", 0...1, 0.6, "The palette’s glow under it.", group: "Appearance"),
-            .init("context", "Context", 0...1, 1, "Suggestions about the screen you’re on, first. Off: the generic verbs.", "%.0f", group: "What it offers", choices: ["Off", "On"]),
+            .init("context", "Offers", 0...1, 1, "What the menu holds: the actions (Ask, Talk, Show me), or suggestions about the screen you’re on. One or the other.", "%.0f", group: "What it offers", choices: ["Actions", "Suggestions"]),
             .init("auto", "Auto-advance", 0...1, 1, "Opens and closes on the clock; off, only a tap does.", "%.0f", group: "What it offers", choices: ["Off", "On"]),
         ]
         case .sunflower: return [

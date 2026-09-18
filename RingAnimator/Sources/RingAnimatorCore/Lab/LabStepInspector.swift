@@ -277,6 +277,13 @@ struct LabStepInspector: View {
             }
             .labelsHidden().pickerStyle(.segmented).controlSize(.small)
         }
+        labelled("Offers") {
+            Picker("", selection: Binding(get: { kit.askOffers ?? .actions }, set: { lab.spec.askOffers = $0 })) {
+                ForEach(LabAskOffers.allCases) { Text($0.label).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.segmented).controlSize(.small)
+        }
+        .help("What the menu holds: the actions, or suggestions about the screen. One or the other.")
         Text("The Ask button is the kit's — it's the same button on every screen.")
             .font(.caption).foregroundStyle(.tertiary)
     }

@@ -144,6 +144,13 @@ public enum LabGestureResult: String, CaseIterable, Identifiable, Codable, Senda
     public var isFullScreen: Bool { self == .fullScreen }
 }
 
+/// What the Ask button's menu holds.
+public enum LabAskOffers: String, CaseIterable, Identifiable, Codable, Sendable {
+    case actions, suggestions
+    public var id: String { rawValue }
+    public var label: String { self == .actions ? "Actions" : "Suggestions" }
+}
+
 // MARK: - A look, a surface, a spec
 
 /// One experiment as tuned: its knobs, post stack, palette and the shared
@@ -283,6 +290,10 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
     public var ask: LabLook?
     public var askPlacement: LabAskPlacement?
     public var askStyle: LabAskStyle?
+    /// What the Ask button's menu offers: the actions (the goo's items)
+    /// or suggestions about the screen — one or the other, not both at
+    /// once (Chris, 2026-09-18).
+    public var askOffers: LabAskOffers?
     /// Quidgets the agent may reply with, and how they sit in a reply.
     /// `nil` is all of them, small.
     public var quidgets: [QuidgetKind]?
@@ -290,7 +301,7 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
 
     public init() {}
 
-    private enum CodingKeys: String, CodingKey { case id, name, pod, states, action, items, surfaces, tap, longPress, ask, askPlacement, askStyle, quidgets, quidgetSize }
+    private enum CodingKeys: String, CodingKey { case id, name, pod, states, action, items, surfaces, tap, longPress, ask, askPlacement, askStyle, askOffers, quidgets, quidgetSize }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
@@ -305,6 +316,7 @@ public struct LabSpec: Codable, Identifiable, Equatable, Sendable {
         ask = try c.decodeIfPresent(LabLook.self, forKey: .ask)
         askPlacement = try? c.decodeIfPresent(LabAskPlacement.self, forKey: .askPlacement)
         askStyle = try? c.decodeIfPresent(LabAskStyle.self, forKey: .askStyle)
+        askOffers = try? c.decodeIfPresent(LabAskOffers.self, forKey: .askOffers)
         quidgets = (try? c.decodeIfPresent([String].self, forKey: .quidgets))??.compactMap(QuidgetKind.init(rawValue:))
         quidgetSize = try c.decodeIfPresent(String.self, forKey: .quidgetSize)
     }
@@ -609,6 +621,9 @@ extension LabState {
         if experiment == .askButton {
             spec.askPlacement = LabAskPlacement.allCases[min(2, Int(value(LabExperiment.askButton.parameters[0], of: .askButton)))]
             spec.askStyle = LabAskStyle.allCases[min(3, Int(value(LabExperiment.askButton.parameters[1], of: .askButton)))]
+            if let p = LabExperiment.askButton.parameters.first(where: { $0.id == "context" }) {
+                spec.askOffers = value(p, of: .askButton) >= 0.5 ? .suggestions : .actions
+            }
         }
     }
     /// Gooey, as tuned, as the pod's menu.
