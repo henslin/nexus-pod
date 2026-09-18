@@ -55,7 +55,7 @@ public final class AudioLevelMonitor: ObservableObject, @unchecked Sendable {
         // "voice reactive does nothing" on the iOS app.
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
+            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             return

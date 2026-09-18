@@ -120,7 +120,7 @@ public final class SpeechToTextService: ObservableObject, @unchecked Sendable {
         // format guard right below silently bails with no error.
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
+            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             lastError = "Couldn't configure the audio session: \(error.localizedDescription)"

@@ -25,11 +25,13 @@ struct LabVolumetricView: View {
     @StateObject private var scene = LabVolumetricScene()
 
     var body: some View {
-        RealityView { content in
+        let scene = self.scene
+        // The scene keeps the subscription, and the subscription must not
+        // keep the scene: the tick reaches it weakly.
+        let tick: @Sendable () -> Void = { [weak scene] in MainActor.assumeIsolated { scene?.tick() } }
+        return RealityView { content in
             for entity in scene.build(frame: frame) { content.add(entity) }
-            scene.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak scene] _ in
-                scene?.tick()
-            }
+            scene.subscription = content.subscribe(to: SceneEvents.Update.self) { _ in tick() }
         } update: { _ in
             scene.apply(frame: frame)
         }

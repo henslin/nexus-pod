@@ -93,6 +93,7 @@ let package = Package(
             exclude: [
                 "firmware-levels.json", "firmware-frames.json",
                 "dump_reference.py", "record_streams.py",
+                "library_manifest.py", "pattern-library.manifest",
             ]
         ),
         // Runs the real import path over a folder of pattern scripts and

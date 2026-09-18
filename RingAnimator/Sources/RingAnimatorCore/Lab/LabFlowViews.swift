@@ -1039,13 +1039,12 @@ struct LabMetalView: View {
                     .floatArray(lab)))
         }
         .frame(width: footprint.width + 80, height: footprint.height + 80)
-        .visualEffect { content, proxy in
+        .visualEffect { [reach = Float(frame.p("reach", .metal)), dent = Float(frame.p("dent", .metal) * frame.p("bend", .metal))] content, proxy in
             // The dent: the whole control bends toward the pointer.
             let p = local.map { CGPoint(x: $0.x + 40, y: $0.y + 40) } ?? CGPoint(x: -1, y: -1)
             return content.distortionEffect(
                 ShaderLibrary.bundle(.module).labDent(.float2(optBend ? p : CGPoint(x: -1, y: -1)),
-                                                       .float(Float(frame.p("reach", .metal))),
-                                                       .float(Float(frame.p("dent", .metal) * frame.p("bend", .metal)))),
+                                                       .float(reach), .float(dent)),
                 maxSampleOffset: CGSize(width: 30, height: 30))
         }
     }

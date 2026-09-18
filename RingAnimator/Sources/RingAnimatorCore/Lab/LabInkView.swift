@@ -176,7 +176,7 @@ final class LabInkCoordinator: NSObject, MTKViewDelegate {
     }
 }
 
-private func configure(_ view: MTKView, _ c: LabInkCoordinator) {
+@MainActor private func configure(_ view: MTKView, _ c: LabInkCoordinator) {
     view.device = c.sim?.device
     view.delegate = c
     view.colorPixelFormat = .bgra8Unorm

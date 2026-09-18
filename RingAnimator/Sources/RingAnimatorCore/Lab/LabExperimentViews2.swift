@@ -385,14 +385,15 @@ struct LabTilesView<Base: View>: View {
     var body: some View {
         let cell = frame.p("cell", .tiles)
         let bulge = frame.p("bulge", .tiles) * (0.5 + frame.intensity)
+        let frost = Float(frame.p("frost", .tiles)), grout = Float(frame.p("grout", .tiles))
+        let coverage = Float(frame.p("coverage", .tiles)), orientation = Float(frame.p("orientation", .tiles))
         ring()
             .padding(cell)
             .visualEffect { content, proxy in
                 content.layerEffect(
                     ShaderLibrary.bundle(.module).labTiles(
                         .float2(proxy.size), .float(Float(cell)), .float(Float(bulge)),
-                        .float(Float(frame.p("frost", .tiles))), .float(Float(frame.p("grout", .tiles))),
-                        .float(Float(frame.p("coverage", .tiles))), .float(Float(frame.p("orientation", .tiles)))),
+                        .float(frost), .float(grout), .float(coverage), .float(orientation)),
                     maxSampleOffset: CGSize(width: cell, height: cell))
             }
     }
@@ -789,12 +790,13 @@ struct LabWaterView<Base: View>: View {
     var body: some View {
         let amount = frame.p("amount", .water) * (0.5 + frame.intensity) + frame.audio * 8
         let time = Float(frame.time * frame.p("speed", .water))
+        let scale = Float(frame.p("scale", .water)), caustic = Float(frame.p("caustic", .water))
         ring()
             .padding(amount)
             .visualEffect { content, proxy in
                 content.layerEffect(
                     ShaderLibrary.bundle(.module).labWater(.float2(proxy.size), .float(time), .float(Float(amount)),
-                                                            .float(Float(frame.p("scale", .water))), .float(Float(frame.p("caustic", .water)))),
+                                                            .float(scale), .float(caustic)),
                     maxSampleOffset: CGSize(width: amount * 1.5, height: amount * 1.5))
             }
     }
@@ -806,12 +808,15 @@ struct LabHazeView<Base: View>: View {
     var body: some View {
         let lab = PerceptualGradient.labTriples(frame.colors)
         let time = Float(frame.time)
+        // Read the knobs here, not in the effect closure: it's Sendable,
+        // and the frame is main-actor.
+        let amount = Float(frame.p("amount", .haze) * (0.6 + frame.intensity * 0.6))
+        let scale = Float(frame.p("scale", .haze)), breathe = Float(frame.p("breathe", .haze))
         ring()
             .visualEffect { content, proxy in
                 content.layerEffect(
                     ShaderLibrary.bundle(.module).labHaze(.float2(proxy.size), .float(time),
-                                                           .float(Float(frame.p("amount", .haze) * (0.6 + frame.intensity * 0.6))),
-                                                           .float(Float(frame.p("scale", .haze))), .float(Float(frame.p("breathe", .haze))),
+                                                           .float(amount), .float(scale), .float(breathe),
                                                            .floatArray(lab)),
                     maxSampleOffset: .zero)
             }
@@ -823,12 +828,13 @@ struct LabFizzView<Base: View>: View {
     @ViewBuilder let ring: () -> Base
     var body: some View {
         let time = Float(frame.time)
+        let count = Float(frame.p("count", .fizz) * (0.6 + frame.intensity * 0.8) + frame.audio * 10)
+        let speed = Float(frame.p("speed", .fizz)), size = Float(frame.p("size", .fizz))
         ring()
             .visualEffect { content, proxy in
                 content.layerEffect(
                     ShaderLibrary.bundle(.module).labFizz(.float2(proxy.size), .float(time),
-                                                           .float(Float(frame.p("count", .fizz) * (0.6 + frame.intensity * 0.8) + frame.audio * 10)),
-                                                           .float(Float(frame.p("speed", .fizz))), .float(Float(frame.p("size", .fizz)))),
+                                                           .float(count), .float(speed), .float(size)),
                     maxSampleOffset: .zero)
             }
     }
@@ -875,13 +881,13 @@ struct LabFocusView<Base: View>: View {
         let drift = frame.p("drift", .focus)
         let fx = Float(frame.p("x", .focus) + sin(frame.time * 0.5) * drift * 0.3)
         let fy = Float(frame.p("y", .focus) + cos(frame.time * 0.37) * drift * 0.3)
+        let band = Float(frame.p("band", .focus)), falloff = Float(frame.p("falloff", .focus)), bokeh = Float(frame.p("bokeh", .focus))
         ring()
             .padding(radius)
             .visualEffect { content, proxy in
                 content.layerEffect(
                     ShaderLibrary.bundle(.module).labFocus(.float2(proxy.size), .float2(CGPoint(x: CGFloat(fx), y: CGFloat(fy))),
-                                                            .float(Float(radius)), .float(Float(frame.p("band", .focus))),
-                                                            .float(Float(frame.p("falloff", .focus))), .float(Float(frame.p("bokeh", .focus)))),
+                                                            .float(Float(radius)), .float(band), .float(falloff), .float(bokeh)),
                     maxSampleOffset: CGSize(width: radius, height: radius))
             }
     }
@@ -919,10 +925,11 @@ struct LabThinkingOrbsView: View {
             let R = frame.diameter / 2 * 0.82
             let t = frame.time * (0.7 + frame.intensity * 0.6)
             let audio = frame.audio
+            let first = frame.colors.first ?? .white
             func color(_ k: Double, _ alpha: Double) -> Color {
                 switch colourMode {
                 case 1: return sweep[Int(k * Double(sweep.count - 1))].opacity(alpha)
-                case 2: return (frame.colors.first ?? .white).opacity(alpha)
+                case 2: return first.opacity(alpha)
                 default: return Color.white.opacity(alpha)
                 }
             }
