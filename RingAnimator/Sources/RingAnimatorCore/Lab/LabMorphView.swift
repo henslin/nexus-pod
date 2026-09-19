@@ -169,7 +169,10 @@ public struct LabMorphPanel: View {
         // The sheet floats: inset from the sides and the bottom, every
         // corner rounded — iOS 26's, not iOS 17's flush one (Chris,
         // 2026-09-18: "the sheet itself should have a bit of a margin").
-        case .sheet:      return CGSize(width: LabMorphView.phone.width - LabMorphPanel.sheetInset * 2, height: 600)
+        // Half the screen — iOS's medium detent, where Siri, ChatGPT,
+        // Claude and Gemini start (Chris, 2026-09-18: "that's the
+        // starting place; then we make it unique"). It was 600.
+        case .sheet:      return CGSize(width: LabMorphView.phone.width - LabMorphPanel.sheetInset * 2, height: 440)
         case .fullScreen: return LabMorphView.phone
         }
     }
