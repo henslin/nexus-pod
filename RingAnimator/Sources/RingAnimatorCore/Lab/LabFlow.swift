@@ -336,6 +336,10 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
     public init(spec: LabSpec, script: LabScript = LabScript.named(4), withError: Bool = false) {
         name = spec.name
         kit = spec
+        if spec.tap.isField {
+            steps = Self.primarySteps(for: spec, script: script)
+            return
+        }
         var out: [LabStep] = [LabStep(.rest)]
         let item: LabActionItem? = spec.tap.item ?? (spec.tap == .menu ? (spec.items.contains(.talk) ? .talk : spec.items.first) : nil)
         if spec.tap == .menu { out.append(LabStep(.menu)) }
@@ -368,6 +372,38 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
         out.append(LabStep(.askMenu, tab: .devices))
         steps = out
     }
+
+    /// The primary flow — the paradigm (Chris, 2026-09-18, after the
+    /// Claude app): tap Nexus and the field morphs up above the tab bar;
+    /// tap the field and it grows into the sheet, where the ask is typed
+    /// and answered with a quidget; then the hold — full screen, voice
+    /// first — as its own pair of steps. The Ask button elsewhere is a
+    /// step type you can add, not part of this.
+    public static func primarySteps(for spec: LabSpec, script: LabScript) -> [LabStep] {
+        var out: [LabStep] = [LabStep(.rest)]
+        var field = LabStep(kind: .field); field.line = ""; field.seconds = 2
+        out.append(field)
+        for verb in [LabAgentVerb.listening, .thinking, .searching, .speaking, .done] {
+            var s = LabStep(.surface, item: .ask, verb: verb)
+            switch verb {
+            case .listening: s.line = script.ask
+            case .searching: s.line = script.checking
+            case .speaking: s.line = script.answer; s.carries = script.quidget; s.effect = script.effect; s.seconds = 5
+            case .done: s.line = script.followUps.joined(separator: "\n"); s.carries = script.quidget
+            default: s.seconds = 2
+            }
+            out.append(s)
+        }
+        // The hold: Talk, full screen, listening while held and speaking after.
+        var hold = LabStep(.surface, item: .talk, verb: .listening); hold.line = script.ask
+        var spoke = LabStep(.surface, item: .talk, verb: .speaking); spoke.line = script.answer; spoke.seconds = 5
+        out.append(hold); out.append(spoke)
+        out.append(LabStep(.rest))
+        return out
+    }
+
+    /// Whether a flow is the paradigm's shape: it has the field.
+    public var hasField: Bool { steps.contains { $0.phase == .field } }
 
     private enum CodingKeys: String, CodingKey { case id, name, kit, steps }
     public init(from decoder: Decoder) throws {
@@ -519,10 +555,33 @@ public final class LabFlowStore: ObservableObject {
     /// The working flow — or the spec that was working before flows
     /// existed, as one — or, first time, a starter.
     public static func loadCurrent() -> LabFlow {
+        var flow: LabFlow
         if let data = UserDefaults.standard.data(forKey: currentKey),
-           let flow = try? JSONDecoder().decode(LabFlow.self, from: data) { return flow }
-        let spec = LabSpecStore.loadCurrent()
-        return LabFlow(spec: spec, script: LabScript.named(spec.name == LabSpec.theirKit.name ? 5 : 4))
+           let f = try? JSONDecoder().decode(LabFlow.self, from: data) { flow = f }
+        else {
+            let spec = LabSpecStore.loadCurrent()
+            flow = LabFlow(spec: spec, script: LabScript.named(spec.name == LabSpec.theirKit.name ? 5 : 4))
+        }
+        // Once, on 2026-09-18: the working flow becomes the paradigm —
+        // its kit's looks kept, its gestures and steps replaced (Chris:
+        // "what I'm describing should take over … the primary steps").
+        let migrated = "nexus.lab.flow.paradigm"
+        if !UserDefaults.standard.bool(forKey: migrated) {
+            if !flow.hasField {
+                flow.kit.tap = .field
+                flow.kit.longPress = .fullScreen
+                if flow.kit.surfaces["ask"] == nil || flow.kit.resolvedSurface(for: .ask).kind != .sheet {
+                    var s = LabSurfaceSpec(kind: .sheet); s.adornments = [.edgeGlow]; flow.kit.surfaces["ask"] = s
+                }
+                if flow.kit.resolvedSurface(for: .talk).kind != .fullScreen {
+                    var s = LabSurfaceSpec(kind: .fullScreen); s.adornments = [.edgeGlow, .waveform]; s.enter = .flare; flow.kit.surfaces["talk"] = s
+                }
+                flow.steps = LabFlow.primarySteps(for: flow.kit, script: LabScript.named(5))
+                autosave(flow)
+            }
+            UserDefaults.standard.set(true, forKey: migrated)
+        }
+        return flow
     }
     public static func autosave(_ flow: LabFlow) {
         if let data = try? JSONEncoder().encode(flow) { UserDefaults.standard.set(data, forKey: currentKey) }

@@ -159,8 +159,9 @@ public struct LabPlayView: View {
             guard let item else { return LabSurfaceSpec(kind: .pod) }
             var s = held ? spec.resolvedSurface(for: item) : (current.surface ?? spec.resolvedSurface(for: item))
             if held, spec.longPress.isFullScreen { s.kind = .fullScreen }
-            // The ask field is a pill with the input in it.
-            if !held, current.phase == .field { s.kind = .pill }
+            // The ask field is a pill with the input in it, and the edge
+            // beam on it by default — over the glass.
+            if !held, current.phase == .field { s.kind = .pill; if s.adornments.isEmpty { s.adornments = [.edgeGlow] } }
             return s
         }()
         let isField = !held && current.phase == .field
@@ -180,6 +181,9 @@ public struct LabPlayView: View {
         let conversation: LabConversation? = item.map {
             var c = LabConversation(script: script, mode: $0 == .talk ? .voice : .text, verb: verb, since: sinceChange, age: surfaceAge)
             c.field = isField
+            // The field shows its own line (empty: the peek, "Ask Nexus"),
+            // not the flow's ask typing itself.
+            if isField { c.typedAsk = current.line; c.sinceKey = .infinity }
             return c
         }
         let onAnotherScreen = step == .askAnywhere || step == .askMenu

@@ -276,8 +276,9 @@ struct LabAppView: View {
             guard let item else { return LabSurfaceSpec(kind: .pod) }
             var s = spec.resolvedSurface(for: item)
             if session.byHold, spec.longPress.isFullScreen { s.kind = .fullScreen }
-            // The field is a pill until the ask is sent.
-            if session.showingField { s.kind = .pill }
+            // The field is a pill until the ask is sent, with the edge
+            // beam on it by default.
+            if session.showingField { s.kind = .pill; if s.adornments.isEmpty { s.adornments = [.edgeGlow] } }
             return s
         }()
         let state = surface.morphState
