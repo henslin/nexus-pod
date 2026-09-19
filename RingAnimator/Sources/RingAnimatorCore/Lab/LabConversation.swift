@@ -112,6 +112,8 @@ public struct LabConversation: Equatable {
     /// keyboard lights the key just pressed.
     public var typedAsk: String? = nil
     public var sinceKey: Double = .infinity
+    /// Characters a second, in Autoplay — the morph's Typing Speed knob.
+    public var typeSpeed: Double = 14
     /// The ask field: the pill as an input — text, the mic, send — the
     /// moment after tapping Nexus (Chris, 2026-09-18).
     public var field: Bool = false
@@ -137,7 +139,7 @@ public struct LabConversation: Equatable {
             // A beat before the first character or word, so the empty
             // surface (and its suggestions) is seen.
             if mode == .text {
-                let n = Int(max(0, since - 0.9) * 14)
+                let n = Int(max(0, since - 0.9) * frame.p("typeSpeed", .morph))
                 return String(script.ask.prefix(n))
             }
             let words = script.ask.split(separator: " ")
@@ -157,7 +159,7 @@ public struct LabConversation: Equatable {
     public var typing: (typed: Int, phase: Double)? {
         guard verb == .listening, mode == .text else { return nil }
         if let typedAsk { return (typedAsk.count, min(1, sinceKey / 0.1)) }
-        let t = max(0, since - 0.9) * 14
+        let t = max(0, since - 0.9) * typeSpeed
         return (min(script.ask.count, Int(t)), t - t.rounded(.down))
     }
     /// The status line — the state, named.
@@ -286,19 +288,23 @@ struct LabConversationView: View {
                             .contentTransition(.numericText())
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: c.mode == .voice ? "keyboard" : "mic.fill")
-                        .font(.system(size: 17))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28)
-                        .contentShape(Rectangle())
-                        .onTapGesture { actions?.toggleVoice() }
-                        .help("Switch to voice")
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(ask.isEmpty && (actions?.draft.wrappedValue.isEmpty ?? true) ? AnyShapeStyle(.tertiary) : AnyShapeStyle(primary))
-                        .contentShape(Circle())
-                        .onTapGesture { if let actions { actions.submit(actions.draft.wrappedValue) } }
-                        .help("Send")
+                    if frame.p("fieldMic", .morph) >= 0.5 {
+                        Image(systemName: c.mode == .voice ? "keyboard" : "mic.fill")
+                            .font(.system(size: 17))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28)
+                            .contentShape(Rectangle())
+                            .onTapGesture { actions?.toggleVoice() }
+                            .help("Switch to voice")
+                    }
+                    if frame.p("fieldSend", .morph) >= 0.5 {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(ask.isEmpty && (actions?.draft.wrappedValue.isEmpty ?? true) ? AnyShapeStyle(.tertiary) : AnyShapeStyle(primary))
+                            .contentShape(Circle())
+                            .onTapGesture { if let actions { actions.submit(actions.draft.wrappedValue) } }
+                            .help("Send")
+                    }
                 }
                 .padding(.leading, 18).padding(.trailing, 10)
             } else {
@@ -324,7 +330,7 @@ struct LabConversationView: View {
                 if let status = c.status {
                     Text(status).font(.subheadline).foregroundStyle(.secondary)
                 } else if c.answerElapsed > 0 {
-                    LabStreamWords(text: c.script.answer, elapsed: c.answerElapsed, size: 15, color: .secondary)
+                    LabStreamWords(text: c.script.answer, elapsed: c.answerElapsed, rate: frame.p("answerRate", .morph), size: 15 * frame.p("textScale", .morph), color: .secondary)
                         .lineLimit(3)
                 }
                 if c.showsFollowUps { followUps(size: 12) }
@@ -381,7 +387,7 @@ struct LabConversationView: View {
                     }
                     .padding(.leading, 4)
                 } else if c.answerElapsed > 0 {
-                    LabStreamWords(text: c.script.answer, elapsed: c.answerElapsed, size: 17, glow: primary.opacity(0.5))
+                    LabStreamWords(text: c.script.answer, elapsed: c.answerElapsed, rate: frame.p("answerRate", .morph), size: 17 * frame.p("textScale", .morph), glow: primary.opacity(0.5))
                         .padding(.leading, 4)
                 }
                 if let quidget {
@@ -410,7 +416,7 @@ struct LabConversationView: View {
                         .frame(maxWidth: size.width - 64)
                 }
                 if c.answerElapsed > 0 {
-                    LabStreamWords(text: c.script.answer, elapsed: c.answerElapsed, rate: 6, size: 22, weight: .medium, glow: primary.opacity(0.6), alignment: .center)
+                    LabStreamWords(text: c.script.answer, elapsed: c.answerElapsed, rate: frame.p("answerRate", .morph) * 0.75, size: 22 * frame.p("textScale", .morph), weight: .medium, glow: primary.opacity(0.6), alignment: .center)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: size.width - 56)
                 }

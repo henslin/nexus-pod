@@ -286,7 +286,7 @@ struct LabAppView: View {
         let panelFrame = frame.applying(look, config: config).applying(surface)
         let age = now.timeIntervalSince(session.surfaceAt)
         let spring = Animation.spring(response: 0.5, dampingFraction: 0.8)
-        let home = LabMorphView.home(of: state.kind)
+        let home = LabMorphView.home(of: state.kind, frame: panelFrame)
         let podHome = LabMorphView.home(of: .pod)
         // On the Nexus tab the pod is the agent; elsewhere the spec's
         // Ask button is, where it puts it.
@@ -352,9 +352,9 @@ struct LabAppView: View {
             #else
             // The field is a peek — no keyboard until it has grown into
             // the container and the typing happens there.
-            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet) && !session.showingField
+            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet) && !session.showingField && panelFrame.p("keyboard", .morph) >= 0.5
             #endif
-            let (lift, sheetHeight) = LabPlayView.keyboardFit(kind: state.kind, up: keyboardUp, phone: phone)
+            let (lift, sheetHeight) = LabPlayView.keyboardFit(kind: state.kind, up: keyboardUp, phone: phone, frame: panelFrame)
             ZStack(alignment: .bottom) {
                 Color.clear
                 if let t = conversation?.typing, keyboardUp {

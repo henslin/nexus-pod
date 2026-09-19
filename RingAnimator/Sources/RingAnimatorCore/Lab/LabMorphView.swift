@@ -46,14 +46,19 @@ struct LabMorphView: View {
     /// Where a kind of panel sits on the phone: the pod in the tab bar's
     /// trailing slot, the pill and card just above the bar, the sheet
     /// and full screen from the bottom.
-    static func home(of kind: LabMorphKind) -> CGPoint {
+    static func home(of kind: LabMorphKind) -> CGPoint { home(of: kind, frame: nil) }
+    /// Where a container sits — with a frame, at the frame's Shape knobs
+    /// (the kit's, or a step's own surface).
+    static func home(of kind: LabMorphKind, frame: LabFrame?) -> CGPoint {
         let phone = Self.phone
-        let size = LabMorphPanel.size(of: kind)
+        let size = LabMorphPanel.size(of: kind, frame: frame)
         let pod = CGFloat(RingConfig.tabBarPodDiameter)
+        let gap = frame.map { $0.p("floatGap", .morph) } ?? 12
+        let sheetInset = frame.map { $0.p("sheetInset", .morph) } ?? LabMorphPanel.sheetInset
         switch kind {
         case .pod:        return CGPoint(x: LabPhone.inset + (phone.width - LabPhone.inset * 2) - pod / 2, y: phone.height - LabPhone.bottom - pod / 2)
-        case .pill, .card: return CGPoint(x: phone.width / 2, y: phone.height - LabPhone.bottom - 62 - 12 - size.height / 2)
-        case .sheet:      return CGPoint(x: phone.width / 2, y: phone.height - LabMorphPanel.sheetInset - size.height / 2)
+        case .pill, .card: return CGPoint(x: phone.width / 2, y: phone.height - LabPhone.bottom - 62 - gap - size.height / 2)
+        case .sheet:      return CGPoint(x: phone.width / 2, y: phone.height - sheetInset - size.height / 2)
         case .fullScreen: return CGPoint(x: phone.width / 2, y: phone.height / 2)
         }
     }
@@ -161,32 +166,47 @@ public struct LabMorphPanel: View {
     /// Real iOS sizes, in points, on a 393-wide phone: the pod is the tab
     /// bar's; the pill is the tab bar accessory's width; the card is a
     /// notification's; the sheet a medium detent; full screen the screen.
-    public static func size(of kind: LabMorphKind) -> CGSize {
+    public static func size(of kind: LabMorphKind) -> CGSize { size(of: kind, frame: nil) }
+    /// With a frame: the frame's Shape knobs decide — the kit's, or a
+    /// step's own surface. Without one, the defaults: the pill is the
+    /// tab bar accessory's width; the card a notification's; the sheet
+    /// floats, inset from the sides and the bottom, half the screen —
+    /// iOS's medium detent, where Siri, ChatGPT, Claude and Gemini
+    /// start (Chris, 2026-09-18).
+    public static func size(of kind: LabMorphKind, frame: LabFrame?) -> CGSize {
+        let phone = LabMorphView.phone
+        func k(_ id: String, _ d: Double) -> CGFloat { frame.map { $0.p(id, .morph) } ?? d }
         switch kind {
         case .pod:        return CGSize(width: 62, height: 62)
-        case .pill:       return CGSize(width: LabMorphView.phone.width - LabPhone.inset * 2, height: 62)
-        case .card:       return CGSize(width: LabMorphView.phone.width - LabPhone.inset * 2, height: 176)
-        // The sheet floats: inset from the sides and the bottom, every
-        // corner rounded — iOS 26's, not iOS 17's flush one (Chris,
-        // 2026-09-18: "the sheet itself should have a bit of a margin").
-        // Half the screen — iOS's medium detent, where Siri, ChatGPT,
-        // Claude and Gemini start (Chris, 2026-09-18: "that's the
-        // starting place; then we make it unique"). It was 600.
-        case .sheet:      return CGSize(width: LabMorphView.phone.width - LabMorphPanel.sheetInset * 2, height: 440)
-        case .fullScreen: return LabMorphView.phone
+        case .pill:       return CGSize(width: phone.width - k("floatInset", 21) * 2, height: k("fieldHeight", 62))
+        case .card:       return CGSize(width: phone.width - k("floatInset", 21) * 2, height: k("cardHeight", 176))
+        case .sheet:      return CGSize(width: phone.width - k("sheetInset", Double(sheetInset)) * 2, height: k("sheetHeight", 440))
+        case .fullScreen: return phone
+        }
+    }
+    /// Whether a morph knob means anything for a kind — the inspector
+    /// shows only those.
+    static func knobApplies(_ p: LabParameter, to kind: LabMorphKind) -> Bool {
+        switch p.id {
+        case "sheetHeight", "sheetInset", "sheetCorner": return kind == .sheet
+        case "fieldHeight", "fieldMic", "fieldSend": return kind == .pill
+        case "floatInset", "floatGap": return kind == .pill || kind == .card
+        case "cardHeight": return kind == .card
+        case "keyboard", "typeSpeed": return kind != .pod
+        default: return true
         }
     }
     private var size: CGSize {
-        var s = Self.size(of: state.kind)
+        var s = Self.size(of: state.kind, frame: frame)
         if let height { s.height = height }
         return s
     }
 
     private var cornerRadius: CGFloat {
         switch state.kind {
-        case .pod, .pill: return 31
+        case .pod, .pill: return size.height / 2
         case .card:       return 28
-        case .sheet:      return 38
+        case .sheet:      return frame.p("sheetCorner", .morph)
         case .fullScreen: return 50
         }
     }

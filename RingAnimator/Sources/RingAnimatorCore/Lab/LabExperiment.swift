@@ -764,6 +764,23 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
             .init("pingpong", "Order", 0...1, 1, "Round: first to last and back to the first. Ping-pong: up the list and back down.", "%.0f", group: "Morphing", choices: ["Round", "Ping-pong"], kind: .popup),
             .init("transIn", "Enter Time", 0.1...2, 0.5, "How long a state's content and adornments take to arrive.", "%.1f s", group: "Morphing"),
             .init("transOut", "Leave Time", 0.1...2, 0.35, "How long they take to leave before the next state.", "%.1f s", group: "Morphing"),
+            // The shape: what was hard-coded in `LabMorphPanel.size(of:)` and
+            // `home(of:)` — per kit, and per step through its own surface
+            // (Chris, 2026-09-18: "far more controls within each step").
+            .init("sheetHeight", "Sheet Height", 240...800, 440, "The sheet, points — 440 is the medium detent, where the assistants start.", "%.0f pt", group: "Shape"),
+            .init("sheetInset", "Sheet Margin", 0...30, 12, "From the sides and the bottom, points.", "%.0f pt", group: "Shape"),
+            .init("sheetCorner", "Sheet Corner", 12...50, 38, "Corner radius, points.", "%.0f pt", group: "Shape"),
+            .init("fieldHeight", "Field Height", 44...80, 62, "The field or pill above the tab bar, points.", "%.0f pt", group: "Shape"),
+            .init("floatInset", "Field Margin", 8...40, 21, "The field, pill or card in from the sides, points.", "%.0f pt", group: "Shape"),
+            .init("floatGap", "Gap Above Bar", 0...40, 12, "Between the field, pill or card and the tab bar, points.", "%.0f pt", group: "Shape"),
+            .init("cardHeight", "Card Height", 100...320, 176, "The card, points.", "%.0f pt", group: "Shape"),
+            // The conversation inside.
+            .init("typeSpeed", "Typing Speed", 4...30, 14, "Characters a second as the ask is typed in Autoplay.", "%.0f /s", group: "Conversation"),
+            .init("answerRate", "Answer Speed", 3...16, 8, "Words a second as the answer arrives.", "%.0f /s", group: "Conversation"),
+            .init("textScale", "Text Size", 0.8...1.4, 1, "The conversation's type, scaled.", "%.2f×", group: "Conversation"),
+            .init("keyboard", "Keyboard", 0...1, 1, "The drawn keyboard while the ask is typed.", "%.0f", group: "Conversation", choices: ["Off", "On"]),
+            .init("fieldMic", "Field Mic", 0...1, 1, "The mic glyph on the field.", "%.0f", group: "Conversation", choices: ["Off", "On"]),
+            .init("fieldSend", "Field Send", 0...1, 1, "The send glyph on the field.", "%.0f", group: "Conversation", choices: ["Off", "On"]),
             .init("glowStyle", "Style", 0...2, 2, "What the edge carries.", "%.0f", group: "Edge Glow", choices: ["Glow", "Tracer", "Both"]),
             .init("glowWidth", "Glow Width", 2...40, 14, "The glow band, points.", "%.0f pt", group: "Edge Glow"),
             .init("glowBlur", "Glow Blur", 0...30, 10, "Glow softness, points.", "%.0f pt", group: "Edge Glow"),

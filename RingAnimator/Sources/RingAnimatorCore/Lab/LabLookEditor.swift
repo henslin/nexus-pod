@@ -142,16 +142,42 @@ struct LabLookEditor: View {
     @ObservedObject var config: RingConfig
     /// The bench, for "the full rail".
     let onBench: () -> Void
+    /// In the rail rather than a popover: no header, no footer, no frame
+    /// of its own — the knobs, in place (Chris, 2026-09-18: the step
+    /// should read as a place to work, not a summary).
+    var inline = false
     @State private var openPost: LabPostEffect?
     @Environment(\.dismiss) private var dismiss
 
     private var experiment: LabExperiment? { look.experimentCase }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            ScrollView {
+        if inline {
+            knobsBody
+        } else {
+            VStack(spacing: 0) {
+                header
+                Divider()
+                ScrollView { knobsBody.padding(14) }
+                Divider()
+                HStack {
+                    Button("Reset") {
+                        look = LabLook(experiment: look.experiment)
+                    }
+                    .help("Back to the experiment's defaults")
+                    Button("Full Rail on the Bench…") { dismiss(); onBench() }
+                        .help("Every control, on the stage — Use brings it back here")
+                    Spacer()
+                    Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                }
+                .controlSize(.small)
+                .padding(10)
+            }
+            .frame(width: 360, height: 520)
+        }
+    }
+
+    private var knobsBody: some View {
                 VStack(alignment: .leading, spacing: 8) {
                     if let experiment, !experiment.parameters.isEmpty {
                         sectionTitle(experiment.name)
@@ -178,23 +204,6 @@ struct LabLookEditor: View {
                         }
                     }
                 }
-                .padding(14)
-            }
-            Divider()
-            HStack {
-                Button("Reset") {
-                    look = LabLook(experiment: look.experiment)
-                }
-                .help("Back to the experiment's defaults")
-                Button("Full Rail on the Bench…") { dismiss(); onBench() }
-                    .help("Every control, on the stage — Use brings it back here")
-                Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
-            }
-            .controlSize(.small)
-            .padding(10)
-        }
-        .frame(width: 360, height: 520)
     }
 
     private var header: some View {
@@ -295,26 +304,50 @@ struct LabContainerEditor: View {
     @Binding var surface: LabSurfaceSpec
     let frameAt: (Date) -> LabFrame
     @ObservedObject var config: RingConfig
+    /// In the rail rather than a popover — see `LabLookEditor.inline`.
+    var inline = false
     @State private var choosingBackdrop = false
     @State private var backdropKnobsOpen = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: item.symbol).foregroundStyle(.secondary)
-                Text("\(item.label) · \(surface.kind.label)").font(.headline)
-                Spacer()
+        if inline {
+            knobsBody
+        } else {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: item.symbol).foregroundStyle(.secondary)
+                    Text("\(item.label) · \(surface.kind.label)").font(.headline)
+                    Spacer()
+                }
+                .padding(12)
+                Divider()
+                ScrollView { knobsBody.padding(14) }
+                Divider()
+                HStack {
+                    Button("Reset") {
+                        surface = LabSurfaceSpec(kind: item.defaultSurface)
+                    }
+                    .help("Back to the item's default container")
+                    Spacer()
+                    Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                }
+                .controlSize(.small)
+                .padding(10)
             }
-            .padding(12)
-            Divider()
-            ScrollView {
+            .frame(width: 380, height: 560)
+        }
+    }
+
+    private var knobsBody: some View {
                 VStack(alignment: .leading, spacing: 8) {
+                    if !inline {
                     labelled("Kind") {
                         Picker("", selection: $surface.kind) {
                             ForEach(LabMorphKind.offered) { Text($0.label).tag($0) }
                         }
                         .labelsHidden().pickerStyle(.menu).controlSize(.small)
+                    }
                     }
 
                     Text("Backdrop").font(.subheadline.weight(.semibold)).padding(.top, 8)
@@ -354,6 +387,7 @@ struct LabContainerEditor: View {
                         LabSlider(title: "Hero size", value: Binding(get: { surface.heroScale ?? 0.42 }, set: { surface.heroScale = $0 }), range: 0.2...0.8, help: "The orb's size, as a fraction of the width.")
                     }
 
+                    if !inline {
                     Text("Carries").font(.subheadline.weight(.semibold)).padding(.top, 8)
                     ForEach(LabMorphAdornment.allCases) { a in
                         HStack(spacing: 8) {
@@ -365,6 +399,9 @@ struct LabContainerEditor: View {
                         }
                     }
 
+                    }
+
+                    if !inline {
                     Text("Comes and goes").font(.subheadline.weight(.semibold)).padding(.top, 8)
                     labelled("Enters") {
                         Picker("", selection: $surface.enter) {
@@ -379,32 +416,20 @@ struct LabContainerEditor: View {
                         .labelsHidden().pickerStyle(.menu).controlSize(.small)
                     }
 
-                    Text("Morph").font(.subheadline.weight(.semibold)).padding(.top, 8)
-                    let params = LabExperiment.morph.parameters.filter { !["hold", "pingpong"].contains($0.id) }
+                    }
+
+                    // The morph's knobs, by group: the shape (this kind's
+                    // geometry), the conversation, the edge glow, timing.
+                    let params = LabExperiment.morph.parameters.filter { !["hold", "pingpong"].contains($0.id) && LabMorphPanel.knobApplies($0, to: surface.kind) }
                     ForEach(Array(params.enumerated()), id: \.element.id) { i, p in
                         if let g = p.group, i == 0 || params[i - 1].group != g {
-                            Text(g).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, i == 0 ? 0 : 6)
+                            Text(g).font(.subheadline.weight(.semibold)).padding(.top, 8)
                         }
                         LabKnob(parameter: p, value: Binding(
                             get: { surface.values["morph.\(p.id)"] ?? p.defaultValue },
                             set: { surface.values["morph.\(p.id)"] = $0 }))
                     }
                 }
-                .padding(14)
-            }
-            Divider()
-            HStack {
-                Button("Reset") {
-                    surface = LabSurfaceSpec(kind: item.defaultSurface)
-                }
-                .help("Back to the item's default container")
-                Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
-            }
-            .controlSize(.small)
-            .padding(10)
-        }
-        .frame(width: 380, height: 560)
     }
 
     @ViewBuilder

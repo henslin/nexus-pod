@@ -16,6 +16,8 @@ struct LabStepInspector: View {
     @StateObject private var clock = LabThumbClock()
     @StateObject private var presets = LabPresetStore()
     @State private var editingSurface = false
+    @State private var containerKnobsOpen = true
+    @State private var lookKnobsOpen = false
     #if os(macOS)
     @Environment(\.controlActiveState) private var activeState
     #endif
@@ -41,8 +43,8 @@ struct LabStepInspector: View {
             header
             Divider()
             LabRailSection("q.step.showing", "Showing", summary: showingSummary) { showing }
-            if step.phase == .surface {
-                LabRailSection("q.step.container", "Container", summary: containerSummary) { container }
+            if step.phase == .surface || step.phase == .field {
+                LabRailSection("q.step.container", step.phase == .field ? "Field" : "Container", summary: containerSummary) { container }
             }
             // Every step shows the look that's visible at that step —
             // the agent in its container, or the pod at rest — so "how
@@ -134,8 +136,13 @@ struct LabStepInspector: View {
 
     // MARK: Container
 
-    private var item: LabActionItem { step.item ?? .talk }
-    private var kitSurface: LabSurfaceSpec { kit.resolvedSurface(for: item) }
+    private var item: LabActionItem { step.phase == .field ? .ask : (step.item ?? .talk) }
+    /// The kit's container for the action — as the field, a pill.
+    private var kitSurface: LabSurfaceSpec {
+        var s = kit.resolvedSurface(for: item)
+        if step.phase == .field { s.kind = .pill; if s.adornments.isEmpty { s.adornments = [.edgeGlow] } }
+        return s
+    }
     private var containerSummary: String {
         if let s = step.surface { return "This step’s · \(s.kind.label)" + (s.adornments.isEmpty ? "" : " · " + s.adornments.map(\.label).joined(separator: ", ")) }
         return "Kit’s · \(kitSurface.kind.label)"
@@ -155,13 +162,19 @@ struct LabStepInspector: View {
             .labelsHidden().pickerStyle(.segmented).controlSize(.small)
         }
         .help("The kit's container for \(item.label), or one this step insists on — its own kind, adornments, transitions and morph knobs. Starts as a copy of the kit's.")
-        if step.surface != nil {
-            let surface = surfaceBinding
-            labelled("Kind") {
-                Picker("", selection: Binding(get: { surface.wrappedValue.kind }, set: { surface.wrappedValue.kind = $0 })) {
-                    ForEach(LabMorphKind.allCases) { Text($0.label).tag($0) }
+        let surface = step.surface != nil ? surfaceBinding : kitSurfaceBinding
+        if step.surface == nil {
+            Text("Editing here changes \(item.label)'s container in the kit — every step that uses it.")
+                .font(.caption).foregroundStyle(.tertiary)
+        }
+        do {
+            if step.phase != .field {
+                labelled("Kind") {
+                    Picker("", selection: Binding(get: { surface.wrappedValue.kind }, set: { surface.wrappedValue.kind = $0 })) {
+                        ForEach(LabMorphKind.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.menu).controlSize(.small)
                 }
-                .labelsHidden().pickerStyle(.menu).controlSize(.small)
             }
             labelled("Carries") {
                 Menu {
@@ -191,18 +204,27 @@ struct LabStepInspector: View {
                 }
                 .labelsHidden().pickerStyle(.menu).controlSize(.small)
             }
-            HStack {
-                Button { editingSurface = true } label: { Label("Tune the Container…", systemImage: "slider.horizontal.3") }
-                    .controlSize(.small)
-                    .popover(isPresented: $editingSurface, arrowEdge: .leading) {
-                        LabContainerEditor(item: item, surface: surface, frameAt: frameAt, config: config)
-                    }
-                    .help("Backdrop, hero size, dim, and every knob of the morph and its adornments — for this step only.")
-                Spacer()
-                Button("Back to Kit’s") { field(\.surface).wrappedValue = nil }
-                    .controlSize(.small)
+            // Every knob the container has, in place: shape, backdrop,
+            // dim, the conversation, the edge glow, timing.
+            DisclosureGroup(isExpanded: $containerKnobsOpen) {
+                LabContainerEditor(item: item, surface: surface, frameAt: frameAt, config: config, inline: true)
+                    .padding(.top, 4)
+            } label: {
+                Text("Shape · Backdrop · Conversation · Edge Glow · Morphing").font(.callout).foregroundStyle(.secondary)
+            }
+            if step.surface != nil {
+                HStack {
+                    Spacer()
+                    Button("Back to Kit’s") { field(\.surface).wrappedValue = nil }
+                        .controlSize(.small)
+                }
             }
         }
+    }
+    /// The kit's container for this action, bound — so a step on Kit's
+    /// edits the kit in place.
+    private var kitSurfaceBinding: Binding<LabSurfaceSpec> {
+        Binding(get: { kit.resolvedSurface(for: item) }, set: { lab.spec.surfaces[item.rawValue] = $0 })
     }
 
     // MARK: Agent
@@ -230,12 +252,27 @@ struct LabStepInspector: View {
         if step.look != nil {
             LabSlotRow(lab: lab, config: config, clock: clock, frameAt: frameAt, title: "Look", symbol: step.verb.symbol,
                        look: step.look, target: .step(step.id), set: { field(\.look).wrappedValue = $0 }, presets: presets)
+            lookKnobs(Binding(get: { step.look ?? LabLook(experiment: LabExperiment.orbKit.id) }, set: { field(\.look).wrappedValue = $0 }), target: .step(step.id))
         } else {
             let look = kit.look(for: step.verb)
             LabSlotRow(lab: lab, config: config, clock: clock, frameAt: frameAt, title: step.verb.label, symbol: step.verb.symbol,
                        look: look, target: .state(step.verb), set: { lab.spec.states[step.verb.rawValue] = $0 }, presets: presets)
             Text("Editing here changes \(step.verb.label) in the kit — every step that wears it.")
                 .font(.caption).foregroundStyle(.tertiary)
+            if look != nil {
+                lookKnobs(Binding(get: { lab.spec.states[step.verb.rawValue] ?? LabLook(experiment: LabExperiment.orbKit.id) }, set: { lab.spec.states[step.verb.rawValue] = $0 }), target: .state(step.verb))
+            }
+        }
+    }
+
+    /// The look's every knob, in place — the experiment's own, its post
+    /// stack, intensity, speed, fill, palette, glyph.
+    private func lookKnobs(_ look: Binding<LabLook>, target: LabSlotTarget) -> some View {
+        DisclosureGroup(isExpanded: $lookKnobsOpen) {
+            LabLookEditor(look: look, frameAt: frameAt, config: config, onBench: { lab.edit(look.wrappedValue, for: target) }, inline: true)
+                .padding(.top, 4)
+        } label: {
+            Text("\(look.wrappedValue.name) knobs · post effects · palette").font(.callout).foregroundStyle(.secondary)
         }
     }
 

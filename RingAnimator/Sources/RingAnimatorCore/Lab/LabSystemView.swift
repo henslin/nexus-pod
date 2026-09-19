@@ -95,13 +95,14 @@ public struct LabPlayView: View {
     /// The keyboard is the screen's, full width at the bottom. A floating
     /// container lifts above it; the sheet shortens so it still floats,
     /// with its margin, above the keyboard.
-    static func keyboardFit(kind: LabMorphKind, up: Bool, phone: CGSize) -> (lift: CGFloat, sheetHeight: CGFloat?) {
+    static func keyboardFit(kind: LabMorphKind, up: Bool, phone: CGSize, frame: LabFrame? = nil) -> (lift: CGFloat, sheetHeight: CGFloat?) {
         guard up else { return (0, nil) }
         switch kind {
         case .pill, .card: return (LabKeyboardView.height - 62 - LabPhone.bottom, nil)
         case .sheet:
-            let full = LabMorphPanel.size(of: .sheet).height
-            let room = phone.height - LabKeyboardView.height - LabMorphPanel.sheetInset - 60
+            let full = LabMorphPanel.size(of: .sheet, frame: frame).height
+            let inset = frame.map { $0.p("sheetInset", .morph) } ?? LabMorphPanel.sheetInset
+            let room = phone.height - LabKeyboardView.height - inset - 60
             let h = min(full, room)
             // Its home is set for the full height, so lifting by the
             // keyboard puts its bottom a margin above the keys; a
@@ -181,6 +182,7 @@ public struct LabPlayView: View {
         let conversation: LabConversation? = item.map {
             var c = LabConversation(script: script, mode: $0 == .talk ? .voice : .text, verb: verb, since: sinceChange, age: surfaceAge)
             c.field = isField
+            c.typeSpeed = panelFrame.p("typeSpeed", .morph)
             // The field shows its own line (empty: the peek, "Ask Nexus"),
             // not the flow's ask typing itself.
             if isField { c.typedAsk = current.line; c.sinceKey = .infinity }
@@ -189,7 +191,7 @@ public struct LabPlayView: View {
         let onAnotherScreen = step == .askAnywhere || step == .askMenu
         let tab: NexusTab = held ? .dashboard : current.tabCase
         let phone = LabMorphView.phone
-        let home = LabMorphView.home(of: state.kind)
+        let home = LabMorphView.home(of: state.kind, frame: panelFrame)
         let podHome = LabMorphView.home(of: .pod)
         let placement = spec.askPlacement ?? .floating
         let showChrome = frame.p("chrome", .system) >= 0.5
@@ -239,8 +241,8 @@ public struct LabPlayView: View {
             // screen hold their own.
             // The field arrives alone for a beat; the keyboard comes up
             // as the typing starts — the tap on the field, in effect.
-            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet) && !onAnotherScreen && !(isField && (sinceChange < 0.7 || current.line.isEmpty))
-            let (lift, sheetHeight) = Self.keyboardFit(kind: state.kind, up: keyboardUp, phone: phone)
+            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet) && !onAnotherScreen && !(isField && (sinceChange < 0.7 || current.line.isEmpty)) && panelFrame.p("keyboard", .morph) >= 0.5
+            let (lift, sheetHeight) = Self.keyboardFit(kind: state.kind, up: keyboardUp, phone: phone, frame: panelFrame)
             ZStack(alignment: .bottom) {
                 Color.clear
                 if let t = conversation?.typing, keyboardUp {
