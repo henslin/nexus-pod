@@ -92,7 +92,7 @@ public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .idle: return "The pod at rest in the tab bar."
         case .menu: return "The pod's menu open."
-        case .field: return "Tap Nexus: a field morphs out of the pod above the tab bar — type, switch to voice, send."
+        case .field: return "Tap Nexus: a field morphs out of the pod above the tab bar. Tap it to grow into the sheet; the mic switches to voice."
         case .listening: return "The container open; the person asks."
         case .thinking: return "The agent working on it."
         case .searching: return "The agent doing named work — checking a device, reading a log."
@@ -145,7 +145,8 @@ public enum LabStepKind: String, CaseIterable, Identifiable, Sendable {
     /// A first line, so the type is legible before it's edited.
     public var sampleLine: String {
         switch self {
-        case .listening, .field: return "Arm my system"
+        case .listening: return "Arm my system"
+        case .field: return ""
         case .searching: return "Checking the cameras…"
         case .speaking: return "Your cameras are armed and your system is in Arm Away mode."
         case .done: return "Arm Away when you leave?\nDisarm when you arrive home?"
@@ -341,13 +342,14 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
         if let item {
             var verbs: [LabAgentVerb] = [.listening, .thinking, .searching, .speaking, .done]
             if withError { verbs.insert(.error, at: 3) }
-            // A tap that opens the ask field: the field is the listening
-            // step, and the ask opens Ask's container from Thinking on.
+            // A tap that opens the ask field: the field comes up empty,
+            // a tap on it grows it into Ask's container, and the typing
+            // happens there.
             if spec.tap.isField {
                 var field = LabStep(kind: .field)
-                field.line = script.ask
+                field.line = ""
+                field.seconds = 2
                 out.append(field)
-                verbs.removeFirst()
             }
             for verb in verbs {
                 var s = LabStep(.surface, item: item, verb: verb)

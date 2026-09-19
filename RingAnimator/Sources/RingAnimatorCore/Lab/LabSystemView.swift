@@ -235,7 +235,7 @@ public struct LabPlayView: View {
             // screen hold their own.
             // The field arrives alone for a beat; the keyboard comes up
             // as the typing starts — the tap on the field, in effect.
-            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet) && !onAnotherScreen && !(isField && sinceChange < 0.7)
+            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet) && !onAnotherScreen && !(isField && (sinceChange < 0.7 || current.line.isEmpty))
             let (lift, sheetHeight) = Self.keyboardFit(kind: state.kind, up: keyboardUp, phone: phone)
             ZStack(alignment: .bottom) {
                 Color.clear

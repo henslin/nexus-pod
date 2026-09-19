@@ -266,12 +266,16 @@ struct LabConversationView: View {
                 let ask = c.askShown(frame: frame)
                 HStack(spacing: 8) {
                     if let actions, c.composing, c.mode == .text {
-                        TextField("Ask Nexus", text: actions.draft)
-                            .textFieldStyle(.plain)
+                        // Live: the field is the way in — a tap grows it
+                        // into the container, where the typing happens
+                        // (the Claude app's composer).
+                        Text(actions.draft.wrappedValue.isEmpty ? "Ask Nexus" : actions.draft.wrappedValue)
                             .font(.system(size: 17))
-                            .focused($fieldFocused)
-                            .onSubmit { actions.submit(actions.draft.wrappedValue) }
-                            .onAppear { fieldFocused = true }
+                            .foregroundStyle(actions.draft.wrappedValue.isEmpty ? .secondary : .primary)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture { actions.expand() }
                     } else if c.mode == .voice {
                         LabWaveformBars(frame: frame, bars: 22, height: 20)
                     } else {

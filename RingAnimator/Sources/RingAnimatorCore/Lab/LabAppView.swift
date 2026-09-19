@@ -107,6 +107,13 @@ public final class LabAppSession: ObservableObject {
     }
     /// The field's mic / keyboard glyph.
     public func toggleVoice() { fieldVoice.toggle() }
+    /// Tap the field: it grows into Ask's container, composing, with
+    /// whatever was typed carried along.
+    public func expandField() {
+        guard showingField else { return }
+        asField = false
+        surfaceAt = Date()
+    }
     /// Whether the field is what's showing: opened as one, and nothing
     /// sent yet.
     public var showingField: Bool { asField && askedAt == nil && surface == .ask }
@@ -231,6 +238,8 @@ struct LabConversationActions {
     var submit: (String) -> Void
     var close: () -> Void
     var toggleVoice: () -> Void = {}
+    /// Tap the field: grow into the container.
+    var expand: () -> Void = {}
 }
 
 struct LabConversationActionsKey: EnvironmentKey {
@@ -286,7 +295,8 @@ struct LabAppView: View {
             draft: Binding(get: { session.draft }, set: { session.typed($0) }),
             submit: { session.submit($0, defaultScript: defaultScript) },
             close: { session.close() },
-            toggleVoice: { session.toggleVoice() })
+            toggleVoice: { session.toggleVoice() },
+            expand: { session.expandField() })
         let menuSince = now.timeIntervalSince(session.menuAt)
 
         return ZStack {
@@ -339,7 +349,9 @@ struct LabAppView: View {
             #if os(iOS)
             let keyboardUp = false
             #else
-            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet)
+            // The field is a peek — no keyboard until it has grown into
+            // the container and the typing happens there.
+            let keyboardUp = conversation?.typing != nil && (state.kind == .pill || state.kind == .card || state.kind == .sheet) && !session.showingField
             #endif
             let (lift, sheetHeight) = LabPlayView.keyboardFit(kind: state.kind, up: keyboardUp, phone: phone)
             ZStack(alignment: .bottom) {

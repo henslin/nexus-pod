@@ -386,6 +386,11 @@ extension LabSpec {
         s.surfaces["ask"] = surface(.sheet, [.edgeGlow])
         s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .waveform], enter: .flare)
         s.surfaces["show"] = surface(.fullScreen, [.edgeGlow])
+        // The Claude app's paradigm (Chris, 2026-09-18): tap the pod and
+        // the field morphs up above the tab bar; tap the field and it
+        // grows into the sheet; the hold is what takes the whole screen.
+        s.tap = .field
+        s.longPress = .fullScreen
         return s
     }
 
@@ -409,6 +414,11 @@ extension LabSpec {
         s.surfaces["ask"] = surface(.sheet, [.borderBeam])
         s.surfaces["talk"] = surface(.fullScreen, [.edgeGlow, .transcript], enter: .flare)
         s.surfaces["show"] = surface(.card, [.edgeGlow])
+        // The Claude app's paradigm (Chris, 2026-09-18): tap the pod and
+        // the field morphs up above the tab bar; tap the field and it
+        // grows into the sheet; the hold is what takes the whole screen.
+        s.tap = .field
+        s.longPress = .fullScreen
         return s
     }
 
@@ -435,6 +445,11 @@ extension LabSpec {
         talk.heroScale = 0.34
         talk.dim = 0.7
         s.surfaces["talk"] = talk
+        // The Claude app's paradigm (Chris, 2026-09-18): tap the pod and
+        // the field morphs up above the tab bar; tap the field and it
+        // grows into the sheet; the hold is what takes the whole screen.
+        s.tap = .field
+        s.longPress = .fullScreen
         return s
     }
 }

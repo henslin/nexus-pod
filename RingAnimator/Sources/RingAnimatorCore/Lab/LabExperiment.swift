@@ -276,7 +276,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .waveform:   return "SwiftUI · Canvas"
         case .edgeGlow:   return "SwiftUI · blur + gradient"
         case .caption:    return "SwiftUI · text transitions"
-        case .system:     return "Autoplay · or in your hand"
+        case .system:     return "Tap → field → sheet · hold → full screen"
         case .sunflower:  return "SwiftUI · Canvas + Speech"
         case .askButton:  return "SwiftUI · Liquid Glass + Canvas filters"
         case .quidgets:   return "SwiftUI · Liquid Glass + matched geometry"
@@ -544,7 +544,7 @@ public enum LabExperiment: String, CaseIterable, Identifiable, Sendable {
         case .sunflower:
             return "The Bloom app, brought in: a sunflower’s seed spiral filling the screen, and blooms of colour opening across it — on the clock, on a tap, and on your voice. A full-screen, ethereal way to talk to the agent: the field is the agent. A live transcript, natively animated, sits at the bottom when Audio Reactive is on."
         case .system:
-            return "The product, assembled. Every slot the Nexus surface needs — the pod, a look per agent state, the menu a tap reveals, the surface each action opens, what tap and long press do — filled from the Lab. Autoplay runs it end to end on the clock (tap to step, hold to talk). Interact hands you the app: the real screens with the pod in the tab bar; tap a tab, tap the pod for the menu, pick Ask and type (the keyboard follows your keys) or tap a suggestion; hold the pod to talk. The agent answers with the closest script and does the thing — arm the house and the dashboard arms."
+            return "The product, assembled. Tap Nexus and a Liquid Glass field morphs up above the tab bar — type, or the mic for voice, and send. Tap the field and it grows into the sheet, where the conversation happens and replies carry quidgets. Hold Nexus for the full screen, voice first. Every part — the pod, a look per agent state, the field, the sheet, the full screen — is a slot filled from the Lab. Autoplay runs a flow end to end on the clock; Interact hands you the app, live, and the agent does the thing to the house."
         }
     }
 
