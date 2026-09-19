@@ -376,9 +376,10 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
     /// The primary flow — the paradigm (Chris, 2026-09-18, after the
     /// Claude app): tap Nexus and the field morphs up above the tab bar;
     /// tap the field and it grows into the sheet, where the ask is typed
-    /// and answered with a quidget; then the hold — full screen, voice
-    /// first — as its own pair of steps. The Ask button elsewhere is a
-    /// step type you can add, not part of this.
+    /// and answered with a quidget. The full screen is the hold's alone
+    /// — it is never a step on the clock; hold the phone and it comes.
+    /// The Ask button elsewhere is a step type you can add, not part of
+    /// this.
     public static func primarySteps(for spec: LabSpec, script: LabScript) -> [LabStep] {
         var out: [LabStep] = [LabStep(.rest)]
         var field = LabStep(kind: .field); field.line = ""; field.seconds = 2
@@ -394,10 +395,6 @@ public struct LabFlow: Codable, Identifiable, Equatable, Sendable {
             }
             out.append(s)
         }
-        // The hold: Talk, full screen, listening while held and speaking after.
-        var hold = LabStep(.surface, item: .talk, verb: .listening); hold.line = script.ask
-        var spoke = LabStep(.surface, item: .talk, verb: .speaking); spoke.line = script.answer; spoke.seconds = 5
-        out.append(hold); out.append(spoke)
         out.append(LabStep(.rest))
         return out
     }
@@ -565,8 +562,14 @@ public final class LabFlowStore: ObservableObject {
         // Once, on 2026-09-18: the working flow becomes the paradigm —
         // its kit's looks kept, its gestures and steps replaced (Chris:
         // "what I'm describing should take over … the primary steps").
-        let migrated = "nexus.lab.flow.paradigm"
+        let migrated = "nexus.lab.flow.paradigm2"
         if !UserDefaults.standard.bool(forKey: migrated) {
+            // The first cut of the paradigm put the hold's full screen in
+            // the flow as steps; it isn't a step. Out.
+            if flow.hasField {
+                flow.steps.removeAll { $0.phase == .surface && $0.item == .talk && flow.kit.resolvedSurface(for: .talk).kind == .fullScreen }
+                autosave(flow)
+            }
             if !flow.hasField {
                 flow.kit.tap = .field
                 flow.kit.longPress = .fullScreen
